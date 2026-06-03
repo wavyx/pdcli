@@ -1,0 +1,17 @@
+node_modules/
+oclif.manifest.json
+coverage/
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+docs/superpowers/
+
+# scratch / handoff docs — never commit (see CLAUDE.md)
+CLAUDE.md
+pdcli-spec.md
+pipedrive-api-notes.md
+
+# screenshots
+*.png
