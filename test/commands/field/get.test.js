@@ -102,3 +102,19 @@ describe('field get without options', () => {
     expect(stdout).toContain('varchar')
   })
 })
+
+describe('field get with options in table mode', () => {
+  it('renders id=label pairs', async () => {
+    mockApi().get('/api/v2/dealFields').reply(200, FIELDS_REPLY)
+
+    const stdout = await runCmd(FieldGetCommand, [
+      'deal',
+      'Deal Size',
+      '--output',
+      'table',
+    ])
+
+    expect(stdout).toContain('10=Small')
+    expect(stdout).toContain('11=Large')
+  })
+})

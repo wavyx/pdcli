@@ -71,3 +71,20 @@ describe('activity list', () => {
     expect(JSON.parse(stdout)).toEqual([])
   })
 })
+
+describe('activity list --done', () => {
+  it('passes done=true as a query param', async () => {
+    mockApi()
+      .get('/api/v2/activities')
+      .query({ limit: '100', done: 'true' })
+      .reply(200, { success: true, data: [] })
+
+    const stdout = await runCmd(ActivityListCommand, [
+      '--done',
+      '--output',
+      'json',
+    ])
+
+    expect(JSON.parse(stdout)).toEqual([])
+  })
+})

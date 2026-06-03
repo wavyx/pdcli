@@ -139,3 +139,20 @@ describe('deal list edge cases', () => {
     expect(stdout).toContain('No value deal')
   })
 })
+
+describe('deal list value without currency', () => {
+  it('renders the bare amount', async () => {
+    mockApi()
+      .get('/api/v2/deals')
+      .query({ limit: '100' })
+      .reply(200, {
+        success: true,
+        data: [{ id: 6, title: 'Currencyless', value: 500 }],
+      })
+
+    const stdout = await runCmd(DealListCommand, ['--output', 'table'])
+
+    expect(stdout).toContain('500')
+    expect(stdout).not.toContain('500 EUR')
+  })
+})

@@ -148,3 +148,22 @@ describe('validateToken', () => {
     expect(user).toEqual({ id: 1, name: 'Jane', email: 'jane@acme.com' })
   })
 })
+
+describe('resolveCredentials without a profile', () => {
+  afterEach(() => {
+    delete process.env.PDCLI_COMPANY_DOMAIN
+    delete process.env.PDCLI_API_TOKEN
+  })
+
+  it('throws ConfigError when nothing provides a domain', async () => {
+    await expect(resolveCredentials({})).rejects.toMatchObject({
+      exitCode: 78,
+    })
+  })
+
+  it('throws AuthRequiredError when a domain exists but no token source', async () => {
+    await expect(
+      resolveCredentials({ flags: { company: 'acme' } }),
+    ).rejects.toMatchObject({ exitCode: 77 })
+  })
+})

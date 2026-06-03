@@ -76,3 +76,19 @@ describe('org get table mode', () => {
     expect(stdout).toContain('Gold')
   })
 })
+
+describe('org get table without custom fields', () => {
+  it('renders the field/value table directly', async () => {
+    mockApi()
+      .get('/api/v2/organizations/8')
+      .reply(200, {
+        success: true,
+        data: { id: 8, name: 'Plain Org' },
+      })
+
+    const stdout = await runCmd(OrgGetCommand, ['8', '--output', 'table'])
+
+    expect(stdout).toContain('Plain Org')
+    expect(stdout).toContain('Field')
+  })
+})

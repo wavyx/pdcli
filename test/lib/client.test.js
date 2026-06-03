@@ -567,3 +567,44 @@ describe('createClient', () => {
     })
   })
 })
+
+describe('array query values', () => {
+  it('joins array values with commas (Pipedrive convention)', async () => {
+    nock.cleanAll()
+    const client = createClient({
+      companyDomain: 'acme',
+      token: 'test-token',
+      retry: false,
+      timeout: 5000,
+    })
+    const scope = nock('https://acme.pipedrive.com')
+      .get('/api/v2/itemSearch')
+      .query({ item_types: 'deal,person' })
+      .reply(200, { success: true, data: { items: [] } })
+
+    await client.get('/api/v2/itemSearch', {
+      query: { item_types: ['deal', 'person'] },
+    })
+    expect(scope.isDone()).toBe(true)
+  })
+})
+
+describe('pageV2 with an empty response body', () => {
+  it('yields nothing and stops', async () => {
+    nock.cleanAll()
+    const client = createClient({
+      companyDomain: 'acme',
+      token: 'test-token',
+      retry: false,
+      timeout: 5000,
+    })
+    nock('https://acme.pipedrive.com').get('/api/v2/deals').reply(200, '')
+
+    const items = []
+    for await (const item of client.pageV2('/api/v2/deals')) {
+      items.push(item)
+    }
+
+    expect(items).toEqual([])
+  })
+})

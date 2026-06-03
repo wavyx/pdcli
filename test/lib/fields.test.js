@@ -150,3 +150,41 @@ describe('makeResolver', () => {
     expect(resolver.resolveCustomFields(record)).toEqual({ id: 1 })
   })
 })
+
+describe('resolveCustomFields fallbacks', () => {
+  const resolver = makeResolver(FIELD_DEFS)
+
+  it('keeps unknown hash keys and unknown option ids as-is', () => {
+    const resolved = resolver.resolveCustomFields({
+      custom_fields: {
+        unknown_key_here: 'raw',
+        [HASH]: 999, // option id not in definition
+      },
+    })
+    expect(resolved.custom_fields.unknown_key_here).toBe('raw')
+    expect(resolved.custom_fields['Deal Size']).toBe(999)
+  })
+
+  it('passes null custom values through untouched', () => {
+    const resolved = resolver.resolveCustomFields({
+      custom_fields: { [HASH]: null },
+    })
+    expect(resolved.custom_fields['Deal Size']).toBeNull()
+  })
+
+  it('keeps unknown ids inside set arrays', () => {
+    const setResolver = makeResolver([
+      {
+        id: 3,
+        field_code: HASH,
+        field_name: 'Tags',
+        field_type: 'set',
+        options: [{ id: 1, label: 'A' }],
+      },
+    ])
+    const resolved = setResolver.resolveCustomFields({
+      custom_fields: { [HASH]: [1, 99] },
+    })
+    expect(resolved.custom_fields.Tags).toEqual(['A', 99])
+  })
+})

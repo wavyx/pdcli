@@ -9,10 +9,12 @@ vi.mock('../../src/lib/keychain.js', () => ({
 }))
 
 const mockGetProfileConfig = vi.fn()
+const mockGetConf = vi.fn()
+const mockGetActiveProfile = vi.fn()
 vi.mock('../../src/lib/config.js', () => ({
   loadConfig: vi.fn().mockReturnValue({ activeProfile: 'default' }),
-  getConf: vi.fn().mockReturnValue({ path: '/tmp/pdcli-test-config' }),
-  getActiveProfile: vi.fn().mockReturnValue('default'),
+  getConf: mockGetConf,
+  getActiveProfile: mockGetActiveProfile,
   getProfileConfig: mockGetProfileConfig,
 }))
 
@@ -25,6 +27,10 @@ describe('doctor', () => {
     mockGetToken.mockReset()
     mockIsKeychainAvailable.mockReset()
     mockGetProfileConfig.mockReset()
+    mockGetConf.mockReset()
+    mockGetConf.mockReturnValue({ path: '/tmp/pdcli-test-config' })
+    mockGetActiveProfile.mockReset()
+    mockGetActiveProfile.mockReturnValue('default')
   })
 
   afterEach(() => {
@@ -78,5 +84,49 @@ describe('doctor', () => {
 
     expect(stdout).toMatch(/1 check failed/)
     expect(stdout).toContain('API reachable')
+  })
+})
+
+describe('doctor failure branches', () => {
+  beforeEach(() => {
+    nock.cleanAll()
+    mockGetToken.mockReset()
+    mockGetProfileConfig.mockReset()
+    mockGetConf.mockReset()
+    mockGetActiveProfile.mockReset()
+  })
+
+  it('reports config store and profile failures', async () => {
+    mockIsKeychainAvailable.mockReturnValue(true)
+    mockGetConf.mockImplementation(() => {
+      throw new Error('cannot create config dir')
+    })
+    mockGetActiveProfile.mockImplementation(() => {
+      throw new Error('no profile store')
+    })
+    mockGetProfileConfig.mockReturnValue(undefined)
+    mockGetToken.mockResolvedValue(null)
+
+    const stdout = await runCmd(DoctorCommand)
+
+    expect(stdout).toContain('Cannot access config store')
+    expect(stdout).toContain('No active profile')
+    expect(stdout).toMatch(/checks failed/)
+  })
+})
+
+describe('doctor without a keychain', () => {
+  it('reports the keychain as unavailable', async () => {
+    nock.cleanAll()
+    mockGetConf.mockReturnValue({ path: '/tmp/x' })
+    mockGetActiveProfile.mockReturnValue('default')
+    mockIsKeychainAvailable.mockReturnValue(false)
+    mockGetProfileConfig.mockReturnValue('acme')
+    mockGetToken.mockResolvedValue('tok')
+    nock('https://acme.pipedrive.com').get('/api/v1/users/me').reply(401)
+
+    const stdout = await runCmd(DoctorCommand)
+
+    expect(stdout).toContain('OS keychain unavailable')
   })
 })

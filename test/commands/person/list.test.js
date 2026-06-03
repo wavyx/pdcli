@@ -105,3 +105,19 @@ describe('person list edge cases', () => {
     expect(stdout).toContain('first@acme.com')
   })
 })
+
+describe('person list email entry without value', () => {
+  it('renders an empty cell', async () => {
+    mockApi()
+      .get('/api/v2/persons')
+      .query({ limit: '100' })
+      .reply(200, {
+        success: true,
+        data: [{ id: 5, name: 'Valueless', emails: [{ primary: true }] }],
+      })
+
+    const stdout = await runCmd(PersonListCommand, ['--output', 'table'])
+
+    expect(stdout).toContain('Valueless')
+  })
+})

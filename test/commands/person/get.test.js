@@ -59,3 +59,35 @@ describe('person get', () => {
     expect(stdout).toContain('Jane Doe')
   })
 })
+
+describe('person get with custom fields', () => {
+  const HASH = 'dcf558aac1ae4e8c4f849ba5e668430d8df9be12'
+
+  it('resolves person custom fields in table mode', async () => {
+    mockApi()
+      .get('/api/v2/persons/5')
+      .reply(200, {
+        success: true,
+        data: { id: 5, name: 'Jane', custom_fields: { [HASH]: 10 } },
+      })
+    mockApi()
+      .get('/api/v2/personFields')
+      .reply(200, {
+        success: true,
+        data: [
+          {
+            id: 1,
+            field_code: HASH,
+            field_name: 'Segment',
+            field_type: 'enum',
+            options: [{ id: 10, label: 'Enterprise' }],
+          },
+        ],
+      })
+
+    const stdout = await runCmd(PersonGetCommand, ['5', '--output', 'table'])
+
+    expect(stdout).toContain('Segment')
+    expect(stdout).toContain('Enterprise')
+  })
+})

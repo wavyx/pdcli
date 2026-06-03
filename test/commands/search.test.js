@@ -116,3 +116,30 @@ describe('search', () => {
     expect(JSON.parse(stdout)).toEqual([])
   })
 })
+
+describe('search edge cases', () => {
+  it('renders blank names for items without title or name', async () => {
+    mockApi()
+      .get('/api/v2/itemSearch')
+      .query({ term: 'acme' })
+      .reply(200, {
+        success: true,
+        data: { items: [{ result_score: 0.1, item: { id: 1, type: 'file' } }] },
+      })
+
+    const stdout = await runCmd(SearchCommand, ['acme', '--output', 'table'])
+
+    expect(stdout).toContain('file')
+  })
+
+  it('handles a null data payload', async () => {
+    mockApi()
+      .get('/api/v2/itemSearch')
+      .query({ term: 'acme' })
+      .reply(200, { success: true, data: null })
+
+    const stdout = await runCmd(SearchCommand, ['acme', '--output', 'json'])
+
+    expect(JSON.parse(stdout)).toEqual([])
+  })
+})
