@@ -93,3 +93,18 @@ describe('deal get', () => {
     await expect(DealGetCommand.run(['not-a-number'])).rejects.toThrow()
   })
 })
+
+describe('deal get table mode without custom fields', () => {
+  it('skips the fields fetch when custom_fields is empty', async () => {
+    mockApi()
+      .get('/api/v2/deals/42')
+      .reply(200, {
+        success: true,
+        data: { id: 42, title: 'Plain deal', custom_fields: {} },
+      })
+
+    const stdout = await runCmd(DealGetCommand, ['42', '--output', 'table'])
+
+    expect(stdout).toContain('Plain deal')
+  })
+})

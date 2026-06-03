@@ -44,3 +44,19 @@ describe('activity get', () => {
     expect(JSON.parse(stdout).subject).toBe('Demo call')
   })
 })
+
+describe('activity get table mode', () => {
+  it('renders a field/value table without custom fields', async () => {
+    mockApi()
+      .get('/api/v2/activities/9')
+      .reply(200, {
+        success: true,
+        data: { id: 9, subject: 'Demo call', custom_fields: {} },
+      })
+
+    const stdout = await runCmd(ActivityGetCommand, ['9', '--output', 'table'])
+
+    expect(stdout).toContain('Demo call')
+    expect(stdout).toContain('Field')
+  })
+})

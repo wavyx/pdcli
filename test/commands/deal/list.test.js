@@ -123,3 +123,19 @@ describe('deal list', () => {
     expect(stdout).toContain('open')
   })
 })
+
+describe('deal list edge cases', () => {
+  it('renders an empty value cell when the deal has no value', async () => {
+    mockApi()
+      .get('/api/v2/deals')
+      .query({ limit: '100' })
+      .reply(200, {
+        success: true,
+        data: [{ id: 5, title: 'No value deal', status: 'open' }],
+      })
+
+    const stdout = await runCmd(DealListCommand, ['--output', 'table'])
+
+    expect(stdout).toContain('No value deal')
+  })
+})

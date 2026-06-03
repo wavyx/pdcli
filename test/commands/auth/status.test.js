@@ -71,3 +71,38 @@ describe('auth status', () => {
     expect(stdout).toContain('Token:')
   })
 })
+
+describe('auth status edge cases', () => {
+  beforeEach(() => {
+    nock.cleanAll()
+    mockGetToken.mockReset()
+    mockGetProfileConfig.mockReset()
+  })
+
+  it('shows unavailable keychain and unset host', async () => {
+    mockIsKeychainAvailable.mockReturnValue(false)
+    mockGetProfileConfig.mockReturnValue(undefined)
+    mockGetToken.mockResolvedValue('tok')
+
+    const stdout = await runCmd(StatusCommand)
+
+    expect(stdout).toContain('unavailable')
+    expect(stdout).toContain('(not set)')
+    // no domain → no identity fetch attempted
+    expect(stdout).toContain('Token:')
+  })
+
+  it('omits identity lines the API does not return', async () => {
+    mockIsKeychainAvailable.mockReturnValue(true)
+    mockGetProfileConfig.mockReturnValue('acme')
+    mockGetToken.mockResolvedValue('tok-123')
+    nock('https://acme.pipedrive.com')
+      .get('/api/v1/users/me')
+      .reply(200, { success: true, data: { id: 1 } })
+
+    const stdout = await runCmd(StatusCommand)
+
+    expect(stdout).toContain('Authenticated User')
+    expect(stdout).not.toContain('Name:')
+  })
+})

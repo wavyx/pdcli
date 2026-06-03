@@ -69,3 +69,39 @@ describe('person list', () => {
     expect(JSON.parse(stdout)[0].id).toBe(2)
   })
 })
+
+describe('person list edge cases', () => {
+  it('renders blanks for persons without emails or phones', async () => {
+    mockApi()
+      .get('/api/v2/persons')
+      .query({ limit: '100' })
+      .reply(200, {
+        success: true,
+        data: [{ id: 3, name: 'No Contact', emails: [], phones: null }],
+      })
+
+    const stdout = await runCmd(PersonListCommand, ['--output', 'table'])
+
+    expect(stdout).toContain('No Contact')
+  })
+
+  it('falls back to the first email when none is primary', async () => {
+    mockApi()
+      .get('/api/v2/persons')
+      .query({ limit: '100' })
+      .reply(200, {
+        success: true,
+        data: [
+          {
+            id: 4,
+            name: 'Secondary',
+            emails: [{ value: 'first@acme.com', primary: false }],
+          },
+        ],
+      })
+
+    const stdout = await runCmd(PersonListCommand, ['--output', 'table'])
+
+    expect(stdout).toContain('first@acme.com')
+  })
+})

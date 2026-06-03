@@ -44,3 +44,35 @@ describe('org get', () => {
     expect(JSON.parse(stdout).name).toBe('Acme Corp')
   })
 })
+
+describe('org get table mode', () => {
+  const HASH = 'dcf558aac1ae4e8c4f849ba5e668430d8df9be12'
+
+  it('resolves custom fields in the field/value table', async () => {
+    mockApi()
+      .get('/api/v2/organizations/7')
+      .reply(200, {
+        success: true,
+        data: { id: 7, name: 'Acme Corp', custom_fields: { [HASH]: 10 } },
+      })
+    mockApi()
+      .get('/api/v2/organizationFields')
+      .reply(200, {
+        success: true,
+        data: [
+          {
+            id: 2,
+            field_code: HASH,
+            field_name: 'Tier',
+            field_type: 'enum',
+            options: [{ id: 10, label: 'Gold' }],
+          },
+        ],
+      })
+
+    const stdout = await runCmd(OrgGetCommand, ['7', '--output', 'table'])
+
+    expect(stdout).toContain('Tier')
+    expect(stdout).toContain('Gold')
+  })
+})

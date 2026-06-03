@@ -86,3 +86,19 @@ describe('field get', () => {
     )
   })
 })
+
+describe('field get without options', () => {
+  it('renders an empty options cell for non-enum fields', async () => {
+    mockApi().get('/api/v2/dealFields').reply(200, FIELDS_REPLY)
+
+    const stdout = await runCmd(FieldGetCommand, [
+      'deal',
+      'title',
+      '--output',
+      'table',
+    ])
+
+    expect(stdout).toContain('Title')
+    expect(stdout).toContain('varchar')
+  })
+})
