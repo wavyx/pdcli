@@ -80,16 +80,17 @@ export default class BaseCommand extends Command {
     })
   }
 
+  /** Effective output format: explicit flag, else table in a TTY, json piped. */
+  resolveFormat() {
+    return this.flags.output ?? (process.stdout.isTTY ? 'table' : 'json')
+  }
+
   /**
    * @param {object | object[]} data
    * @param {Record<string, import('./lib/output/table.js').Column>} columns
    */
   async outputResults(data, columns) {
-    let format = this.flags.output
-    if (!format) {
-      format = process.stdout.isTTY ? 'table' : 'json'
-    }
-    formatOutput(data, columns, format, this)
+    formatOutput(data, columns, this.resolveFormat(), this)
   }
 
   async catch(err) {
