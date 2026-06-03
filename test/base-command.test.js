@@ -1,0 +1,183 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import nock from 'nock'
+
+const mockResolveCredentials = vi.fn()
+vi.mock('../src/lib/auth.js', async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    resolveCredentials: mockResolveCredentials,
+  }
+})
+
+const mockLoadConfig = vi.fn()
+vi.mock('../src/lib/config.js', () => ({
+  loadConfig: mockLoadConfig,
+  getProfileConfig: vi.fn().mockReturnValue(undefined),
+}))
+
+const { default: BaseCommand } = await import('../src/base-command.js')
+const { AuthRequiredError } = await import('../src/lib/errors.js')
+
+const API_BASE = 'https://acme.pipedrive.com'
+
+/** Minimal authenticated command used to exercise BaseCommand wiring. */
+class ApiCmd extends BaseCommand {
+  async run() {
+    const body = await this.apiClient.get('/api/v2/users/me')
+    await this.outputResults(body.data, {
+      id: { header: 'ID' },
+      name: { header: 'Name' },
+      email: { header: 'Email' },
+    })
+  }
+}
+
+/** Minimal unauthenticated command. */
+class NoAuthCmd extends BaseCommand {
+  static skipAuth = true
+  async run() {
+    this.log(`profile:${this.activeProfile} limit:${this.flags.limit ?? ''}`)
+  }
+}
+
+function captureLogs(CmdClass, argv = []) {
+  const lines = []
+  const spy = vi.spyOn(console, 'log').mockImplementation((...args) => {
+    lines.push(args.map(String).join(' '))
+  })
+  return CmdClass.run(argv)
+    .then(() => lines.join('\n'))
+    .finally(() => spy.mockRestore())
+}
+
+describe('BaseCommand', () => {
+  beforeEach(() => {
+    nock.cleanAll()
+    mockLoadConfig.mockReturnValue({ activeProfile: 'default' })
+    mockResolveCredentials.mockReset()
+    mockResolveCredentials.mockResolvedValue({
+      companyDomain: 'acme',
+      token: 'test-token',
+      source: 'profile',
+    })
+  })
+
+  afterEach(() => {
+    nock.cleanAll()
+    delete process.env.FORCE_COLOR
+    delete process.env.NO_COLOR
+    delete process.env.DEBUG
+  })
+
+  it('sets DEBUG=pd:* when --verbose flag is passed', async () => {
+    await captureLogs(NoAuthCmd, ['--verbose'])
+    expect(process.env.DEBUG).toContain('pd:')
+  })
+
+  it('appends pd:* to existing DEBUG when --verbose flag is passed', async () => {
+    process.env.DEBUG = 'other:*'
+    await captureLogs(NoAuthCmd, ['--verbose'])
+    expect(process.env.DEBUG).toContain('other:*')
+    expect(process.env.DEBUG).toContain('pd:*')
+  })
+
+  it('sets FORCE_COLOR=0 when --no-color flag is passed', async () => {
+    await captureLogs(NoAuthCmd, ['--no-color'])
+    expect(process.env.FORCE_COLOR).toBe('0')
+  })
+
+  it('sets FORCE_COLOR=0 when NO_COLOR env is set', async () => {
+    process.env.NO_COLOR = '1'
+    await captureLogs(NoAuthCmd)
+    expect(process.env.FORCE_COLOR).toBe('0')
+  })
+
+  it('skips credential resolution when skipAuth is true', async () => {
+    const stdout = await captureLogs(NoAuthCmd)
+    expect(mockResolveCredentials).not.toHaveBeenCalled()
+    expect(stdout).toContain('profile:default')
+  })
+
+  it('exposes the parsed --limit flag', async () => {
+    const stdout = await captureLogs(NoAuthCmd, ['--limit', '25'])
+    expect(stdout).toContain('limit:25')
+  })
+
+  it('propagates AuthRequiredError when credentials are missing', async () => {
+    mockResolveCredentials.mockRejectedValue(new AuthRequiredError())
+    await expect(captureLogs(ApiCmd)).rejects.toThrow('Not authenticated')
+  })
+
+  it('defaults to json output when not TTY', async () => {
+    nock(API_BASE)
+      .get('/api/v2/users/me')
+      .reply(200, { success: true, data: { id: 1, name: 'Json User' } })
+
+    const origIsTTY = process.stdout.isTTY
+    process.stdout.isTTY = false
+    const stdout = await captureLogs(ApiCmd)
+    process.stdout.isTTY = origIsTTY
+
+    expect(stdout).toContain('"name": "Json User"')
+  })
+
+  it('defaults to table output when TTY', async () => {
+    nock(API_BASE)
+      .get('/api/v2/users/me')
+      .reply(200, { success: true, data: { id: 1, name: 'TTY User' } })
+
+    const origIsTTY = process.stdout.isTTY
+    process.stdout.isTTY = true
+    const stdout = await captureLogs(ApiCmd)
+    process.stdout.isTTY = origIsTTY
+
+    expect(stdout).toContain('TTY User')
+    expect(stdout).toContain('│')
+  })
+
+  it('respects an explicit --output json', async () => {
+    nock(API_BASE)
+      .get('/api/v2/users/me')
+      .reply(200, { success: true, data: { id: 1, name: 'Explicit' } })
+
+    const stdout = await captureLogs(ApiCmd, ['--output', 'json'])
+    expect(JSON.parse(stdout)).toEqual({ id: 1, name: 'Explicit' })
+  })
+
+  it('catch surfaces Pipedrive API errors via handleError', async () => {
+    nock(API_BASE)
+      .get('/api/v2/users/me')
+      .reply(422, { success: false, error: 'Validation failed' })
+
+    await expect(captureLogs(ApiCmd)).rejects.toThrow(
+      'Pipedrive API 422: Validation failed',
+    )
+  })
+
+  it('sends a pdcli User-Agent on API requests', async () => {
+    nock.disableNetConnect()
+    try {
+      const scope = nock(API_BASE)
+        .get('/api/v2/users/me')
+        .matchHeader('user-agent', /^pdcli\/\d+\.\d+\.\d+/)
+        .reply(200, { success: true, data: { id: 1, name: 'UA User' } })
+
+      const stdout = await captureLogs(ApiCmd, ['--output', 'json'])
+      expect(stdout).toContain('UA User')
+      expect(scope.isDone()).toBe(true)
+    } finally {
+      nock.enableNetConnect()
+    }
+  })
+
+  it('passes --no-retry through to the client (429 throws immediately)', async () => {
+    nock(API_BASE)
+      .get('/api/v2/users/me')
+      .reply(429, '', { 'x-ratelimit-reset': '9' })
+
+    await expect(captureLogs(ApiCmd, ['--no-retry'])).rejects.toThrow(
+      /Rate limited/,
+    )
+  })
+})
