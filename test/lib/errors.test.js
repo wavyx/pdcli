@@ -152,6 +152,13 @@ describe('ApiError', () => {
       expect(err.message).toBe('Pipedrive API 502: Bad Gateway')
     })
 
+    it('truncates huge non-JSON bodies (e.g. HTML error pages)', () => {
+      const html = `<!DOCTYPE html><html>${'x'.repeat(20_000)}</html>`
+      const err = ApiError.fromResponse(404, html, '/api/v2/missing')
+      expect(err.message.length).toBeLessThan(400)
+      expect(err.message).toContain('…')
+    })
+
     it('maps status codes to correct exit codes', () => {
       expect(ApiError.fromResponse(422, '{}', '/x').exitCode).toBe(65)
       expect(ApiError.fromResponse(403, '{}', '/x').exitCode).toBe(77)

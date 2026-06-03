@@ -71,7 +71,9 @@ export class ApiError extends CliError {
     try {
       body = JSON.parse(text)
     } catch {
-      body = { message: text }
+      // Non-JSON bodies (e.g. HTML error pages) can be huge — truncate.
+      const truncated = text.length > 200 ? `${text.slice(0, 200)}…` : text
+      body = { message: truncated }
     }
     return new ApiError(statusCode, body, path)
   }

@@ -80,7 +80,7 @@ export default class DoctorCommand extends BaseCommand {
     //    a 401 still proves the host resolves and answers)
     if (domain) {
       try {
-        await fetch(`${companyDomainToBaseOrigin(domain)}/api/v2/users/me`, {
+        await fetch(`${companyDomainToBaseOrigin(domain)}/api/v1/users/me`, {
           signal: AbortSignal.timeout(5000),
         })
         results.push({ label: 'API reachable', ok: true })

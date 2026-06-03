@@ -38,7 +38,7 @@ describe('auth login', () => {
 
   it('validates and stores credentials passed via flags', async () => {
     nock('https://acme.pipedrive.com')
-      .get('/api/v2/users/me')
+      .get('/api/v1/users/me')
       .matchHeader('x-api-token', 'tok-123')
       .reply(200, {
         success: true,
@@ -67,7 +67,7 @@ describe('auth login', () => {
     mockPassword.mockResolvedValue('prompted-token')
 
     nock('https://acme.pipedrive.com')
-      .get('/api/v2/users/me')
+      .get('/api/v1/users/me')
       .matchHeader('x-api-token', 'prompted-token')
       .reply(200, {
         success: true,
@@ -84,7 +84,7 @@ describe('auth login', () => {
 
   it('normalizes a pasted full URL to the bare subdomain', async () => {
     nock('https://acme.pipedrive.com')
-      .get('/api/v2/users/me')
+      .get('/api/v1/users/me')
       .reply(200, { success: true, data: { id: 1, name: 'N', email: 'n@a' } })
 
     await runCmd(LoginCommand, [
@@ -103,7 +103,7 @@ describe('auth login', () => {
 
   it('does not store anything when validation fails', async () => {
     nock('https://acme.pipedrive.com')
-      .get('/api/v2/users/me')
+      .get('/api/v1/users/me')
       .reply(401, { success: false, error: 'invalid token' })
 
     await expect(

@@ -35,7 +35,7 @@ describe('doctor', () => {
     mockIsKeychainAvailable.mockReturnValue(true)
     mockGetProfileConfig.mockReturnValue('acme')
     mockGetToken.mockResolvedValue('a-token')
-    nock('https://acme.pipedrive.com').get('/api/v2/users/me').reply(401)
+    nock('https://acme.pipedrive.com').get('/api/v1/users/me').reply(401)
 
     const stdout = await runCmd(DoctorCommand)
 
@@ -47,7 +47,7 @@ describe('doctor', () => {
     mockIsKeychainAvailable.mockReturnValue(true)
     mockGetProfileConfig.mockReturnValue('acme')
     mockGetToken.mockResolvedValue(null)
-    nock('https://acme.pipedrive.com').get('/api/v2/users/me').reply(401)
+    nock('https://acme.pipedrive.com').get('/api/v1/users/me').reply(401)
 
     const stdout = await runCmd(DoctorCommand)
 
@@ -71,7 +71,7 @@ describe('doctor', () => {
     mockGetProfileConfig.mockReturnValue('acme')
     mockGetToken.mockResolvedValue('a-token')
     nock('https://acme.pipedrive.com')
-      .get('/api/v2/users/me')
+      .get('/api/v1/users/me')
       .replyWithError('getaddrinfo ENOTFOUND')
 
     const stdout = await runCmd(DoctorCommand)

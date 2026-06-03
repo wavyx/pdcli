@@ -132,7 +132,9 @@ describe('resolveCredentials', () => {
 })
 
 describe('validateToken', () => {
-  it('fetches /api/v2/users/me and returns the user data', async () => {
+  // Users API has no v2 equivalent (June 2026) — /api/v2/users/me 404s
+  // into the web app's HTML page. Must use v1.
+  it('fetches /api/v1/users/me and returns the user data', async () => {
     const client = {
       get: vi.fn().mockResolvedValue({
         success: true,
@@ -142,7 +144,7 @@ describe('validateToken', () => {
 
     const user = await validateToken(client)
 
-    expect(client.get).toHaveBeenCalledWith('/api/v2/users/me')
+    expect(client.get).toHaveBeenCalledWith('/api/v1/users/me')
     expect(user).toEqual({ id: 1, name: 'Jane', email: 'jane@acme.com' })
   })
 })

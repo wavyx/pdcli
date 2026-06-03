@@ -84,10 +84,12 @@ export async function resolveCredentials({ flags, profile } = {}) {
 
 /**
  * Validate a token by fetching the authenticated user.
+ * Note: the Users API has no v2 equivalent (June 2026) — /api/v2/users/me
+ * 404s into the web app's HTML page, so this must stay on v1.
  * @param {{ get: (path: string) => Promise<{data: object}> }} client
  * @returns {Promise<object>} the Pipedrive user object
  */
 export async function validateToken(client) {
-  const body = await client.get('/api/v2/users/me')
+  const body = await client.get('/api/v1/users/me')
   return body.data
 }

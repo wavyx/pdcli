@@ -34,7 +34,7 @@ describe('auth status', () => {
     mockGetProfileConfig.mockReturnValue('acme')
     mockGetToken.mockResolvedValue('tok-123')
     nock('https://acme.pipedrive.com')
-      .get('/api/v2/users/me')
+      .get('/api/v1/users/me')
       .matchHeader('x-api-token', 'tok-123')
       .reply(200, {
         success: true,
@@ -63,7 +63,7 @@ describe('auth status', () => {
     mockGetProfileConfig.mockReturnValue('acme')
     mockGetToken.mockResolvedValue('tok-123')
     nock('https://acme.pipedrive.com')
-      .get('/api/v2/users/me')
+      .get('/api/v1/users/me')
       .replyWithError('network down')
 
     const stdout = await runCmd(StatusCommand)
