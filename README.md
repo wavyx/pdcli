@@ -69,6 +69,16 @@ pdcli person import people.csv --dry-run               # CSV headers map to fiel
 pdcli person import people.csv                         # custom fields by name
 ```
 
+## Analytics & housekeeping
+
+```bash
+pdcli metrics velocity --period 90d      # the Sales Velocity Equation, in your terminal
+pdcli funnel --pipeline 1                # stage-to-stage conversion
+pdcli pipeline health                    # per-stage value, weighted value, stale, no-next-step
+pdcli audit                              # 11 data-hygiene checks (duplicates, stale, gaps)
+pdcli audit --strict                     # exit 1 on must-severity findings — wire into CI
+```
+
 ## Files, webhooks, backup
 
 ```bash
