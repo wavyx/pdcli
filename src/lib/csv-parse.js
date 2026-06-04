@@ -60,8 +60,10 @@ export function parseCsv(text) {
     throw new CliError('Unterminated quoted field in CSV', { exitCode: 65 })
   }
   if (field !== '' || record.length > 0) {
+    // A tail record only reaches here when non-empty (a bare trailing
+    // newline never starts a record), so push unconditionally.
     record.push(field)
-    if (record.length > 1 || record[0] !== '') records.push(record)
+    records.push(record)
   }
 
   if (records.length === 0) {

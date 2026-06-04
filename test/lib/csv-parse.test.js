@@ -56,3 +56,10 @@ describe('parseCsv', () => {
     expect(() => parseCsv('a\n"oops\n')).toThrow(/unterminated/i)
   })
 })
+
+describe('parseCsv without trailing newline', () => {
+  it('keeps the final record', () => {
+    const { rows } = parseCsv('a,b\n1,2')
+    expect(rows).toEqual([['1', '2']])
+  })
+})
