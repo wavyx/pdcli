@@ -1,5 +1,9 @@
 # pdcli
 
+[![CI](https://github.com/wavyx/pdcli/actions/workflows/ci.yml/badge.svg)](https://github.com/wavyx/pdcli/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/wavyx/pdcli/branch/main/graph/badge.svg)](https://codecov.io/gh/wavyx/pdcli)
+[![npm](https://img.shields.io/npm/v/%40wavyx%2Fpdcli)](https://www.npmjs.com/package/@wavyx/pdcli)
+
 Command-line interface for [Pipedrive](https://www.pipedrive.com/) — fast, scriptable, built for terminals, CI pipelines, and AI agents.
 
 > Not affiliated with or endorsed by Pipedrive.
@@ -53,6 +57,16 @@ Custom fields by **human name** — labels and option IDs resolve automatically:
 ```bash
 pdcli deal create --title "Sized" --field "Deal Size=Large" --field "Score=4.5"
 pdcli deal update 42 --body '{"probability":75}'   # raw JSON escape hatch
+```
+
+## Bulk
+
+```bash
+pdcli deal bulk-update --filter 9 --stage 5            # saved filter → stage move
+pdcli deal bulk-update --ids 1,2,3 --status won --yes
+pdcli deal list --status open --jq '.[].id' | pdcli deal bulk-update --owner 42
+pdcli person import people.csv --dry-run               # CSV headers map to fields,
+pdcli person import people.csv                         # custom fields by name
 ```
 
 ## Files, webhooks, backup
