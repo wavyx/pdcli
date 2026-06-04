@@ -5,7 +5,7 @@ description: Full command reference for the pdcli command-line interface.
 
 <!-- AUTO-GENERATED from the oclif manifest by scripts/gen-commands.mjs — do not edit by hand. -->
 
-Reference for `pdcli` v0.3.0 (71 commands). Every command also accepts the global flags `--output table|json`, `--profile`, `--no-color`, `--verbose`, `--no-retry`, `--timeout`, and `--limit`.
+Reference for `pdcli` v0.4.0 (74 commands). Every command also accepts the global flags `--output table|json`, `--profile`, `--no-color`, `--verbose`, `--no-retry`, `--timeout`, and `--limit`.
 
 ## Top-level
 
@@ -313,6 +313,34 @@ pdcli config set default_output json
 ```
 
 ## pdcli deal
+
+### `pdcli deal bulk-update`
+
+Update many deals at once (by --ids, a saved --filter, or ids piped on stdin)
+
+```
+pdcli deal bulk-update [flags]
+```
+
+- `--ids <value>` — Comma-separated deal IDs
+- `--filter <value>` — Pipedrive saved filter ID to select deals
+- `--stage <value>` — Move to stage ID
+- `--pipeline <value>` — Move to pipeline ID
+- `--status <open|won|lost>` — Set status
+- `--owner <value>` — Assign owner (user) ID
+- `--field <value>` — Custom/standard field as "Name=Value" (repeatable)
+- `--body <value>` — Raw JSON body to merge (flags win)
+- `--dry-run` — List the targets without updating anything
+- `-y, --yes` — Skip the confirmation prompt
+
+Examples:
+
+```bash
+pdcli deal bulk-update --ids 1,2,3 --stage 5
+pdcli deal bulk-update --filter 9 --status won
+pdcli deal list --status open --jq '.[].id' | pdcli deal bulk-update --owner 42
+pdcli deal bulk-update --filter 9 --stage 5 --dry-run
+```
 
 ### `pdcli deal create`
 
@@ -834,6 +862,24 @@ pdcli org get 7
 pdcli org get 7 --output json
 ```
 
+### `pdcli org import`
+
+Bulk-create organizations from a CSV (headers map to fields, custom fields by name)
+
+```
+pdcli org import <file> [flags]
+```
+
+- `--dry-run` — Validate every row without creating anything
+- `-y, --yes` — Skip the confirmation prompt
+
+Examples:
+
+```bash
+pdcli org import orgs.csv
+pdcli org import orgs.csv --dry-run
+```
+
 ### `pdcli org list`
 
 List organizations
@@ -928,6 +974,24 @@ Examples:
 ```bash
 pdcli person get 5
 pdcli person get 5 --output json
+```
+
+### `pdcli person import`
+
+Bulk-create persons from a CSV (headers map to fields, custom fields by name)
+
+```
+pdcli person import <file> [flags]
+```
+
+- `--dry-run` — Validate every row without creating anything
+- `-y, --yes` — Skip the confirmation prompt
+
+Examples:
+
+```bash
+pdcli person import people.csv
+pdcli person import people.csv --dry-run
 ```
 
 ### `pdcli person list`

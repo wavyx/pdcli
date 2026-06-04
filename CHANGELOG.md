@@ -4,6 +4,23 @@ All notable changes to `pdcli` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/).
 
+## [0.4.0] - 2026-06-04
+
+### Added
+
+- `deal bulk-update` — update many deals at once by `--ids`, a Pipedrive
+  saved `--filter`, or ids piped on stdin. Paced sequentially inside the
+  rate-limit burst window, confirms before writing (`--yes` to skip),
+  `--dry-run` previews targets, partial failures are listed per deal and
+  exit 1.
+- `person import` / `org import` — bulk-create from CSV. Headers map to
+  fields, including custom fields by human name with option-label
+  resolution; `--dry-run` validates every row without writing.
+
+### Changed
+
+- CI actions bumped to checkout/setup-node v5.
+
 ## [0.3.0] - 2026-06-04
 
 ### Added
