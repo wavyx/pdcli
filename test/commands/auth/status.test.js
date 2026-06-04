@@ -3,8 +3,10 @@ import nock from 'nock'
 
 const mockGetToken = vi.fn()
 const mockIsKeychainAvailable = vi.fn()
+const mockGetOAuthTokens = vi.fn()
 vi.mock('../../../src/lib/keychain.js', () => ({
   getToken: mockGetToken,
+  getOAuthTokens: mockGetOAuthTokens,
   isKeychainAvailable: mockIsKeychainAvailable,
 }))
 
@@ -104,5 +106,53 @@ describe('auth status edge cases', () => {
 
     expect(stdout).toContain('Authenticated User')
     expect(stdout).not.toContain('Name:')
+  })
+})
+
+describe('auth status in OAuth mode', () => {
+  beforeEach(() => {
+    nock.cleanAll()
+    mockGetToken.mockReset()
+    mockGetOAuthTokens.mockReset()
+    mockGetProfileConfig.mockReset()
+    mockIsKeychainAvailable.mockReturnValue(true)
+  })
+
+  it('shows OAuth mode with expiry and identity', async () => {
+    mockGetProfileConfig.mockImplementation((p, key) =>
+      key === 'auth_mode' ? 'oauth' : 'acme',
+    )
+    mockGetOAuthTokens.mockResolvedValue({
+      accessToken: 'at-1',
+      refreshToken: 'rt-1',
+      expiresAt: Date.now() + 30 * 60_000,
+      apiDomain: 'https://acme.pipedrive.com',
+      clientId: 'cid',
+      clientSecret: 'csec',
+    })
+    nock('https://acme.pipedrive.com')
+      .get('/api/v1/users/me')
+      .matchHeader('authorization', 'Bearer at-1')
+      .reply(200, {
+        success: true,
+        data: { id: 1, name: 'OAuth Jane', email: 'jane@acme.com' },
+      })
+
+    const stdout = await runCmd(StatusCommand)
+
+    expect(stdout).toContain('OAuth')
+    expect(stdout).toMatch(/expires in/i)
+    expect(stdout).toContain('jane@acme.com')
+  })
+
+  it('reports not authenticated when OAuth mode has no tokens', async () => {
+    mockGetProfileConfig.mockImplementation((p, key) =>
+      key === 'auth_mode' ? 'oauth' : 'acme',
+    )
+    mockGetOAuthTokens.mockResolvedValue(null)
+
+    const stdout = await runCmd(StatusCommand)
+
+    expect(stdout).toContain('Not authenticated')
   })
 })

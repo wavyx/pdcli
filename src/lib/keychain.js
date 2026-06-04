@@ -64,6 +64,53 @@ export async function deleteToken(profile) {
   }
 }
 
+/**
+ * @typedef {object} OAuthTokens
+ * @property {string} accessToken
+ * @property {string} refreshToken
+ * @property {number} expiresAt epoch ms
+ * @property {string} apiDomain e.g. https://acme.pipedrive.com
+ * @property {string} clientId
+ * @property {string} clientSecret kept in the keychain, never in config
+ */
+
+/**
+ * @param {string} profile
+ * @returns {Promise<OAuthTokens | null>}
+ */
+export async function getOAuthTokens(profile) {
+  if (!Entry) return null
+  const account = `${profile}/oauth`
+  try {
+    const raw = getEntry(account).getPassword()
+    return raw ? JSON.parse(raw) : null
+  } catch (err) {
+    debug('getOAuthTokens error: %s', err.message)
+    return null
+  }
+}
+
+/**
+ * @param {string} profile
+ * @param {OAuthTokens} tokens
+ */
+export async function setOAuthTokens(profile, tokens) {
+  if (!Entry) keychainRequired()
+  const account = `${profile}/oauth`
+  getEntry(account).setPassword(JSON.stringify(tokens))
+}
+
+/** @param {string} profile */
+export async function deleteOAuthTokens(profile) {
+  if (!Entry) return
+  const account = `${profile}/oauth`
+  try {
+    getEntry(account).deletePassword()
+  } catch (err) {
+    debug('deleteOAuthTokens error: %s', err.message)
+  }
+}
+
 export function isKeychainAvailable() {
   return Entry !== null
 }

@@ -31,21 +31,33 @@ function clampLimit(query) {
 
 /**
  * @param {object} options
- * @param {string} options.companyDomain Bare subdomain ("acme") — forms and
- *   locks the base origin https://acme.pipedrive.com.
- * @param {string} options.token Personal API token (sent as x-api-token).
+ * @param {string} [options.companyDomain] Bare subdomain ("acme") — forms and
+ *   locks the base origin https://acme.pipedrive.com (token mode).
+ * @param {string} [options.apiDomain] Full origin from the OAuth token
+ *   response (e.g. https://acme.pipedrive.com) — used and locked in OAuth mode.
+ * @param {string} options.token Personal API token (x-api-token header) or
+ *   OAuth access token (Authorization: Bearer) depending on authMode.
+ * @param {'token' | 'oauth'} [options.authMode]
+ * @param {() => Promise<string>} [options.onRefresh] OAuth-mode callback
+ *   invoked once on a 401; returns a fresh access token to retry with.
  * @param {number} [options.timeout]
  * @param {boolean} [options.retry]
  * @param {string} [options.userAgent]
  */
 export function createClient({
   companyDomain,
-  token,
+  apiDomain,
+  token: initialToken,
+  authMode = 'token',
+  onRefresh,
   timeout = 30_000,
   retry = true,
   userAgent = 'pdcli',
 }) {
-  const baseOrigin = companyDomainToBaseOrigin(companyDomain)
+  const baseOrigin = apiDomain
+    ? new URL(apiDomain).origin
+    : companyDomainToBaseOrigin(companyDomain)
+  let token = initialToken
 
   async function request(method, path, { body, query } = {}) {
     const url = new URL(path, baseOrigin)
@@ -75,9 +87,13 @@ export function createClient({
       attempts++
 
       const headers = {
-        'x-api-token': token,
         'content-type': 'application/json',
         'user-agent': userAgent,
+      }
+      if (authMode === 'oauth') {
+        headers.authorization = `Bearer ${token}`
+      } else {
+        headers['x-api-token'] = token
       }
 
       const res = await fetch(url, {
@@ -99,6 +115,13 @@ export function createClient({
         sawRateLimit = true
         debug('rate limited, waiting %ds', wait)
         await sleep(wait * 1000)
+        continue
+      }
+
+      // OAuth access tokens expire (~1h) — refresh once and retry.
+      if (res.status === 401 && onRefresh && attempts === 1) {
+        debug('401, attempting OAuth token refresh')
+        token = await onRefresh()
         continue
       }
 

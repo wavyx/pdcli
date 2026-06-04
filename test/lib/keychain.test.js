@@ -3,6 +3,9 @@ import {
   getToken,
   setToken,
   deleteToken,
+  getOAuthTokens,
+  setOAuthTokens,
+  deleteOAuthTokens,
   isKeychainAvailable,
 } from '../../src/lib/keychain.js'
 
@@ -66,3 +69,47 @@ describe('isKeychainAvailable', () => {
     expect(typeof isKeychainAvailable()).toBe('boolean')
   })
 })
+
+const sampleOAuth = {
+  accessToken: 'at-123',
+  refreshToken: 'rt-456',
+  expiresAt: 1750000000000,
+  apiDomain: 'https://acme.pipedrive.com',
+  clientId: 'cid',
+  clientSecret: 'csec',
+}
+
+describe.skipIf(!isKeychainAvailable())(
+  'keychain OAuth slot (real keyring)',
+  () => {
+    const oauthProfile = `pdcli-oauth-test-${Date.now()}`
+
+    afterEach(async () => {
+      await deleteOAuthTokens(oauthProfile)
+    })
+
+    it('round-trips the OAuth token bundle as JSON', async () => {
+      await setOAuthTokens(oauthProfile, sampleOAuth)
+      expect(await getOAuthTokens(oauthProfile)).toEqual(sampleOAuth)
+    })
+
+    it('returns null for a profile without OAuth tokens', async () => {
+      expect(await getOAuthTokens(`none-${Date.now()}`)).toBeNull()
+    })
+
+    it('returns null for corrupted stored JSON', async () => {
+      const { Entry } = await import('@napi-rs/keyring')
+      const entry = new Entry('pdcli', `${oauthProfile}/oauth`)
+      entry.setPassword('not-json{{{')
+      expect(await getOAuthTokens(oauthProfile)).toBeNull()
+      entry.deletePassword()
+    })
+
+    it('deleteOAuthTokens removes the bundle and tolerates repeats', async () => {
+      await setOAuthTokens(oauthProfile, sampleOAuth)
+      await deleteOAuthTokens(oauthProfile)
+      expect(await getOAuthTokens(oauthProfile)).toBeNull()
+      await expect(deleteOAuthTokens(oauthProfile)).resolves.toBeUndefined()
+    })
+  },
+)

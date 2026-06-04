@@ -31,3 +31,19 @@ describe('keychain when OS keychain is unavailable', () => {
     await expect(deleteToken(testProfile)).resolves.toBeUndefined()
   })
 })
+
+describe('OAuth slot when OS keychain is unavailable', () => {
+  it('setOAuthTokens refuses to write', async () => {
+    const { setOAuthTokens } = await import('../../src/lib/keychain.js')
+    await expect(
+      setOAuthTokens(testProfile, { accessToken: 'x' }),
+    ).rejects.toThrow(/keychain/i)
+  })
+
+  it('getOAuthTokens returns null, deleteOAuthTokens is a no-op', async () => {
+    const { getOAuthTokens, deleteOAuthTokens } =
+      await import('../../src/lib/keychain.js')
+    await expect(getOAuthTokens(testProfile)).resolves.toBeNull()
+    await expect(deleteOAuthTokens(testProfile)).resolves.toBeUndefined()
+  })
+})

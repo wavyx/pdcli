@@ -1,7 +1,8 @@
 import { Command, Flags } from '@oclif/core'
 import { formatOutput } from './lib/output/index.js'
 import { loadConfig } from './lib/config.js'
-import { resolveCredentials } from './lib/auth.js'
+import { resolveCredentials, refreshAccessToken } from './lib/auth.js'
+import { setOAuthTokens } from './lib/keychain.js'
 import { createClient } from './lib/client.js'
 import { handleError } from './lib/errors.js'
 
@@ -67,16 +68,45 @@ export default class BaseCommand extends Command {
 
     if (this.constructor.skipAuth) return
 
-    const { companyDomain, token } = await resolveCredentials({
+    const creds = await resolveCredentials({
       flags,
       profile: this.activeProfile,
     })
-    this.apiClient = createClient({
-      companyDomain,
-      token,
+
+    const common = {
       retry: !flags['no-retry'],
       timeout: flags.timeout,
       userAgent: `pdcli/${this.config.version}`,
+    }
+
+    if (creds.mode === 'oauth') {
+      this.apiClient = createClient({
+        ...common,
+        apiDomain: creds.apiDomain,
+        token: creds.token,
+        authMode: 'oauth',
+        onRefresh: async () => {
+          const refreshed = await refreshAccessToken({
+            refreshToken: creds.oauth.refreshToken,
+            clientId: creds.oauth.clientId,
+            clientSecret: creds.oauth.clientSecret,
+          })
+          await setOAuthTokens(this.activeProfile, {
+            ...creds.oauth,
+            accessToken: refreshed.accessToken,
+            refreshToken: refreshed.refreshToken,
+            expiresAt: Date.now() + refreshed.expiresIn * 1000,
+          })
+          return refreshed.accessToken
+        },
+      })
+      return
+    }
+
+    this.apiClient = createClient({
+      ...common,
+      companyDomain: creds.companyDomain,
+      token: creds.token,
     })
   }
 
