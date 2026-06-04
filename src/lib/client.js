@@ -195,12 +195,79 @@ export function createClient({
     }
   }
 
+  function lockedUrl(path) {
+    const url = new URL(path, baseOrigin)
+    if (url.origin !== baseOrigin) {
+      throw new CliError(
+        `Refusing to send request outside your Pipedrive company host ` +
+          `(${baseOrigin}): ${url.origin}`,
+        { exitCode: 78 },
+      )
+    }
+    return url
+  }
+
+  function authHeaders() {
+    return authMode === 'oauth'
+      ? { authorization: `Bearer ${token}`, 'user-agent': userAgent }
+      : { 'x-api-token': token, 'user-agent': userAgent }
+  }
+
+  /**
+   * Download a binary resource (e.g. /api/v1/files/:id/download).
+   * @param {string} path
+   * @returns {Promise<{buffer: ArrayBuffer, contentType: string | null}>}
+   */
+  async function download(path) {
+    const url = lockedUrl(path)
+    const res = await fetch(url, {
+      headers: authHeaders(),
+      signal: AbortSignal.timeout(timeout),
+    })
+    debug('GET (binary) %s → %d', path, res.status)
+    if (!res.ok) {
+      throw ApiError.fromResponse(res.status, await res.text(), path)
+    }
+    return {
+      buffer: await res.arrayBuffer(),
+      contentType: res.headers.get('content-type'),
+    }
+  }
+
+  /**
+   * POST multipart/form-data (file uploads — v1 files API).
+   * @param {string} path
+   * @param {{ file: { name: string, data: Buffer | Uint8Array }, fields?: Record<string, unknown> }} options
+   */
+  async function postMultipart(path, { file, fields = {} }) {
+    const url = lockedUrl(path)
+    const form = new FormData()
+    form.set('file', new Blob([file.data]), file.name)
+    for (const [k, v] of Object.entries(fields)) {
+      if (v != null) form.set(k, String(v))
+    }
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: authHeaders(), // fetch sets the multipart boundary itself
+      body: form,
+      signal: AbortSignal.timeout(timeout),
+    })
+    debug('POST (multipart) %s → %d', path, res.status)
+    const text = await res.text()
+    if (!res.ok) {
+      throw ApiError.fromResponse(res.status, text, path)
+    }
+    return text ? JSON.parse(text) : null
+  }
+
   return {
     get: (path, opts) => request('GET', path, opts),
     post: (path, opts) => request('POST', path, opts),
     put: (path, opts) => request('PUT', path, opts),
     patch: (path, opts) => request('PATCH', path, opts),
     del: (path, opts) => request('DELETE', path, opts),
+    download,
+    postMultipart,
     pageV1,
     pageV2,
   }
