@@ -16,6 +16,7 @@ const manifest = {
         output: {
           type: 'option',
           helpGroup: 'GLOBAL',
+          options: ['table', 'json'],
           description: 'Output format',
         },
       },
@@ -62,6 +63,24 @@ describe('renderGithubMarkdown', () => {
     expect(md).toContain('pdcli deal list\n')
     // hidden commands excluded
     expect(md).not.toContain('secret')
+  })
+})
+
+describe('renderStatsJson', () => {
+  it('emits version, command count, topic count, and output format count', async () => {
+    const { renderStatsJson } = await import('../scripts/gen-commands.mjs')
+    const stats = JSON.parse(renderStatsJson(manifest))
+    expect(stats).toEqual({
+      version: '0.1.0',
+      commands: 3,
+      topics: 1,
+      formats: 2,
+    })
+  })
+
+  it('ends with a trailing newline so the file is POSIX-clean', async () => {
+    const { renderStatsJson } = await import('../scripts/gen-commands.mjs')
+    expect(renderStatsJson(manifest)).toMatch(/\n$/)
   })
 })
 
