@@ -211,3 +211,89 @@ describe('computeHealth', () => {
     expect(s2.noNextActivityCount).toBe(1) // deal 7 has no activities at all
   })
 })
+
+describe('formatApiDatetime', () => {
+  it('strips milliseconds (v2 query params reject them)', async () => {
+    const { formatApiDatetime } = await import('../../src/lib/period.js')
+    expect(formatApiDatetime(new Date('2026-06-04T12:00:00.123Z'))).toBe(
+      '2026-06-04T12:00:00Z',
+    )
+  })
+})
+
+describe('computeHealth probability fallbacks', () => {
+  it('defaults to 100% when neither deal nor stage has a probability', () => {
+    const stages = [{ id: 1, name: 'S', pipeline_id: 1, order_nr: 0 }]
+    const rows = computeHealth(
+      [
+        {
+          id: 1,
+          status: 'open',
+          stage_id: 1,
+          value: 100,
+          probability: null,
+          update_time: NOW.toISOString(),
+          expected_close_date: null,
+        },
+      ],
+      stages,
+      [],
+      { now: NOW },
+    )
+    expect(rows[0].weightedValue).toBe(100)
+  })
+})
+
+describe('computeFunnel defaults', () => {
+  it('works without an options argument', () => {
+    const funnel = computeFunnel([], [], STAGES)
+    expect(funnel).toHaveLength(3)
+  })
+
+  it('returns null conversion when nothing reached the previous stage', () => {
+    const funnel = computeFunnel(
+      [{ id: 1, status: 'lost', stage_id: 99 }], // unknown stage → reached nothing
+      [],
+      STAGES,
+    )
+    expect(funnel[1].conversionFromPrev).toBeNull()
+  })
+})
+
+describe('null-value tolerance', () => {
+  it('treats null won values as zero', () => {
+    const v = computeVelocity(
+      [
+        {
+          id: 1,
+          status: 'won',
+          value: null,
+          won_time: daysAgo(5),
+          add_time: daysAgo(10),
+        },
+      ],
+      { since: parsePeriod('90d', NOW), now: NOW },
+    )
+    expect(v.avgWonValue).toBe(0)
+  })
+
+  it('treats null open values as zero in funnel and health', () => {
+    const open = [
+      {
+        id: 5,
+        status: 'open',
+        stage_id: 1,
+        value: null,
+        probability: 50,
+        update_time: NOW.toISOString(),
+        expected_close_date: null,
+      },
+    ]
+    const funnel = computeFunnel([], open, STAGES)
+    expect(funnel[0].openValue).toBe(0)
+
+    const rows = computeHealth(open, STAGES, [], { now: NOW })
+    expect(rows[0].openValue).toBe(0)
+    expect(rows[0].weightedValue).toBe(0)
+  })
+})

@@ -21,3 +21,13 @@ export function parsePeriod(period, now = new Date()) {
   const days = match[2] === 'm' ? amount * 30 : amount
   return new Date(now.getTime() - days * DAY_MS)
 }
+
+/**
+ * Format a date the way v2 query params accept it: RFC 3339 seconds
+ * precision, no milliseconds (the API rejects fractional seconds).
+ * @param {Date} date
+ * @returns {string}
+ */
+export function formatApiDatetime(date) {
+  return date.toISOString().replace(/\.\d{3}Z$/, 'Z')
+}

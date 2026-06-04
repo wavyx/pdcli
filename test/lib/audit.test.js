@@ -322,3 +322,32 @@ describe('runChecks', () => {
     expect(results[0].name).toBe('stale-deals')
   })
 })
+
+describe('audit input edge shapes', () => {
+  it('tolerates persons with null email arrays and entries without values', () => {
+    const results = runChecks(
+      dataset({
+        persons: [
+          { id: 1, name: 'NullArrays', emails: null, phones: null },
+          { id: 2, name: 'EmptyValue', emails: [{ value: '' }], phones: [] },
+        ],
+      }),
+      { now: NOW },
+    )
+    expect(byName(results, 'uncontactable-persons').count).toBe(2)
+    expect(byName(results, 'duplicate-persons').count).toBe(0)
+  })
+
+  it('skips organizations without a name', () => {
+    const results = runChecks(
+      dataset({
+        organizations: [
+          { id: 1, name: null },
+          { id: 2, name: null },
+        ],
+      }),
+      { now: NOW },
+    )
+    expect(byName(results, 'duplicate-orgs').count).toBe(0)
+  })
+})
