@@ -1,0 +1,86 @@
+import { CliError } from './errors.js'
+
+/**
+ * Minimal RFC 4180 CSV parser (quoted fields, escaped quotes, embedded
+ * commas/newlines, CRLF). First record is the header row.
+ * @param {string} text
+ * @returns {{ headers: string[], rows: string[][] }}
+ */
+export function parseCsv(text) {
+  const records = []
+  let record = []
+  let field = ''
+  let inQuotes = false
+  let i = 0
+
+  while (i < text.length) {
+    const char = text[i]
+
+    if (inQuotes) {
+      if (char === '"') {
+        if (text[i + 1] === '"') {
+          field += '"'
+          i += 2
+          continue
+        }
+        inQuotes = false
+        i++
+        continue
+      }
+      field += char
+      i++
+      continue
+    }
+
+    if (char === '"') {
+      inQuotes = true
+      i++
+      continue
+    }
+    if (char === ',') {
+      record.push(field)
+      field = ''
+      i++
+      continue
+    }
+    if (char === '\n' || char === '\r') {
+      if (char === '\r' && text[i + 1] === '\n') i++
+      record.push(field)
+      field = ''
+      if (record.length > 1 || record[0] !== '') records.push(record)
+      record = []
+      i++
+      continue
+    }
+    field += char
+    i++
+  }
+
+  if (inQuotes) {
+    throw new CliError('Unterminated quoted field in CSV', { exitCode: 65 })
+  }
+  if (field !== '' || record.length > 0) {
+    record.push(field)
+    if (record.length > 1 || record[0] !== '') records.push(record)
+  }
+
+  if (records.length === 0) {
+    throw new CliError('CSV file is empty', { exitCode: 65 })
+  }
+
+  const [headers, ...rows] = records
+
+  return {
+    headers,
+    rows: rows.map((row, index) => {
+      if (row.length > headers.length) {
+        throw new CliError(
+          `CSV row ${index + 2} has ${row.length} cells but the header has ${headers.length}`,
+          { exitCode: 65 },
+        )
+      }
+      while (row.length < headers.length) row.push('')
+      return row
+    }),
+  }
+}
