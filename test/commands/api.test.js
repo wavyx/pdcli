@@ -84,3 +84,23 @@ describe('api', () => {
     expect(stdout).toBe('')
   })
 })
+
+describe('api --jq', () => {
+  it('filters the raw response through jq', async () => {
+    mockApi()
+      .get('/api/v1/currencies')
+      .reply(200, {
+        success: true,
+        data: [{ code: 'EUR' }, { code: 'USD' }],
+      })
+
+    const stdout = await runCmd(ApiCommand, [
+      'GET',
+      '/api/v1/currencies',
+      '--jq',
+      '.[0].data | length',
+    ])
+
+    expect(stdout.trim()).toBe('2')
+  })
+})

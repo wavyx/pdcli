@@ -53,8 +53,12 @@ export default class ApiCommand extends BaseCommand {
 
     const data = await this.apiClient[method](args.path, opts)
 
-    if (data !== null) {
-      this.log(JSON.stringify(data, null, 2))
+    if (data === null) return
+
+    if (this.flags.jq) {
+      await this.outputResults(data, {})
+      return
     }
+    this.log(JSON.stringify(data, null, 2))
   }
 }
