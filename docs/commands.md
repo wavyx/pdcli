@@ -5,7 +5,7 @@ description: Full command reference for the pdcli command-line interface.
 
 <!-- AUTO-GENERATED from the oclif manifest by scripts/gen-commands.mjs — do not edit by hand. -->
 
-Reference for `pdcli` v0.4.0 (74 commands). Every command also accepts the global flags `--output table|json`, `--profile`, `--no-color`, `--verbose`, `--no-retry`, `--timeout`, and `--limit`.
+Reference for `pdcli` v0.5.0 (78 commands). Every command also accepts the global flags `--output table|json`, `--profile`, `--no-color`, `--verbose`, `--no-retry`, `--timeout`, and `--limit`.
 
 ## Top-level
 
@@ -26,6 +26,25 @@ pdcli api GET /api/v2/deals
 pdcli api GET /api/v1/currencies
 pdcli api POST /api/v2/deals --body '{"title":"New deal"}'
 pdcli api DELETE /api/v1/webhooks/1
+```
+
+### `pdcli audit`
+
+Data-quality audit: stale deals, missing fields, duplicates, overdue pileups
+
+```
+pdcli audit [flags]
+```
+
+- `--checks <value>` — Comma-separated subset of checks (stale-deals, no-next-activity, past-close-date, missing-fields, ancient-deals, missing-close-time, duplicate-persons, uncontactable-persons, duplicate-orgs, overdue-activities, currency-missing)
+- `--strict` — Exit 1 when any must-severity check has findings
+
+Examples:
+
+```bash
+pdcli audit
+pdcli audit --checks stale-deals,duplicate-persons --verbose
+pdcli audit --strict   # exit 1 on must-severity findings (CI)
 ```
 
 ### `pdcli backup`
@@ -59,6 +78,24 @@ Examples:
 
 ```bash
 pdcli doctor
+```
+
+### `pdcli funnel`
+
+Stage-to-stage conversion approximated from closed deals (final stage reached)
+
+```
+pdcli funnel [flags]
+```
+
+- `--period <value>` — Trailing window for closed deals (Nd or Nm)
+- `--pipeline <value>` — Pipeline ID (required when the account has several)
+
+Examples:
+
+```bash
+pdcli funnel
+pdcli funnel --pipeline 1 --period 180d
 ```
 
 ### `pdcli search`
@@ -713,6 +750,27 @@ pdcli lead update adf21080-0e10-11eb-879b-05d71fb426ec --title "Renamed"
 pdcli lead update adf21080-0e10-11eb-879b-05d71fb426ec --value 7500 --currency USD
 ```
 
+## pdcli metrics
+
+### `pdcli metrics velocity`
+
+Sales Velocity Equation: (open × win rate × avg won value) / cycle days
+
+```
+pdcli metrics velocity [flags]
+```
+
+- `--period <value>` — Trailing window for closed deals (Nd or Nm)
+- `--pipeline <value>` — Restrict to a pipeline ID
+- `--owner <value>` — Restrict to an owner (user) ID
+
+Examples:
+
+```bash
+pdcli metrics velocity
+pdcli metrics velocity --period 30d --pipeline 1
+```
+
 ## pdcli note
 
 ### `pdcli note create`
@@ -1051,6 +1109,23 @@ Examples:
 ```bash
 pdcli pipeline get 1
 pdcli pipeline get 1 --output json
+```
+
+### `pdcli pipeline health`
+
+Per-stage pipeline health: value, weighted value, stale deals, missing next steps
+
+```
+pdcli pipeline health [flags]
+```
+
+- `--pipeline <value>` — Pipeline ID (required when the account has several)
+
+Examples:
+
+```bash
+pdcli pipeline health
+pdcli pipeline health --pipeline 1
 ```
 
 ### `pdcli pipeline list`

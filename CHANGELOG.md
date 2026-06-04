@@ -4,6 +4,23 @@ All notable changes to `pdcli` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/).
 
+## [0.5.0] - 2026-06-04
+
+### Added
+
+- `metrics velocity` — the Sales Velocity Equation ((open × win rate ×
+  avg won value) / cycle days) with all four levers, over a trailing
+  `--period` and optional `--pipeline`/`--owner` scope.
+- `funnel` — stage-to-stage conversion approximated from closed deals'
+  final stages, plus the current open distribution per stage.
+- `pipeline health` — per-stage snapshot: open count/value,
+  probability-weighted value, stale deals (>14d), deals without a next
+  step, deals past their close date.
+- `audit` — 11 data-hygiene checks (stale/ancient deals, missing fields,
+  duplicate persons by email, duplicate orgs by name, uncontactable
+  contacts, overdue pileups, …) with `--checks`, `--verbose`, and
+  `--strict` (exit 1 on must-severity findings — CI-able).
+
 ## [0.4.0] - 2026-06-04
 
 ### Added
