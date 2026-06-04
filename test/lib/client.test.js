@@ -805,3 +805,39 @@ describe('multipart upload', () => {
     ).rejects.toMatchObject({ statusCode: 400 })
   })
 })
+
+describe('binary + multipart in OAuth mode / edge bodies', () => {
+  beforeEach(() => nock.cleanAll())
+
+  it('download sends Bearer in oauth mode', async () => {
+    const client = createClient({
+      apiDomain: 'https://acme.pipedrive.com',
+      token: 'oauth-at',
+      authMode: 'oauth',
+      retry: false,
+      timeout: 5000,
+    })
+    const scope = nock('https://acme.pipedrive.com')
+      .get('/api/v1/files/1/download')
+      .matchHeader('authorization', 'Bearer oauth-at')
+      .reply(200, Buffer.from('x'), { 'content-type': 'text/plain' })
+
+    await client.download('/api/v1/files/1/download')
+    expect(scope.isDone()).toBe(true)
+  })
+
+  it('postMultipart returns null for an empty response body', async () => {
+    const client = createClient({
+      companyDomain: 'acme',
+      token: 'test-token',
+      retry: false,
+      timeout: 5000,
+    })
+    nock('https://acme.pipedrive.com').post('/api/v1/files').reply(204, '')
+
+    const result = await client.postMultipart('/api/v1/files', {
+      file: { name: 'x.txt', data: Buffer.from('x') },
+    })
+    expect(result).toBeNull()
+  })
+})

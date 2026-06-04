@@ -318,3 +318,34 @@ describe('BaseCommand output formats and filters', () => {
     expect(stdout).not.toContain('Field User')
   })
 })
+
+describe('--jq with array data', () => {
+  beforeEach(() => {
+    nock.cleanAll()
+    mockLoadConfig.mockReturnValue({ activeProfile: 'default' })
+    mockResolveCredentials.mockResolvedValue({
+      mode: 'token',
+      companyDomain: 'acme',
+      token: 'test-token',
+      source: 'profile',
+    })
+  })
+
+  it('passes arrays to jq unwrapped', async () => {
+    class ArrayCmd extends BaseCommand {
+      async run() {
+        await this.outputResults(
+          [
+            { id: 1, name: 'A' },
+            { id: 2, name: 'B' },
+          ],
+          { id: { header: 'ID' }, name: { header: 'Name' } },
+        )
+      }
+    }
+
+    nock(API_BASE) // no API call needed, but auth wiring runs
+    const stdout = await captureLogs(ArrayCmd, ['--jq', '.[1].name'])
+    expect(stdout).toContain('B')
+  })
+})
