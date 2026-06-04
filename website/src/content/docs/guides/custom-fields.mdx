@@ -1,0 +1,122 @@
+---
+title: Custom fields
+description: Discover, read, and write Pipedrive custom fields by human name — pdcli resolves the per-account hash keys and option labels for you.
+---
+
+In Pipedrive, every custom field has a **40-character hexadecimal hash key** instead of a
+readable name, and those keys are **unique to your account**. A field you call "Deal Size"
+might be `dcf558aac1ae4e8c4f849ba5e668430d8df9be12` in one company and a completely
+different hash in another. Dropdown options are stored as numeric IDs, not their labels.
+
+pdcli hides all of that. You discover fields, read them, and write them by their human
+names — the CLI resolves names to keys and labels to option IDs on every call.
+
+## Discover fields
+
+`field list <entity>` shows every field for an entity, custom fields included, with their
+hash keys, types, and option labels. Entities: `deal`, `person`, `org`, `product`,
+`activity`.
+
+```bash
+pdcli field list deal
+```
+
+```text
+┌──────────────────────────────────────────┬───────────┬──────────┬──────────────────────┐
+│ Key                                       │ Name      │ Type     │ Options              │
+├──────────────────────────────────────────┼───────────┼──────────┼──────────────────────┤
+│ title                                     │ Title     │ varchar  │                      │
+│ value                                     │ Value     │ monetary │                      │
+│ dcf558aac1ae4e8c4f849ba5e668430d8df9be12  │ Deal Size │ enum     │ Small, Medium, Large │
+│ a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2  │ Score     │ double   │                      │
+└──────────────────────────────────────────┴───────────┴──────────┴──────────────────────┘
+```
+
+`field get <entity> <name|key>` shows one field by either its human name or its hash key.
+For enum/set fields it lists each option's ID next to its label:
+
+```bash
+pdcli field get deal "Deal Size"
+pdcli field get deal dcf558aac1ae4e8c4f849ba5e668430d8df9be12
+```
+
+```text
+┌──────────────────────────────────────────┬───────────┬──────┬──────────────────────────┐
+│ Key                                       │ Name      │ Type │ Options                  │
+├──────────────────────────────────────────┼───────────┼──────┼──────────────────────────┤
+│ dcf558aac1ae4e8c4f849ba5e668430d8df9be12  │ Deal Size │ enum │ 12=Small,13=Medium,14=Large │
+└──────────────────────────────────────────┴───────────┴──────┴──────────────────────────┘
+```
+
+## Reading: names in tables, raw keys in JSON
+
+In table output, custom-field values are shown under their human names, and option IDs are
+swapped back to their labels. JSON output stays **raw** — hash keys and numeric option IDs
+intact — so scripts have something stable to parse.
+
+```bash
+pdcli deal get 42                 # table: shows "Deal Size: Large"
+pdcli deal get 42 --output json   # JSON: custom_fields.{hash}: 14
+```
+
+v2 nests custom-field values under a `custom_fields` object on the record.
+
+## Writing: `--field "Name=Value"`
+
+On every write command that accepts custom fields (`deal`, `person`, `org`, `product`,
+`activity` — `create`, `update`, and `deal bulk-update`), pass `--field "Name=Value"`. The
+flag is repeatable, one field per flag:
+
+```bash
+pdcli deal create --title "Acme renewal" \
+  --field "Deal Size=Large" \
+  --field "Score=4.5"
+```
+
+What resolution does for you:
+
+- **Name to key** — `Deal Size` becomes its 40-char hash. You can also pass the hash key
+  or `field_code` directly if you prefer.
+- **Label to option ID** — for `enum` fields, `Large` becomes the numeric option ID.
+- **Set (multi-option) fields** — give comma-separated labels, each resolved to its ID:
+  `--field "Tags=VIP,Renewal"`.
+- **Numeric coercion** — `double`, `monetary`, and `int` field values are converted to
+  numbers, so `Score=4.5` is sent as `4.5`, not the string `"4.5"`.
+- **Custom fields nest** under `custom_fields`; standard fields go at the top level.
+
+## When a label is wrong
+
+If you give an option label that doesn't exist, pdcli stops before writing and lists the
+valid options (exit code 65):
+
+```bash
+pdcli deal create --title "Sized" --field "Deal Size=Huge"
+```
+
+```text
+Error: Unknown option "Huge" for field "Deal Size". Valid: Small, Medium, Large
+```
+
+An unknown field name also fails fast, pointing you at discovery (exit code 65):
+
+```text
+Error: Unknown field "Dela Size". Run: pdcli field list <entity>
+```
+
+## Same resolution everywhere
+
+The exact same name-and-label resolution runs on single writes (`create`/`update`), on
+[`deal bulk-update`](/pdcli/guides/bulk/), and on
+[CSV imports](/pdcli/guides/bulk/) — where each CSV header is treated as a field name. So a
+`Deal Size` column in your spreadsheet resolves the same way `--field "Deal Size=Large"`
+does on the command line.
+
+## Raw escape hatch
+
+If you'd rather supply the raw v2 shape yourself, `--body` takes JSON and typed flags win
+over it. You'd use the hash keys directly:
+
+```bash
+pdcli deal create --title "Raw" \
+  --body '{"custom_fields":{"dcf558aac1ae4e8c4f849ba5e668430d8df9be12":14}}'
+```

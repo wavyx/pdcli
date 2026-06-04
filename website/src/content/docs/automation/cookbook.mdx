@@ -1,0 +1,115 @@
+---
+title: Cookbook
+description: Copy-paste pdcli recipes for common Pipedrive tasks — reports, bulk edits, exports, and cron jobs.
+---
+
+Each recipe is one command or pipeline. They assume you're authenticated (or have
+`PDCLI_COMPANY_DOMAIN` + `PDCLI_API_TOKEN` set). Piped commands emit JSON automatically, so
+`--jq` and `jq` work without `--output json`.
+
+## Stale open deals to CSV
+
+```bash
+pdcli audit --checks stale-deals --output json \
+  | jq -r '.[0].items[] | [.id, .title, .days] | @csv' > stale-deals.csv
+```
+
+Writes one row per open deal untouched for more than 14 days, with the age in days.
+
+## Bulk stage-move via a saved filter
+
+```bash
+pdcli deal bulk-update --filter 9 --stage 5 --dry-run   # preview targets first
+pdcli deal bulk-update --filter 9 --stage 5             # confirms, then moves
+```
+
+`--dry-run` lists every deal the saved filter selects without writing. Drop it (or add
+`--yes`) to apply. Partial failures are reported per deal and exit `1`.
+
+## Weekly pipeline-health JSON for a dashboard
+
+```bash
+pdcli pipeline health --pipeline 1 --output json > health-$(date +%F).json
+```
+
+Per-stage open count, total value, probability-weighted value, stale-deal count, and
+deals with no next step. Pass `--pipeline` when the account has more than one pipeline.
+
+## Find a person by email
+
+```bash
+pdcli search "jane@acme.com" --item-types person --output json \
+  | jq '.[] | {id, name}'
+```
+
+`search` hits Pipedrive's itemSearch (40 token cost, throttled to 10 req/2s). Add `--exact`
+for an exact match.
+
+## Create a deal with custom fields in one line
+
+```bash
+pdcli deal create --title "Acme renewal" --value 5000 --currency EUR \
+  --stage 3 --field "Deal Size=Large" --field "Score=4.5"
+```
+
+Custom fields are given by **human name**; pdcli resolves the 40-char hash key and maps
+option labels (like `Large`) to their IDs. See [Custom fields](/pdcli/guides/custom-fields/).
+
+## Nightly cron backup
+
+```bash
+# crontab -e
+0 2 * * * PDCLI_COMPANY_DOMAIN=acme PDCLI_API_TOKEN=xxxx \
+  /usr/local/bin/pdcli backup --dir /backups/pipedrive --resume
+```
+
+Full-account export to a JSON tree. `--resume` skips resources finished in a prior run, so a
+re-run after an interruption continues instead of restarting.
+
+## Duplicate-persons report
+
+```bash
+pdcli audit --checks duplicate-persons --verbose
+```
+
+Lists every email shared by more than one person, with the person IDs, so you can merge
+them. Output (table mode, `--verbose`):
+
+```text
+Sev  Check                       Findings
+●    Persons sharing the same email   3
+
+Persons sharing the same email
+  {"email":"jane@acme.com","ids":[12,87]}
+  …
+```
+
+## Export persons for a mail merge
+
+```bash
+pdcli person list --output csv --fields id,name,email > contacts.csv
+```
+
+`--fields` selects columns; `--output csv` produces a header row plus one row per contact.
+Scope it with `--org <id>` or `--owner <id>`.
+
+## Log an activity after a call
+
+```bash
+pdcli activity create --subject "Discovery call" --type call \
+  --due-date 2026-06-04 --done --deal 42 --note "Budget confirmed, sending quote"
+```
+
+`--done` marks it complete on creation; `--deal` links it. On v2 activity writes `--person`
+maps to a primary participant.
+
+## Won-deal report for the quarter
+
+```bash
+pdcli deal list --status won --output json \
+  | jq '[.[] | select(.won_time >= "2026-04-01")]
+        | {count: length, total: (map(.value) | add)}'
+```
+
+Counts deals won since the quarter start and sums their value. For the full sales-velocity
+breakdown over a trailing window, use `pdcli metrics velocity --period 90d`.

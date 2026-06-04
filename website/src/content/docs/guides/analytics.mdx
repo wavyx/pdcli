@@ -1,0 +1,108 @@
+---
+title: Sales analytics
+description: Sales velocity, an approximate conversion funnel, and a per-stage pipeline health snapshot — computed locally from your deals.
+---
+
+pdcli ships three read-only analytics commands. Each fetches deals (and stages/activities
+where needed) and computes the numbers locally, so they work against any account without
+extra setup. All accept the global `--output`/`--jq`/`--fields` flags.
+
+## `metrics velocity`
+
+The Sales Velocity Equation: how much deal value your pipeline produces per day.
+
+```
+velocity/day = (open opportunities × win rate × avg won value) / avg cycle days
+```
+
+The four levers are measured over a trailing window (`--period`, default `90d`, accepts
+`Nd` or `Nm`), scoped optionally to a `--pipeline` and/or `--owner`:
+
+- **Open opportunities** — count of currently open deals.
+- **Win rate** — won / (won + lost) among deals *decided* in the window, keyed on
+  `won_time`/`lost_time`.
+- **Avg won value** — mean value of deals won in the window.
+- **Avg cycle days** — mean of `won_time − add_time` for those won deals.
+
+```bash
+pdcli metrics velocity --period 30d --pipeline 1
+```
+
+```text
+┌────────────────────┬───────────────────┐
+│ Metric             │ Value             │
+├────────────────────┼───────────────────┤
+│ Open opportunities │ 58                │
+│ Win rate (30d)     │ 41.2% (7W/10L)    │
+│ Avg won value      │ 8200              │
+│ Avg cycle (days)   │ 34.5              │
+│ Velocity / day     │ 5677              │
+└────────────────────┴───────────────────┘
+```
+
+If a lever can't be computed (no decided deals, no won deals, or a zero cycle), it shows
+`n/a` and velocity is `n/a` rather than a misleading zero.
+
+## `funnel`
+
+Stage-to-stage conversion. **This is an approximation, stated honestly:** Pipedrive doesn't
+hand back per-deal stage history in a single cheap call, so the funnel infers stage reach
+from each closed deal's *final* stage — a deal counts as having reached every stage up to
+and including the one it ended in, and won deals count for every stage. Accurate per-stage
+flow would need per-deal history mining; this stays one list call per status.
+
+Closed deals are taken over `--period` (default `90d`). The current open distribution per
+stage is shown alongside.
+
+```bash
+pdcli funnel --pipeline 1 --period 180d
+```
+
+```text
+┌──────────────────────┬──────────────────────────┬─────────────────┬──────────┬────────────┐
+│ Stage                │ Reached (closed, 180d)   │ Conv. from prev │ Open now │ Open value │
+├──────────────────────┼──────────────────────────┼─────────────────┼──────────┼────────────┤
+│ Qualified            │ 120                      │                 │ 54       │ 4391545    │
+│ Proposal Made        │ 64                       │ 53%             │ 12       │ 980000     │
+│ Negotiations Started │ 28                       │ 44%             │ 2        │ 81909      │
+└──────────────────────┴──────────────────────────┴─────────────────┴──────────┴────────────┘
+```
+
+When your account has more than one pipeline, `--pipeline <id>` is **required** — without it
+pdcli lists the pipeline IDs and exits 64. With a single pipeline it's inferred.
+
+## `pipeline health`
+
+A per-stage snapshot of your **open** deals — what's there, what it's worth, and what's
+neglected.
+
+```bash
+pdcli pipeline health --pipeline 1
+```
+
+```text
+┌──────────────────────┬──────┬────────────┬──────────┬────────────┬──────────────┬────────────┐
+│ Stage                │ Open │ Value      │ Weighted │ Stale >14d │ No next step │ Past close │
+├──────────────────────┼──────┼────────────┼──────────┼────────────┼──────────────┼────────────┤
+│ Qualified            │ 54   │ 4391545    │ 878309   │ 12         │ 31           │ 4          │
+│ Proposal Made        │ 12   │ 980000     │ 490000   │ 3          │ 5            │ 1          │
+│ Negotiations Started │ 2    │ 81909      │ 65527    │ 1          │ 2            │ 0          │
+└──────────────────────┴──────┴────────────┴──────────┴────────────┴──────────────┴────────────┘
+```
+
+Column by column:
+
+| Column | Meaning |
+| ------ | ------- |
+| **Open** | Open deals currently in the stage. |
+| **Value** | Sum of those deals' `value`. |
+| **Weighted** | Value × probability. Per-deal `probability` wins; otherwise the stage's `deal_probability`; otherwise 100%. |
+| **Stale >14d** | Open deals not updated in more than 14 days. |
+| **No next step** | Open deals with no future, not-done activity scheduled. |
+| **Past close** | Open deals whose `expected_close_date` is before today. |
+
+Like `funnel`, `--pipeline` is required when there's more than one pipeline and inferred
+otherwise.
+
+These same hygiene signals drive the [data-hygiene audit](/pdcli/guides/audit/) — `audit`
+applies them account-wide with severities and a CI gate.

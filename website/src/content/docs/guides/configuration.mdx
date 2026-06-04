@@ -1,0 +1,106 @@
+---
+title: Profiles & configuration
+description: Manage multiple accounts with profiles, set per-profile config, and understand precedence.
+---
+
+pdcli stores settings per **profile**. Each profile has its own company domain, auth
+mode, and stored credentials, so you can keep several Pipedrive accounts side by side.
+The active profile defaults to `default`.
+
+## Profiles
+
+Create a profile by logging in with `--profile`; the name is created on first use:
+
+```bash
+pdcli auth login --profile work
+pdcli auth login --profile personal
+```
+
+List, switch, and inspect the active profile:
+
+```bash
+pdcli profile list
+```
+
+```text
+* default (authenticated)
+  work (authenticated)
+  personal (authenticated)
+```
+
+The `*` marks the active profile.
+
+```bash
+pdcli profile use work        # switch the active profile
+pdcli profile current         # print the active profile name
+```
+
+Run a single command against another profile without switching — the global
+`--profile` flag works on every command:
+
+```bash
+pdcli deal list --profile work
+```
+
+## Per-profile config
+
+`config get/set/list` operate on the active profile (or the one named with `--profile`):
+
+```bash
+pdcli config set company_domain acme
+pdcli config set default_output json
+pdcli config get company_domain
+pdcli config list
+```
+
+```text
+company_domain=acme
+auth_mode=token
+default_output=json
+```
+
+Common keys:
+
+| Key | Set by | Purpose |
+| --- | ------ | ------- |
+| `company_domain` | `auth login` | The `acme` in `acme.pipedrive.com`; builds the API host. |
+| `auth_mode` | `auth login` | `token` or `oauth`. |
+| `default_output` | you | Default output format when no `--output` flag is given. |
+
+Credentials (the token, or the OAuth bundle) are **never** in config — they live only
+in the OS keychain.
+
+## Precedence
+
+For any setting, the most specific source wins:
+
+```text
+command-line flag  >  environment variable  >  profile config
+```
+
+So `--company acme` overrides `PDCLI_COMPANY_DOMAIN`, which overrides the profile's
+`company_domain`. Likewise an explicit `--api-token` or `PDCLI_API_TOKEN` overrides
+the keychain token for that run.
+
+## Environment variables
+
+| Variable | Effect |
+| -------- | ------ |
+| `PDCLI_COMPANY_DOMAIN` | Company subdomain (`acme`). Overrides profile config. |
+| `PDCLI_API_TOKEN` | Personal API token. Used instead of the keychain; no keychain needed. |
+| `PDCLI_PROFILE` | Active profile name (same as `--profile`). |
+| `PDCLI_CLIENT_ID` | OAuth app client ID, read by `auth login --oauth`. |
+| `PDCLI_CLIENT_SECRET` | OAuth app client secret, read by `auth login --oauth`. |
+| `NO_COLOR` | Any value disables colored output (same as `--no-color`). |
+
+Together, `PDCLI_COMPANY_DOMAIN` + `PDCLI_API_TOKEN` are all you need for a fully
+non-interactive, keychain-free run — ideal for CI and agents:
+
+```bash
+PDCLI_COMPANY_DOMAIN=acme PDCLI_API_TOKEN=$TOKEN pdcli deal list --output json
+```
+
+## See also
+
+- [Authentication](/pdcli/guides/authentication/) — token vs OAuth, switching modes.
+- [Output & filtering](/pdcli/automation/output/) — `default_output` and `--output`.

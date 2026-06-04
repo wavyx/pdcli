@@ -1,0 +1,96 @@
+---
+title: Installation
+description: Install pdcli, verify it, and turn on shell completions.
+---
+
+`pdcli` is published to npm as [`@wavyx/pdcli`](https://www.npmjs.com/package/@wavyx/pdcli)
+and runs on Node 20 or newer.
+
+## Requirements
+
+- **Node.js 20+** (LTS). Check with `node --version`.
+- An OS keychain for credential storage (macOS Keychain, GNOME Keyring /
+  libsecret on Linux, Windows Credential Manager). Without one, writes that store
+  tokens hard-fail by design; reads still work via environment variables.
+
+## Install globally
+
+```bash
+npm install -g @wavyx/pdcli
+```
+
+This puts a `pdcli` binary on your `PATH`.
+
+## Run without installing
+
+```bash
+npx @wavyx/pdcli deal list
+```
+
+`npx` is handy for CI or a one-off, but the global install is faster for daily use.
+
+## Verify the install
+
+`pdcli version` prints the version and environment:
+
+```bash
+pdcli version
+```
+
+```text
+pdcli 0.5.0
+Node:     v20.11.1
+API base: https://acme.pipedrive.com
+Platform: darwin-arm64
+```
+
+`API base` shows `(not set)` until you authenticate.
+
+## Run the doctor
+
+`pdcli doctor` runs environment checks — config store, keychain, profile, domain,
+token, and live API reachability:
+
+```bash
+pdcli doctor
+```
+
+```text
+Pipedrive CLI Diagnostics
+
+  ✔ Config directory accessible
+  ✔ Keychain available
+  ✔ Active profile set (default)
+  ✔ Company domain set (acme)
+  ✔ API token present
+  ✔ API reachable
+
+All checks passed
+```
+
+Before you log in, several checks fail with a hint — for example
+`✘ Company domain set (Run: pdcli auth login)` and
+`✘ API token present (Run: pdcli auth login)`. If `Keychain available` fails, your
+OS keychain is unreachable and pdcli cannot store credentials; use
+[environment-variable auth](/pdcli/guides/authentication/) instead.
+
+## Shell completions
+
+Completions ship via the bundled oclif autocomplete plugin. Run `autocomplete` for
+your shell to print the exact setup steps to add to your shell profile:
+
+```bash
+pdcli autocomplete bash
+pdcli autocomplete zsh
+pdcli autocomplete fish
+```
+
+Each command prints the lines to source (and how) for that shell, then enables
+tab-completion of commands and flags. Running `pdcli autocomplete` with no shell
+argument detects your current shell.
+
+## Next steps
+
+- [Quickstart](/pdcli/start/quickstart/) — authenticate and run your first commands.
+- [Quickstart for AI agents](/pdcli/start/agents/) — env-var auth, JSON, exit codes.
+- [Authentication](/pdcli/guides/authentication/) — token vs OAuth, CI patterns.

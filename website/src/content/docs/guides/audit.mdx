@@ -1,0 +1,110 @@
+---
+title: Data-hygiene audit
+description: Eleven data-quality checks for stale deals, missing fields, duplicates, and overdue pileups — with a CI gate.
+---
+
+`pdcli audit` runs 11 data-hygiene checks across your deals, persons, organizations, and
+activities, and prints a findings count per check. Run a subset with `--checks`, see the
+flagged items with `--verbose`, and fail CI on serious findings with `--strict`.
+
+```bash
+pdcli audit
+```
+
+```text
+┌─────┬──────────────────────────────────────────────────────┬──────────┐
+│ Sev │ Check                                                │ Findings │
+├─────┼──────────────────────────────────────────────────────┼──────────┤
+│ ●   │ Open deals untouched for >14 days                    │ 18       │
+│ ●   │ Open deals with no future activity scheduled         │ 31       │
+│ ●   │ Open deals past their expected close date            │ 4        │
+│ ●   │ Open deals missing owner, person/org, value, or currency │ 7    │
+│ ●   │ Open deals far older than the typical won cycle      │ 2        │
+│ ○   │ Closed deals missing their close timestamp           │ 0        │
+│ ●   │ Persons sharing the same email                       │ 3        │
+│ ●   │ Persons with neither email nor phone                 │ 12       │
+│ ○   │ Organizations with the same normalized name          │ 5        │
+│ ○   │ Overdue open activities piling up per owner          │ 44       │
+│ ○   │ Deals with a value but no currency                   │ 0        │
+└─────┴──────────────────────────────────────────────────────┴──────────┘
+```
+
+`●` is a **must**-severity check, `○` is a **should**. Only `must` checks gate `--strict`.
+
+## The checks
+
+| Name | Sev | Detection rule |
+| ---- | --- | -------------- |
+| `stale-deals` | must | Open deal where `now − update_time > 14 days`. |
+| `no-next-activity` | must | Open deal with no not-done activity due today or later linked to it. |
+| `past-close-date` | must | Open deal whose `expected_close_date` is before today. |
+| `missing-fields` | must | Open deal missing any of: owner; both person and org; a value > 0; or currency when it has a value. |
+| `ancient-deals` | must | Open deal whose age (`now − add_time`) exceeds 2× the avg won cycle, or 168 days when no won deals exist. |
+| `missing-close-time` | should | A `won` deal with no `won_time`, or a `lost` deal with no `lost_time`. |
+| `duplicate-persons` | must | Two or more persons sharing the same email (trimmed, lowercased). |
+| `uncontactable-persons` | must | Person with neither a non-empty email nor phone. |
+| `duplicate-orgs` | should | Two or more orgs with the same normalized name (lowercased, common suffixes like Inc/Ltd/LLC/GmbH stripped, non-alphanumerics removed). |
+| `overdue-activities` | should | Open (not-done) activities past due, counted per owner. |
+| `currency-missing` | should | Open deal with a value > 0 but no currency. |
+
+The thresholds are constants in the audit: stale = 14 days, ancient = 2× the avg won cycle
+(`won_time − add_time` across won deals) with a 168-day fallback when there are no won deals
+to learn from.
+
+The `Findings` count is the number of flagged items per check — except `overdue-activities`,
+where it's the total overdue activities summed across owners.
+
+## Run a subset
+
+```bash
+pdcli audit --checks stale-deals,duplicate-persons --verbose
+```
+
+Pass a comma-separated list of check names (the `Name` column above). An unknown name fails
+fast with exit 64 and lists the valid names.
+
+## See the items: `--verbose`
+
+In table output, `--verbose` prints the flagged items under each check that has findings,
+as one JSON object per line, **truncated at 25 items** with a "… N more" footer:
+
+```text
+Open deals untouched for >14 days
+  {"id":204,"title":"Acme renewal","days":31}
+  {"id":311,"title":"Globex expansion","days":19}
+  … 16 more
+
+Persons sharing the same email
+  {"email":"jane@acme.com","ids":[88,142]}
+```
+
+For full machine-readable output (no truncation), use `--output json` — every check
+includes its full `items` array.
+
+## Gate CI: `--strict`
+
+`--strict` exits **1** if any `must`-severity check has findings, naming them; otherwise
+exit 0. `should` findings never fail the gate.
+
+```bash
+pdcli audit --strict
+```
+
+```text
+Error: 7 must-severity checks found issues: stale-deals, no-next-activity, past-close-date, missing-fields, ancient-deals, duplicate-persons, uncontactable-persons
+```
+
+## Recipe: weekly hygiene report
+
+Run a scoped, strict audit on a schedule and let the exit code decide whether to alert. With
+env-var auth it's fully non-interactive:
+
+```bash
+PDCLI_COMPANY_DOMAIN=acme PDCLI_API_TOKEN=$PD_TOKEN \
+  pdcli audit --checks stale-deals,no-next-activity,duplicate-persons --strict --output json \
+  > hygiene-$(date +%F).json \
+  || echo "Hygiene issues found — see report"
+```
+
+See [CI recipes](/pdcli/automation/ci/) and [Exit codes](/pdcli/automation/exit-codes/) for
+wiring this into a pipeline.

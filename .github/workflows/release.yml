@@ -44,6 +44,10 @@ jobs:
             npm publish --provenance
           fi
 
+      # Native tarballs for non-npm installs, attached to the GitHub Release.
+      - name: Pack native tarballs
+        run: npx oclif pack tarballs --targets linux-x64,linux-arm64,darwin-x64,darwin-arm64,win32-x64 --no-xz
+
       - name: Create GitHub Release from CHANGELOG (skip if exists)
         env:
           GH_TOKEN: ${{ github.token }}
@@ -60,4 +64,5 @@ jobs:
           ' CHANGELOG.md)
           gh release create "$GITHUB_REF_NAME" \
             --title "$GITHUB_REF_NAME" \
-            --notes "${NOTES:-Release $GITHUB_REF_NAME}"
+            --notes "${NOTES:-Release $GITHUB_REF_NAME}" \
+            dist/*.tar.gz

@@ -1,0 +1,127 @@
+---
+title: Output & filtering
+description: Choose a format, filter with jq, pick columns, and build scriptable pipelines.
+---
+
+Every command accepts the same output flags: `--output`, `--jq`, `--fields`, and
+`--no-color`. They work the same whether you're reading a list or a single record.
+
+## Output formats
+
+```bash
+pdcli deal list --output table   # default in a terminal
+pdcli deal list --output json    # default when piped
+pdcli deal list --output yaml
+pdcli deal list --output csv
+```
+
+**The default depends on the destination:** a TTY gets a `table`, a pipe or capture
+gets `json`. So `pdcli deal list` shows a table to you, while `pdcli deal list | cat`
+emits JSON automatically. Set a persistent default with
+`pdcli config set default_output json` (see
+[configuration](/pdcli/guides/configuration/)).
+
+Table output:
+
+```text
+┌────┬──────────────┬──────────┬────────┬───────┬────────┬─────┬───────┐
+│ ID │ Title        │ Value    │ Status │ Stage │ Person │ Org │ Owner │
+├────┼──────────────┼──────────┼────────┼───────┼────────┼─────┼───────┤
+│ 42 │ Acme renewal │ 5000 EUR │ open   │ 3     │ 17     │ 7   │ 1     │
+└────┴──────────────┴──────────┴────────┴───────┴────────┴─────┴───────┘
+```
+
+## Filter with `--jq`
+
+`--jq` runs a [jq](https://jqlang.github.io/jq/) expression over the JSON result. The
+native jq binary is bundled and loaded only when you actually use the flag. The input
+is always an array, so index with `.[]`:
+
+```bash
+pdcli deal list --jq '.[].id'
+pdcli deal list --jq '.[] | {id, title, value}'
+pdcli deal list --status won --jq '[.[].value] | add'
+```
+
+`--jq` overrides `--output` and `--fields` — you get exactly what the expression
+produces.
+
+## Pick columns with `--fields`
+
+`--fields` limits a `table` or `csv` to the columns you name (by their data key, not
+the header):
+
+```bash
+pdcli deal list --fields id,title,value
+```
+
+```text
+┌────┬──────────────┬──────────┐
+│ ID │ Title        │ Value    │
+├────┼──────────────┼──────────┤
+│ 42 │ Acme renewal │ 5000 EUR │
+└────┴──────────────┴──────────┘
+```
+
+## Disable color
+
+`--no-color` (or setting the `NO_COLOR` environment variable to any value) strips ANSI
+color — useful in logs and CI where escape codes are noise:
+
+```bash
+pdcli deal list --no-color
+```
+
+## Recipes
+
+### CSV export with chosen columns
+
+```bash
+pdcli person list --output csv --fields id,name,email > contacts.csv
+```
+
+```text
+ID,Name,Email
+17,Jane Doe,jane@acme.com
+21,John Roe,john@globex.com
+```
+
+Values containing commas, quotes, or newlines are quoted and escaped automatically.
+
+### jq + xargs pipeline
+
+Pull IDs and act on each. Because the output is piped, JSON is implied, but `--jq`
+makes the shape explicit:
+
+```bash
+pdcli deal list --status open --owner 42 --jq '.[].id' \
+  | xargs -I{} pdcli deal get {} --output json
+```
+
+You can also stream IDs straight into a bulk command:
+
+```bash
+pdcli deal list --status open --jq '.[].id' | pdcli deal bulk-update --owner 42
+```
+
+### YAML for humans
+
+YAML is the friendliest format for eyeballing a single nested record:
+
+```bash
+pdcli deal get 42 --output yaml
+```
+
+```text
+id: 42
+title: Acme renewal
+value: 5000
+currency: EUR
+status: open
+stage_id: 3
+```
+
+## See also
+
+- [Quickstart for AI agents](/pdcli/start/agents/) — JSON defaults and exit codes.
+- [Profiles & configuration](/pdcli/guides/configuration/) — `default_output`.

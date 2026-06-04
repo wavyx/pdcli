@@ -15,3 +15,12 @@ pipedrive-api-notes.md
 
 # screenshots
 *.png
+
+# docs site
+website/node_modules/
+website/dist/
+website/.astro/
+
+# oclif pack output
+dist/
+tmp/

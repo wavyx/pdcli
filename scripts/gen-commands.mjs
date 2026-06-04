@@ -69,6 +69,65 @@ Reference for \`${bin}\` v${manifest.version} (${commands.length} commands). Eve
   return out
 }
 
+/* ============================================================
+   Starlight docs site MDX (website reference page)
+   ============================================================ */
+const firstLine = (s) =>
+  String(s || '')
+    .split('\n')[0]
+    .trim()
+
+// Escape MDX-significant chars: `|` breaks tables, bare `<`/`>` parse as JSX.
+const mdxSafe = (s) =>
+  firstLine(s)
+    .replaceAll('|', '\\|')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+
+export function renderWebsiteMdx(manifest, bin = BIN) {
+  const { commands, byTopic } = groupByTopic(manifest)
+  let out = `---
+title: Command reference
+description: Every ${bin} command, flag, and example — generated from the CLI manifest.
+---
+
+{/* AUTO-GENERATED from the oclif manifest by scripts/gen-commands.mjs — do not edit by hand. */}
+
+All ${commands.length} commands in \`${bin}\` v${manifest.version}. Every command also
+accepts the [global flags](/pdcli/reference/config/) \`--output\`, \`--jq\`,
+\`--fields\`, \`--profile\`, \`--limit\`, \`--no-color\`, \`--verbose\`,
+\`--no-retry\`, and \`--timeout\`. Run \`${bin} <command> --help\` for the live version.
+
+`
+  const topics = Object.keys(byTopic).sort()
+  for (const topic of topics) {
+    out += `## ${topic === '_root' ? 'Top-level commands' : `${bin} ${topic}`}\n\n`
+    for (const c of byTopic[topic]) {
+      const cmd = c.id.replaceAll(':', ' ')
+      out += `### \`${bin} ${cmd}\`\n\n`
+      if (c.description) out += `${mdxSafe(c.description)}\n\n`
+      out += '```text\n' + `${bin} ${cmd}${argString(c)} [flags]` + '\n```\n\n'
+      const flags = nonGlobalFlags(c)
+      if (flags.length) {
+        out += `| Flag | Description |\n| --- | --- |\n`
+        for (const [name, f] of flags) {
+          const alias = f.char ? `-${f.char}, ` : ''
+          const value =
+            f.type === 'option'
+              ? ` &lt;${(f.options || []).join('\\|') || 'value'}&gt;`
+              : ''
+          out += `| \`${alias}--${name}\`${value} | ${mdxSafe(f.description)} |\n`
+        }
+        out += '\n'
+      }
+      const examples = (c.examples || []).map(exampleText).filter(Boolean)
+      if (examples.length)
+        out += '```bash\n' + examples.join('\n') + '\n```\n\n'
+    }
+  }
+  return out
+}
+
 /* CLI entry — guarded so imports stay pure */
 const invokedDirectly =
   process.argv[1] && import.meta.url === `file://${process.argv[1]}`
@@ -82,6 +141,19 @@ if (invokedDirectly) {
     new URL('../docs/commands.md', import.meta.url),
     renderGithubMarkdown(manifest),
   )
+  mkdirSync(
+    new URL('../website/src/content/docs/reference/', import.meta.url),
+    {
+      recursive: true,
+    },
+  )
+  writeFileSync(
+    new URL(
+      '../website/src/content/docs/reference/commands.mdx',
+      import.meta.url,
+    ),
+    renderWebsiteMdx(manifest),
+  )
   const count = groupByTopic(manifest).commands.length
-  console.log(`Wrote docs/commands.md — ${count} commands`)
+  console.log(`Wrote docs/commands.md + website reference — ${count} commands`)
 }
