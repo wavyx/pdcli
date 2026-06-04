@@ -4,6 +4,21 @@ All notable changes to `pdcli` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/).
 
+## [0.3.0] - 2026-06-04
+
+### Added
+
+- Full entity surface: `lead` (v1, UUID ids), `note`, `file`
+  (list/get/download/upload), `filter`, `webhook` (defaults to v2 payloads),
+  `goal`, `pipeline`/`stage`, and `project` (v2) topics.
+- Output formats everywhere: `--output yaml|csv` join `table|json`; `--jq`
+  expression filtering (lazy-loaded native jq); `--fields` column selection.
+- `pdcli backup` — full-account export to a JSON tree (18 resources), with a
+  manifest checkpoint after every resource and `--resume` to continue
+  interrupted runs.
+- Client: binary downloads and multipart uploads (files API), host-locked
+  like every other request.
+
 ## [0.2.0] - 2026-06-04
 
 ### Added
