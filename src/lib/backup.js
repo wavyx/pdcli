@@ -104,9 +104,7 @@ export async function runBackup(client, dir, { resume, onProgress } = {}) {
       JSON.stringify(items, null, 2),
     )
 
-    if (!manifest.completed.includes(resource.name)) {
-      manifest.completed.push(resource.name)
-    }
+    manifest.completed.push(resource.name)
     manifest.counts[resource.name] = items.length
     manifest.updated_at = new Date().toISOString()
     writeManifest(dir, manifest)

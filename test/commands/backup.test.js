@@ -88,3 +88,16 @@ describe('backup', () => {
     )
   })
 })
+
+describe('backup progress reporting', () => {
+  it('updates the spinner via onProgress', async () => {
+    mockRunBackup.mockImplementation(async (client, dir, opts) => {
+      opts.onProgress('deals', 5)
+      return { total: 1, exported: 1, skipped: 0, counts: { deals: 5 } }
+    })
+
+    const stdout = await runCmd(BackupCommand, ['--dir', '/tmp/x'])
+
+    expect(stdout).toContain('1/1')
+  })
+})

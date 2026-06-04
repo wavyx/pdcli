@@ -136,3 +136,76 @@ describe('runBackup', () => {
     expect(manifest.completed).not.toContain(second.name)
   })
 })
+
+describe('runBackup with a corrupted manifest', () => {
+  let dir
+
+  beforeEach(() => {
+    nock.cleanAll()
+    dir = mkdtempSync(join(tmpdir(), 'pdcli-backup-corrupt-'))
+  })
+
+  afterEach(() => {
+    nock.cleanAll()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('treats unparseable manifest as a fresh run when resuming', async () => {
+    const { writeFileSync } = await import('node:fs')
+    writeFileSync(join(dir, 'manifest.json'), 'not-json{{{')
+    mockAll()
+
+    const summary = await runBackup(client(), dir, { resume: true })
+
+    expect(summary.exported).toBe(BACKUP_RESOURCES.length)
+    expect(summary.skipped).toBe(0)
+  })
+})
+
+describe('runBackup remaining edges', () => {
+  let dir
+
+  beforeEach(() => {
+    nock.cleanAll()
+    dir = mkdtempSync(join(tmpdir(), 'pdcli-backup-edge-'))
+  })
+
+  afterEach(() => {
+    nock.cleanAll()
+    rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('--resume on a fresh directory exports everything', async () => {
+    mockAll()
+    const summary = await runBackup(client(), dir, { resume: true })
+    expect(summary.exported).toBe(BACKUP_RESOURCES.length)
+  })
+
+  it('writes an empty array when a plain resource returns null data', async () => {
+    for (const r of BACKUP_RESOURCES) {
+      if (r.pager === 'plain') {
+        nock(API_BASE)
+          .get(r.path)
+          .query(true)
+          .reply(200, { success: true, data: null })
+      } else {
+        nock(API_BASE)
+          .get(r.path)
+          .query(true)
+          .reply(200, {
+            success: true,
+            data: [],
+            additional_data:
+              r.pager === 'v1'
+                ? { pagination: { more_items_in_collection: false } }
+                : { next_cursor: null },
+          })
+      }
+    }
+
+    await runBackup(client(), dir, {})
+
+    const users = JSON.parse(readFileSync(join(dir, 'users.json'), 'utf8'))
+    expect(users).toEqual([])
+  })
+})
