@@ -6,11 +6,16 @@ import { flattenRecord } from './output/record.js'
  * field/value table with custom-field hash keys and option IDs resolved.
  * @param {import('../base-command.js').default} cmd
  * @param {object} record
- * @param {string} entity deal | person | org | activity | product
+ * @param {string} [entity] deal | person | org | activity | product — omit
+ *   for entities without resolvable custom fields (notes, files, webhooks, …)
  */
 export async function outputRecord(cmd, record, entity) {
   if (cmd.resolveFormat() === 'table') {
-    if (record.custom_fields && Object.keys(record.custom_fields).length) {
+    if (
+      entity &&
+      record.custom_fields &&
+      Object.keys(record.custom_fields).length
+    ) {
       const defs = await getFields(cmd.apiClient, entity)
       record = makeResolver(defs).resolveCustomFields(record)
     }

@@ -27,11 +27,16 @@ access tokens refresh automatically. CI/scripts can use env vars instead:
 ```bash
 pdcli deal list --status open --limit 20
 pdcli deal get 42
-pdcli person list --org 7 --output json | jq '.[].id'
+pdcli person list --org 7 --jq '.[].id'
 pdcli activity list --todo
+pdcli lead list
+pdcli note list --deal 42
+pdcli pipeline list && pdcli stage list --pipeline 1
 pdcli search "acme"
 pdcli field list deal           # custom fields with their hash keys
 ```
+
+Output everywhere: `--output table|json|yaml|csv`, `--jq '<expr>'`, `--fields id,name`.
 
 ## Write
 
@@ -50,6 +55,15 @@ pdcli deal create --title "Sized" --field "Deal Size=Large" --field "Score=4.5"
 pdcli deal update 42 --body '{"probability":75}'   # raw JSON escape hatch
 ```
 
+## Files, webhooks, backup
+
+```bash
+pdcli file upload ./contract.pdf --deal 42
+pdcli file download 15 --out ./contract.pdf
+pdcli webhook create --url https://ci.example.com/hook --event-action create --event-object deal
+pdcli backup --dir ./pipedrive-backup    # full account → JSON tree, --resume to continue
+```
+
 ## Anything else
 
 ```bash
@@ -58,7 +72,7 @@ pdcli api POST /api/v2/deals --body '{"title":"Raw deal"}'
 pdcli doctor                             # diagnose auth/keychain/connectivity
 ```
 
-- `--output table|json` everywhere; table in a TTY, JSON when piped.
+- `--output table|json|yaml|csv` everywhere; table in a TTY, JSON when piped.
 - Deterministic [sysexits](https://man.freebsd.org/cgi/man.cgi?query=sysexits) exit codes for scripting.
 - Full reference: [docs/commands.md](docs/commands.md) (generated from the CLI manifest).
 

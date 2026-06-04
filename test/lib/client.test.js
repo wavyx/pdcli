@@ -694,3 +694,150 @@ describe('OAuth mode', () => {
     expect(onRefresh).toHaveBeenCalledOnce()
   })
 })
+
+describe('binary download', () => {
+  beforeEach(() => nock.cleanAll())
+
+  it('returns the raw bytes and content type', async () => {
+    const client = createClient({
+      companyDomain: 'acme',
+      token: 'test-token',
+      retry: false,
+      timeout: 5000,
+    })
+    nock('https://acme.pipedrive.com')
+      .get('/api/v1/files/7/download')
+      .reply(200, Buffer.from('PDF-BYTES'), {
+        'content-type': 'application/pdf',
+      })
+
+    const { buffer, contentType } = await client.download(
+      '/api/v1/files/7/download',
+    )
+
+    expect(Buffer.from(buffer).toString()).toBe('PDF-BYTES')
+    expect(contentType).toBe('application/pdf')
+  })
+
+  it('throws ApiError on a failed download', async () => {
+    const client = createClient({
+      companyDomain: 'acme',
+      token: 'test-token',
+      retry: false,
+      timeout: 5000,
+    })
+    nock('https://acme.pipedrive.com')
+      .get('/api/v1/files/404/download')
+      .reply(404, { success: false, error: 'File not found' })
+
+    await expect(
+      client.download('/api/v1/files/404/download'),
+    ).rejects.toMatchObject({ statusCode: 404 })
+  })
+
+  it('host-locks downloads', async () => {
+    const client = createClient({
+      companyDomain: 'acme',
+      token: 'test-token',
+      retry: false,
+      timeout: 5000,
+    })
+    nock.disableNetConnect()
+    try {
+      await expect(client.download('https://evil.com/x')).rejects.toThrow(
+        /Pipedrive company host/i,
+      )
+    } finally {
+      nock.enableNetConnect()
+    }
+  })
+})
+
+describe('multipart upload', () => {
+  beforeEach(() => nock.cleanAll())
+
+  it('POSTs multipart/form-data with the file and fields', async () => {
+    const client = createClient({
+      companyDomain: 'acme',
+      token: 'test-token',
+      retry: false,
+      timeout: 5000,
+    })
+    const scope = nock('https://acme.pipedrive.com')
+      .post('/api/v1/files', (body) => {
+        const s = String(body)
+        return (
+          s.includes('name="file"') &&
+          s.includes('filename="note.txt"') &&
+          s.includes('hello upload') &&
+          s.includes('name="deal_id"') &&
+          s.includes('42')
+        )
+      })
+      .matchHeader('content-type', /multipart\/form-data/)
+      .matchHeader('x-api-token', 'test-token')
+      .reply(201, { success: true, data: { id: 9, name: 'note.txt' } })
+
+    const result = await client.postMultipart('/api/v1/files', {
+      file: { name: 'note.txt', data: Buffer.from('hello upload') },
+      fields: { deal_id: 42 },
+    })
+
+    expect(result.data.id).toBe(9)
+    expect(scope.isDone()).toBe(true)
+  })
+
+  it('throws ApiError on upload failure', async () => {
+    const client = createClient({
+      companyDomain: 'acme',
+      token: 'test-token',
+      retry: false,
+      timeout: 5000,
+    })
+    nock('https://acme.pipedrive.com')
+      .post('/api/v1/files')
+      .reply(400, { success: false, error: 'bad upload' })
+
+    await expect(
+      client.postMultipart('/api/v1/files', {
+        file: { name: 'x.txt', data: Buffer.from('x') },
+      }),
+    ).rejects.toMatchObject({ statusCode: 400 })
+  })
+})
+
+describe('binary + multipart in OAuth mode / edge bodies', () => {
+  beforeEach(() => nock.cleanAll())
+
+  it('download sends Bearer in oauth mode', async () => {
+    const client = createClient({
+      apiDomain: 'https://acme.pipedrive.com',
+      token: 'oauth-at',
+      authMode: 'oauth',
+      retry: false,
+      timeout: 5000,
+    })
+    const scope = nock('https://acme.pipedrive.com')
+      .get('/api/v1/files/1/download')
+      .matchHeader('authorization', 'Bearer oauth-at')
+      .reply(200, Buffer.from('x'), { 'content-type': 'text/plain' })
+
+    await client.download('/api/v1/files/1/download')
+    expect(scope.isDone()).toBe(true)
+  })
+
+  it('postMultipart returns null for an empty response body', async () => {
+    const client = createClient({
+      companyDomain: 'acme',
+      token: 'test-token',
+      retry: false,
+      timeout: 5000,
+    })
+    nock('https://acme.pipedrive.com').post('/api/v1/files').reply(204, '')
+
+    const result = await client.postMultipart('/api/v1/files', {
+      file: { name: 'x.txt', data: Buffer.from('x') },
+    })
+    expect(result).toBeNull()
+  })
+})
