@@ -1,0 +1,95 @@
+---
+title: Full-account backup
+description: Export your whole Pipedrive account to a JSON tree with a resumable, checkpointed run.
+---
+
+`pdcli backup` exports your entire account to a directory of JSON files — one per resource —
+with a manifest checkpoint written after each resource so an interrupted run can pick up
+where it left off.
+
+```bash
+pdcli backup                              # → ./pipedrive-backup
+pdcli backup --dir ./my-backup            # choose the directory
+pdcli backup --dir ./my-backup --resume   # skip resources already done
+```
+
+The default directory is `pipedrive-backup` in the current working directory.
+
+## What gets exported
+
+18 resources, fetched sequentially. Each becomes a `<name>.json` file containing the full
+list of items:
+
+| File | Source | Pager |
+| ---- | ------ | ----- |
+| `deals.json` | `/api/v2/deals` | v2 cursor |
+| `persons.json` | `/api/v2/persons` | v2 cursor |
+| `organizations.json` | `/api/v2/organizations` | v2 cursor |
+| `activities.json` | `/api/v2/activities` | v2 cursor |
+| `products.json` | `/api/v2/products` | v2 cursor |
+| `pipelines.json` | `/api/v2/pipelines` | v2 cursor |
+| `stages.json` | `/api/v2/stages` | v2 cursor |
+| `dealFields.json` | `/api/v2/dealFields` | v2 cursor |
+| `personFields.json` | `/api/v2/personFields` | v2 cursor |
+| `organizationFields.json` | `/api/v2/organizationFields` | v2 cursor |
+| `productFields.json` | `/api/v2/productFields` | v2 cursor |
+| `activityFields.json` | `/api/v2/activityFields` | v2 cursor |
+| `leads.json` | `/api/v1/leads` | v1 offset |
+| `notes.json` | `/api/v1/notes` | v1 offset |
+| `users.json` | `/api/v1/users` | plain |
+| `filters.json` | `/api/v1/filters` | plain |
+| `webhooks.json` | `/api/v1/webhooks` | plain |
+| `currencies.json` | `/api/v1/currencies` | plain |
+
+The five `*Fields.json` files are your field **definitions** — including the per-account
+custom-field hash keys and their option labels — so a restored record's `custom_fields`
+hashes stay meaningful. Core CRM uses v2; leads, notes, users, filters, webhooks, and
+currencies come from v1 (which is where those endpoints live).
+
+## The manifest and `--resume`
+
+After each resource is written, pdcli updates `manifest.json` in the backup directory with
+the completed resources and their item counts:
+
+```json
+{
+  "started_at": "2026-06-04T09:00:00.000Z",
+  "completed": ["deals", "persons", "organizations"],
+  "counts": { "deals": 1840, "persons": 5210, "organizations": 612 },
+  "updated_at": "2026-06-04T09:01:12.000Z"
+}
+```
+
+If the run is interrupted, re-run with `--resume` and pdcli skips every resource already in
+the manifest, refetching only what's missing:
+
+```bash
+pdcli backup --dir ./my-backup --resume
+```
+
+```text
+Backup complete: 4/18 resources exported to ./my-backup (14 skipped)
+```
+
+Without `--resume`, a fresh run starts a new manifest and re-exports everything.
+
+## Token-cost awareness
+
+The export is **sequential by design** to keep the rate-limit budget predictable. Each list
+page costs 20 tokens; the client's 429 backoff handles any bursts (see
+[How pdcli talks to Pipedrive](/pdcli/concepts/api-model/)). A large account with hundreds
+of pages will take time — that's the trade for not tripping the limiter.
+
+## Scheduling
+
+Because `backup` is one non-interactive command with a deterministic exit code, it drops
+straight into cron or CI. Use env-var auth so nothing prompts:
+
+```bash
+# nightly at 02:00 — see CI recipes for full examples
+0 2 * * *  PDCLI_COMPANY_DOMAIN=acme PDCLI_API_TOKEN=$PD_TOKEN \
+  pdcli backup --dir /backups/pipedrive-$(date +\%F)
+```
+
+For incremental safety on a flaky link, point repeated runs at the same directory with
+`--resume`. See [CI recipes](/pdcli/automation/ci/) for a scheduled-job example.

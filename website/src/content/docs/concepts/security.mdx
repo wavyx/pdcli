@@ -1,0 +1,79 @@
+---
+title: Security model
+description: Where pdcli keeps your tokens, how the raw api passthrough is host-locked, and how credentials stay out of logs.
+---
+
+`pdcli` is designed so a credential is hard to leak, even by mistyping a command. Three
+properties enforce that: tokens live only in the OS keychain, the raw `api` passthrough is
+host-locked, and tokens are redacted from output.
+
+## Tokens live only in the OS keychain
+
+Credentials are stored exclusively in your operating system keychain via
+[`@napi-rs/keyring`](https://www.npmjs.com/package/@napi-rs/keyring) — macOS Keychain,
+Windows Credential Manager, or libsecret / GNOME Keyring on Linux. They are **never** written
+to disk in plaintext. Only the company domain and non-secret per-profile settings go into the
+config file; the token does not.
+
+### Hard-fail writes when there's no keychain
+
+If no keychain is available, writes that would store a credential **fail by design** rather
+than fall back to plaintext:
+
+```text
+OS keychain unavailable. pdcli stores credentials in your operating system keychain
+(macOS Keychain, Windows Credential Manager, or libsecret on Linux) and refuses to write
+them to disk in plaintext. Enable a system keychain and retry.
+```
+
+This is exit `78`. Reads and deletes **degrade gracefully** — `getToken` returns `null`
+(you'll be prompted to authenticate) and `logout` is a no-op rather than an error. The
+practical consequence: on a headless box with no keychain, use env-var auth (below) instead
+of `auth login`. See [Troubleshooting](/pdcli/reference/troubleshooting/).
+
+### OAuth bundle, including the client secret
+
+When you authenticate with `auth login --oauth`, the **entire OAuth bundle** is kept in the
+keychain: the access token, refresh token, expiry, `api_domain`, client ID, and the
+**client secret** — never in config. Access tokens refresh automatically before expiry and
+once on a `401`. The refreshed bundle is written straight back to the keychain.
+
+## Env-var auth keeps tokens out of shell history
+
+For CI and scripts, set the token in the environment instead of passing it as a flag:
+
+```bash
+PDCLI_COMPANY_DOMAIN=acme PDCLI_API_TOKEN=xxxxxxxx pdcli deal list
+```
+
+Env auth takes precedence over the keychain, so it needs no keychain at all — ideal for
+headless runners. Prefer the prompt or env over `--api-token` on the command line, which
+would land the token in your shell history. See [CI recipes](/pdcli/automation/ci/).
+
+## The raw `api` passthrough is host-locked
+
+`pdcli api <method> <path>` lets you hit endpoints pdcli doesn't wrap yet. It is **locked to
+your Pipedrive host** — the company domain (`https://{company}.pipedrive.com`) in token mode,
+or the OAuth `api_domain`. Before sending, pdcli resolves the path against that base origin
+and **compares origins**; if they don't match, it refuses:
+
+```text
+Refusing to send request outside your Pipedrive company host
+(https://acme.pipedrive.com): https://evil.example.com
+```
+
+This is why you pass **paths, not full URLs** (`pdcli api GET /api/v2/deals`). A hallucinated
+or mistyped absolute URL can't exfiltrate your token to another host. There is no generic
+`api.pipedrive.com` data host — every request goes to your company subdomain. The same lock
+applies to file downloads and uploads.
+
+## Redaction and identification
+
+- **Redaction.** Tokens are sent only as headers (`x-api-token` for tokens,
+  `Authorization: Bearer` for OAuth) and are never echoed in logs, errors, or `--verbose`
+  output. `--verbose` shows the request path, status, and Pipedrive's `error_info`, but not
+  credentials.
+- **User-Agent.** Every request identifies itself as `pdcli/<version>` (e.g. `pdcli/0.5.0`).
+
+For where each setting is stored and the full precedence order, see
+[Config & environment](/pdcli/reference/config/).

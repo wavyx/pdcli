@@ -1,0 +1,123 @@
+---
+title: Bulk operations & CSV import
+description: Update many deals at once by IDs, a saved filter, or piped stdin, and bulk-create persons and organizations from CSV.
+---
+
+pdcli has two bulk workflows: `deal bulk-update` for changing many existing deals at once,
+and `person import` / `org import` for creating records from a CSV. Both pace their writes
+to stay inside Pipedrive's rate limits and report per-item failures honestly.
+
+## Bulk-updating deals
+
+`deal bulk-update` selects a set of deals and applies the same change to each. Pick the
+targets with **exactly one** selector:
+
+```bash
+pdcli deal bulk-update --ids 1,2,3 --stage 5            # explicit IDs
+pdcli deal bulk-update --filter 9 --status won          # a Pipedrive saved filter ID
+pdcli deal list --status open --jq '.[].id' | pdcli deal bulk-update --owner 42   # stdin
+```
+
+`--ids` and `--filter` are mutually exclusive. With neither flag and no piped input you get
+exit 64 (`No targets — pass --ids, --filter, or pipe ids on stdin`).
+
+### What you can pipe on stdin
+
+When stdin is not a TTY, pdcli reads it and accepts three shapes:
+
+- **Newline-separated IDs** — one integer per line.
+- **A JSON array of IDs** — `[1, 2, 3]`.
+- **A JSON array of objects** with an `id` field — e.g. the output of `deal list --output
+  json`, so `pdcli deal list --status open | pdcli deal bulk-update --status won` works.
+
+### What you can change
+
+Any combination of `--stage`, `--pipeline`, `--status` (`open|won|lost`), `--owner`,
+repeatable `--field "Name=Value"` (resolved like everywhere — see
+[Custom fields](/pdcli/guides/custom-fields/)), and a raw `--body` JSON merge (typed flags
+win). You must pass at least one change, or it's exit 64.
+
+### Preview, then confirm
+
+`--dry-run` lists the targets and the change without touching anything:
+
+```bash
+pdcli deal bulk-update --filter 9 --stage 5 --dry-run
+```
+
+```text
+Would update 12 deals: 1, 2, 5, 8, 9, 13, 21, 34, 55, 89, 144, 233
+Change: {"stage_id":5}
+```
+
+Without `--dry-run`, pdcli confirms before writing. Pass `-y`/`--yes` to skip the prompt in
+scripts. Declining aborts with exit 1.
+
+### Pacing and partial failures
+
+Updates run **sequentially** with a short gap between them, so a burst of writes stays
+within the 2-second rate-limit window (each write costs 10 tokens); the client's 429
+backoff covers anything that slips through. Per-deal failures are collected, not thrown —
+you get a full summary, and any failure exits 1:
+
+```text
+Updated 10/12 deals
+  ✘ deal 55: Pipedrive API 404: Deal not found
+  ✘ deal 233: Pipedrive API 403: insufficient permissions
+Error: 2 of 12 updates failed
+```
+
+:::note
+Pipedrive v2 has **no bulk-by-IDs endpoints**, so the loop is client-side: one `PATCH
+/api/v2/deals/{id}` per target. That's why pacing and the partial-failure report matter —
+each deal succeeds or fails on its own.
+:::
+
+## Importing persons and organizations from CSV
+
+`person import <file>` and `org import <file>` bulk-create records from a CSV. The first
+row is the header; **a `name` column is required** (case-insensitive), or it's exit 64.
+
+Each header maps to a field. Recognized special columns build standard values directly;
+every other header is resolved through the entity's field definitions — by human name,
+`field_code`, or hash key — including custom fields and their option labels.
+
+| Entity | Special columns |
+| ------ | --------------- |
+| person | `name`, `email`, `phone`, `org_id`, `owner_id` |
+| org    | `name`, `owner_id` |
+
+For persons, `email` and `phone` become the primary email/phone. Empty cells are skipped.
+
+```csv
+name,email,Segment,owner_id
+Jane Doe,jane@acme.com,Enterprise,7
+John Roe,john@acme.com,SMB,7
+```
+
+```bash
+pdcli person import people.csv --dry-run    # validate every row, create nothing
+pdcli person import people.csv              # confirms, then creates (custom fields by name)
+```
+
+`--dry-run` runs the full validation — header mapping, field resolution, option-label
+lookups — against every row and reports the count without writing:
+
+```text
+24 rows valid — nothing created
+```
+
+A bad value fails the whole run before any writes, naming the offending row (exit 65):
+
+```text
+Error: CSV row 5: Unknown option "Huge" for field "Deal Size". Valid: Small, Medium, Large
+```
+
+A real import confirms (skip with `-y`/`--yes`), paces the creates like bulk-update, and
+reports partial failures the same way — any failure exits 1:
+
+```text
+Imported 23/24 persons
+  ✘ John Roe: Pipedrive API 422: email already in use
+Error: 1 of 24 rows failed
+```

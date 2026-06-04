@@ -1,0 +1,113 @@
+---
+title: CI recipes
+description: Run pdcli in CI with env-var auth, nightly backups, audit gates, bulk imports, and deterministic flags.
+---
+
+`pdcli` is built for non-interactive use. In CI, authenticate with environment variables (no
+keychain, no prompts), and use deterministic flags so a run either succeeds or fails cleanly.
+
+## Authenticate with env vars
+
+In CI, set the company domain and a personal API token as environment variables instead of
+running `pdcli auth login`. The token never touches disk and stays out of shell history.
+
+```bash
+PDCLI_COMPANY_DOMAIN=acme PDCLI_API_TOKEN=xxxxxxxx pdcli deal list
+```
+
+Store the token as an encrypted secret and inject it per step. In GitHub Actions:
+
+```yaml
+name: pipedrive-audit
+on:
+  schedule:
+    - cron: '0 6 * * 1' # Mondays 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    env:
+      PDCLI_COMPANY_DOMAIN: acme
+      PDCLI_API_TOKEN: ${{ secrets.PIPEDRIVE_API_TOKEN }}
+    steps:
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+      - run: npm install -g @wavyx/pdcli
+      - run: pdcli audit --strict
+```
+
+Env auth means no OS keychain is required on the runner — env vars take precedence over the
+keychain, so writes (login) are never attempted. See
+[Security model](/pdcli/concepts/security/).
+
+## Deterministic flags
+
+CI runs should be predictable. Two flags matter most:
+
+- `--no-retry` — disable automatic backoff on `429` and `5xx`. The command fails immediately
+  with exit `75` (rate limited) or `69` (service unavailable) instead of sleeping through a
+  retry window. Use it when you'd rather fail fast and let the CI scheduler retry the job.
+- `--timeout <ms>` — cap each request (default 30000). A hung network won't stall the job
+  past your budget.
+
+```bash
+pdcli deal list --no-retry --timeout 10000 --output json
+```
+
+Piped output defaults to JSON, so `pdcli ... | jq` works without `--output json`. Errors go
+to stderr as JSON; see [Exit codes](/pdcli/automation/exit-codes/).
+
+## Audit as a data-quality gate
+
+`pdcli audit` runs 11 hygiene checks. With `--strict` it exits `1` when any **must-severity**
+check has findings (stale deals, duplicate persons, missing fields, …), which fails the job.
+
+```bash
+pdcli audit --strict
+# narrow the gate to specific checks:
+pdcli audit --checks duplicate-persons,missing-fields --strict
+```
+
+Exit `1` = the gate caught something. Wire it as a required check on a schedule, or before a
+deploy that depends on clean data. See [Data-hygiene audit](/pdcli/guides/audit/).
+
+## Nightly backup
+
+Export the whole account to a JSON tree on a schedule. `--resume` skips resources already
+written, so a re-run after a transient failure continues instead of restarting.
+
+```yaml
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    env:
+      PDCLI_COMPANY_DOMAIN: acme
+      PDCLI_API_TOKEN: ${{ secrets.PIPEDRIVE_API_TOKEN }}
+    steps:
+      - uses: actions/setup-node@v5
+        with: { node-version: 20 }
+      - run: npm install -g @wavyx/pdcli
+      - run: pdcli backup --dir ./pipedrive-backup
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pipedrive-backup
+          path: ./pipedrive-backup
+```
+
+`backup` paces itself against the token budget, so it's safe to run alongside other jobs.
+
+## Bulk import in a pipeline
+
+Validate CSV rows first with `--dry-run`, then import with `--yes` to skip the confirmation
+prompt (there's no TTY in CI):
+
+```bash
+pdcli person import people.csv --dry-run   # fails (exit 65) on bad rows
+pdcli person import people.csv --yes       # creates rows
+```
+
+A failed `--dry-run` exits non-zero, so chaining with `&&` stops the import if validation
+fails. CSV headers map to fields, custom fields by human name. See
+[Bulk operations & CSV import](/pdcli/guides/bulk/).

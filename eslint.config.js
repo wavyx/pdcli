@@ -35,6 +35,14 @@ export default [
     },
   },
   {
-    ignores: ['node_modules/', 'coverage/', 'oclif.manifest.json'],
+    ignores: [
+      'node_modules/',
+      'coverage/',
+      'oclif.manifest.json',
+      'website/',
+      'dist/',
+      'tmp/',
+      'design/',
+    ],
   },
 ]

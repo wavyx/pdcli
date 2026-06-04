@@ -1,0 +1,117 @@
+---
+title: Quickstart for AI agents
+description: Run pdcli non-interactively with env-var auth, JSON output, and deterministic exit codes.
+---
+
+pdcli is built to be driven by agents (Claude Code, Codex, CI bots). It is
+self-describing, emits machine-readable JSON, and uses deterministic exit codes.
+This page covers the conventions an agent needs.
+
+## Authenticate with environment variables
+
+Avoid the interactive `auth login` flow. Set credentials in the environment so no
+prompt blocks the run and no token lands in command history or a stored profile:
+
+```bash
+export PDCLI_COMPANY_DOMAIN=acme
+export PDCLI_API_TOKEN=<personal-api-token>
+pdcli deal list --status open
+```
+
+Env vars take precedence over a stored profile and require no keychain, which makes
+them the right choice for ephemeral or headless environments. The token must stay in
+the environment, never on a flag like `--api-token` where it would be visible in the
+process list.
+
+## Output is JSON when piped
+
+In a TTY the default output is a table; when stdout is **not** a TTY (piped or
+captured), pdcli defaults to JSON. Be explicit to remove all doubt:
+
+```bash
+pdcli deal get 42 --output json
+```
+
+Refine without leaving the CLI using `--jq` (native jq), `--fields`, or
+`--output yaml|csv`. See [Output & filtering](/pdcli/automation/output/).
+
+## Branch on exit codes
+
+pdcli uses [sysexits](https://man.freebsd.org/cgi/man.cgi?query=sysexits) codes so a
+script can react to the failure class without parsing text:
+
+| Code | Meaning |
+| ---- | ------- |
+| 0  | Success |
+| 1  | Generic error |
+| 64 | Usage error (bad flags/arguments) |
+| 65 | Bad input data (API 400 / 422) |
+| 69 | Service unavailable (API 5xx, or unreachable) |
+| 70 | Internal software error (unexpected) |
+| 75 | Rate limited (API 429) — retry later |
+| 77 | Not authenticated / forbidden (API 401 / 403) |
+| 78 | Configuration error (e.g. API 402, missing domain) |
+
+With `--output json`, errors also print a JSON object on **stderr**:
+
+```json
+{
+  "error": "ApiError",
+  "message": "Pipedrive API 401: invalid token",
+  "exitCode": 77,
+  "statusCode": 401,
+  "path": "/api/v2/deals"
+}
+```
+
+## Self-description
+
+Every command and flag is discoverable:
+
+```bash
+pdcli --help
+pdcli deal --help
+pdcli deal create --help
+```
+
+The full reference is at [/pdcli/reference/commands/](/pdcli/reference/commands/).
+
+## The host-locked `api` escape hatch
+
+When no dedicated command exists, call any endpoint directly. The request is
+host-locked to your authenticated company domain (or the OAuth `api_domain`), so a
+hallucinated host cannot leak the token. There is no generic data host.
+
+```bash
+pdcli api GET /api/v2/pipelines
+pdcli api POST /api/v2/deals --body '{"title":"Raw deal"}'
+```
+
+`api` always prints raw JSON. Both v1 and v2 paths work.
+
+## Machine-readable docs
+
+The whole documentation site is available as plain text for ingestion:
+
+- [/pdcli/llms.txt](/pdcli/llms.txt) — index of pages.
+- [/pdcli/llms-full.txt](/pdcli/llms-full.txt) — the full docs in one file.
+- [/pdcli/llms-small.txt](/pdcli/llms-small.txt) — a compact variant.
+
+## End-to-end example
+
+Find open deals owned by user 42 that are missing a value, and report how many:
+
+```bash
+export PDCLI_COMPANY_DOMAIN=acme
+export PDCLI_API_TOKEN=$PIPEDRIVE_TOKEN
+
+deals=$(pdcli deal list --status open --owner 42 --output json)
+status=$?
+if [ "$status" -ne 0 ]; then
+  echo "pdcli failed (exit $status)" >&2   # branch on the sysexits code
+  exit "$status"
+fi
+
+count=$(echo "$deals" | jq '[.[] | select(.value == null)] | length')
+echo "Open deals missing a value: $count"
+```

@@ -1,0 +1,117 @@
+---
+title: Authentication
+description: Token mode, OAuth mode, CI patterns, and how to switch between them.
+---
+
+pdcli supports two auth modes. Credentials always live **only in your OS keychain** —
+never in plaintext on disk. If no keychain is available, commands that store
+credentials hard-fail by design; use [environment variables](#ci-and-headless) instead.
+
+## Token mode (default)
+
+A personal API token is the quickest way in. Generate one at
+[app.pipedrive.com/settings/api](https://app.pipedrive.com/settings/api) — it is tied
+to your user and inherits your permissions.
+
+```bash
+pdcli auth login
+```
+
+You are prompted for the company domain (`acme` from `acme.pipedrive.com`) and the
+token. The token is validated against the API, then stored in the keychain; the
+company domain is saved to your profile config. pdcli sends it as the
+`x-api-token` header on every request, host-locked to your domain.
+
+Non-interactively:
+
+```bash
+pdcli auth login --company acme --api-token <token>
+```
+
+Prefer the prompt or an environment variable over `--api-token` so the token stays
+out of your shell history.
+
+## OAuth mode
+
+Use OAuth 2.0 with your **own** Pipedrive Developer Hub app (bring-your-own client).
+In the Developer Hub, register the callback URL exactly as:
+
+```text
+http://127.0.0.1:9999/callback
+```
+
+Then run the browser authorization-code flow:
+
+```bash
+pdcli auth login --oauth
+pdcli auth login --oauth --client-id <id> --client-secret <secret>
+```
+
+pdcli opens your browser, captures the code on a local loopback server, and exchanges
+it for tokens. The **entire bundle — access token, refresh token, `api_domain`, and
+the client secret — is stored only in the keychain.** Config records just the mode and
+display domain.
+
+Access tokens refresh automatically: proactively when they're within ~5 minutes of
+expiry, and reactively on a 401. You never run a manual refresh.
+
+If port 9999 is in use, pick another with `--port` — but it must match the callback URL
+registered in your Developer Hub app.
+
+## Check status and log out
+
+```bash
+pdcli auth status
+```
+
+Token mode shows the host and a best-effort identity check:
+
+```text
+Auth Status
+
+  Profile:    default
+  Keychain:   OS keychain
+  API host:   https://acme.pipedrive.com
+  Token:      present (keychain)
+
+  Authenticated User
+  Name:       Jane Doe
+  Email:      jane@acme.com
+```
+
+OAuth mode shows the mode and time to expiry:
+
+```text
+  Auth mode:  OAuth (auto-refresh)
+  Token:      present (expires in 47m)
+```
+
+Log out to clear stored credentials for the active profile (both modes):
+
+```bash
+pdcli auth logout
+```
+
+## CI and headless
+
+For pipelines and agents, skip the keychain entirely and pass credentials via the
+environment. They take precedence over any stored profile:
+
+```bash
+PDCLI_COMPANY_DOMAIN=acme PDCLI_API_TOKEN=$PIPEDRIVE_TOKEN pdcli deal list
+```
+
+For OAuth client credentials in CI, `PDCLI_CLIENT_ID` and `PDCLI_CLIENT_SECRET` are
+read by `auth login --oauth`. Store all secrets in your CI secret manager, never in
+the repo.
+
+## Switching modes
+
+Auth mode is per-profile. Running `auth login` (token) or `auth login --oauth` on the
+same profile replaces the stored credentials and updates the recorded `auth_mode`.
+To keep both around, use separate [profiles](/pdcli/guides/configuration/):
+
+```bash
+pdcli auth login --profile token-acme
+pdcli auth login --oauth --profile oauth-acme
+```

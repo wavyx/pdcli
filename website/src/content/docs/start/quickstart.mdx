@@ -1,0 +1,121 @@
+---
+title: Quickstart
+description: Authenticate and run your first pdcli commands in about five minutes.
+---
+
+This walks you from a fresh install to listing deals, piping output, and resolving
+custom fields. It assumes pdcli is [installed](/pdcli/start/installation/).
+
+## 1. Log in
+
+```bash
+pdcli auth login
+```
+
+You are prompted for two things:
+
+- **Company domain** — the `acme` in `acme.pipedrive.com` (a full URL is accepted too).
+- **API token** — find it at
+  [app.pipedrive.com/settings/api](https://app.pipedrive.com/settings/api). The prompt
+  masks it so it never lands in your shell history.
+
+The token is validated, then stored **only in your OS keychain**. The company domain
+goes in your profile config.
+
+```text
+Logged in to acme.pipedrive.com as Jane Doe (jane@acme.com)
+Profile: default — token in keychain
+```
+
+Prefer OAuth or a non-interactive flow? See [Authentication](/pdcli/guides/authentication/).
+
+## 2. Confirm you're authenticated
+
+```bash
+pdcli auth status
+```
+
+```text
+Auth Status
+
+  Profile:    default
+  Keychain:   OS keychain
+  API host:   https://acme.pipedrive.com
+  Token:      present (keychain)
+
+  Authenticated User
+  Name:       Jane Doe
+  Email:      jane@acme.com
+```
+
+## 3. List deals
+
+```bash
+pdcli deal list --status open --limit 5
+```
+
+In a terminal you get a table:
+
+```text
+┌────┬───────────────┬───────────┬────────┬───────┬────────┬─────┬───────┐
+│ ID │ Title         │ Value     │ Status │ Stage │ Person │ Org │ Owner │
+├────┼───────────────┼───────────┼────────┼───────┼────────┼─────┼───────┤
+│ 42 │ Acme renewal  │ 5000 EUR  │ open   │ 3     │ 17     │ 7   │ 1     │
+│ 43 │ Globex expand │ 12000 USD │ open   │ 2     │ 21     │ 9   │ 1     │
+└────┴───────────────┴───────────┴────────┴───────┴────────┴─────┴───────┘
+```
+
+When the output is piped, pdcli switches to JSON automatically.
+
+## 4. Pipe into other tools
+
+Use the built-in `--jq` to pull just the IDs:
+
+```bash
+pdcli deal list --status open --jq '.[].id'
+```
+
+```text
+42
+43
+```
+
+That stream feeds straight into other commands — for example,
+`pdcli deal list --status open --jq '.[].id' | pdcli deal bulk-update --owner 42`.
+More patterns in [Output & filtering](/pdcli/automation/output/).
+
+## 5. Discover custom fields
+
+Pipedrive custom fields are 40-character hash keys. `field list` reveals the
+human names, types, and keys for an entity:
+
+```bash
+pdcli field list deal
+```
+
+```text
+┌──────────────────────────────────────────┬───────────┬──────┬──────────────────┐
+│ Key                                       │ Name      │ Type │ Options          │
+├──────────────────────────────────────────┼───────────┼──────┼──────────────────┤
+│ dcf558aac1ae4e8c4f849ba5e668430d8df9be12  │ Deal Size │ enum │ Small, Med, Large│
+└──────────────────────────────────────────┴───────────┴──────┴──────────────────┘
+```
+
+Inspect one field by name or key:
+
+```bash
+pdcli field get deal "Deal Size"
+```
+
+You can then write to it by **name** — pdcli resolves the label to the option ID:
+
+```bash
+pdcli deal update 42 --field "Deal Size=Large"
+```
+
+## Next steps
+
+- [Custom fields](/pdcli/guides/custom-fields/) — name/key resolution in depth.
+- [Authentication](/pdcli/guides/authentication/) — OAuth, CI, switching modes.
+- [Profiles & configuration](/pdcli/guides/configuration/) — multiple accounts.
+- [Command reference](/pdcli/reference/commands/) — every command and flag.

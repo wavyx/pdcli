@@ -1,0 +1,85 @@
+---
+title: How pdcli talks to Pipedrive
+description: The dual API, the two paginators, and the token-budget rate limiting pdcli handles for you.
+---
+
+`pdcli` wraps Pipedrive's REST API. Most of this is handled for you, but knowing the model
+explains why some commands behave the way they do.
+
+## Dual API: v2 and v1
+
+Pipedrive runs two API versions. `pdcli` routes each topic to the right one.
+
+| Topic | API |
+| ----- | --- |
+| deals, persons, organizations, products, pipelines, stages, activities, projects, fields, search | **v2** |
+| leads, notes, files, filters, webhooks, goals, users | **v1** |
+
+Core CRM is on **v2** because Pipedrive deprecated ~59 v1 core endpoints after 2025-12-31, so
+pdcli never builds core CRUD on v1. The v1-only topics above have no v2 equivalent yet and are
+unaffected. Notably, **`pdcli user me` is v1-only** — `/api/v2/users/me` 404s into the web
+app's HTML page, so the Users API stays on v1.
+
+A few v2 specifics that surface in commands:
+
+- Updates use **PATCH**, not PUT — only the fields you pass change (this is why update commands
+  say "only provided fields change").
+- v2 accepts **JSON bodies only**.
+- v2 custom-field values are nested under a `custom_fields` object on the entity.
+
+Hit anything not yet wrapped with the host-locked [`pdcli api`](/pdcli/guides/api/) escape
+hatch (`pdcli api GET /api/v2/deals`, `pdcli api GET /api/v1/currencies`).
+
+## Two paginators, never mixed
+
+`list` commands auto-page through every result, capped by `--limit`. The two API versions
+paginate differently, and pdcli keeps their state separate:
+
+- **v2 — cursor.** Sends `cursor` + `limit`, follows `additional_data.next_cursor` until it's
+  null.
+- **v1 — offset.** Sends `start` + `limit`, follows
+  `additional_data.pagination.next_start` / `more_items_in_collection` until done.
+
+The maximum `limit` is **500** for both; pdcli clamps anything higher to 500. (Search is
+separately capped — itemSearch tops out at 100.) Offset and cursor state are never shared.
+
+## Token-budget rate limiting
+
+Pipedrive doesn't rate-limit by requests-per-second; it spends from a **token budget**. The
+cost depends on the verb:
+
+| Operation | Token cost |
+| --------- | ---------- |
+| GET one | 2 |
+| GET list | 20 |
+| POST / PUT / PATCH | 10 |
+| DELETE one | 6 |
+| Search | 40 |
+
+There's a rolling **2-second burst window** plus a **daily budget** (scales with plan and
+seats, resets at midnight server time). pdcli reads the `x-ratelimit-remaining`,
+`x-ratelimit-reset`, and `Retry-After` headers to pace itself.
+
+### Backoff and the hard stop
+
+On a `429`, pdcli waits for the window indicated by `x-ratelimit-reset` (falling back to
+`Retry-After`, then a 2s default) and retries with exponential backoff. `5xx` responses are
+also retried with backoff.
+
+If Pipedrive escalates persistent rate-limit abuse from `429` to a **`403`**, pdcli treats it
+as a **hard stop** — it does not retry into it, and exits `77`. Wait for your budget to reset
+before trying again.
+
+`--no-retry` turns off all of this: a `429` becomes an immediate exit `75`, and a `5xx`
+becomes exit `69`, with no sleeping. Use it in [CI](/pdcli/automation/ci/) when you'd rather
+fail fast.
+
+## A note on `updated_since`
+
+The analytics commands (`metrics velocity`, `funnel`) query deals by `updated_since`. The v2
+API requires **RFC 3339 timestamps at seconds precision** — fractional seconds (milliseconds)
+are rejected. pdcli formats these for you (e.g. `2026-03-06T00:00:00Z`); if you pass a
+timestamp through `pdcli api`, drop the milliseconds yourself.
+
+See [Exit codes](/pdcli/automation/exit-codes/) for how the HTTP statuses above map to
+deterministic exit codes.

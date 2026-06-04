@@ -1,0 +1,85 @@
+---
+title: Config & environment
+description: Profile config keys, environment variables, global flags, the config file location, and precedence.
+---
+
+A flat reference for how `pdcli` is configured. For the workflow, see
+[Profiles & configuration](/pdcli/guides/configuration/).
+
+## Precedence (highest wins)
+
+1. **Flags** — `--company`, `--api-token`, `--output`, `--profile`, …
+2. **Environment variables** — `PDCLI_COMPANY_DOMAIN`, `PDCLI_API_TOKEN`, `PDCLI_PROFILE`, …
+3. **Profile config** — per-profile keys in the config file.
+4. **Global config** — shared defaults.
+5. **Built-in defaults.**
+
+The company domain and the token resolve **independently**, each down this chain. So a profile
+domain plus an env token, or an env domain plus a `--api-token` flag, both work.
+
+## Environment variables
+
+| Variable | Purpose |
+| -------- | ------- |
+| `PDCLI_COMPANY_DOMAIN` | Company subdomain (`acme` from `acme.pipedrive.com`). Forms and locks the API host. |
+| `PDCLI_API_TOKEN` | Personal API token, sent as `x-api-token`. Preferred over `--api-token` so it stays out of shell history. |
+| `PDCLI_PROFILE` | Active profile name (same as `--profile`). |
+| `PDCLI_CLIENT_ID` | OAuth app client ID (used with `auth login --oauth`). |
+| `PDCLI_CLIENT_SECRET` | OAuth app client secret (used with `auth login --oauth`). |
+| `NO_COLOR` | Any value disables colored output (same as `--no-color`). |
+| `DEBUG` | Set to `pd:*` for debug logging (`--verbose` enables this automatically). |
+
+Setting `PDCLI_COMPANY_DOMAIN` + `PDCLI_API_TOKEN` is the recommended way to run in CI — no
+keychain needed. Env values take precedence over stored credentials.
+
+## Global flags
+
+Every command accepts these. Run any command with `--help` to confirm.
+
+| Flag | Default | Description |
+| ---- | ------- | ----------- |
+| `--output`, `-o` | table (TTY) / json (piped) | Output format: `table`, `json`, `yaml`, or `csv`. |
+| `--jq <expr>` | — | Filter output through a jq expression. |
+| `--fields <a,b,c>` | — | Comma-separated columns to display. |
+| `--profile <name>` | `default` | Named auth profile (env `PDCLI_PROFILE`). |
+| `--no-color` | off | Disable colored output. |
+| `--verbose` | off | Show request path, status, and `error_info` on errors; enables `pd:*` debug. |
+| `--no-retry` | off | Disable automatic retry on `429` and `5xx`. |
+| `--timeout <ms>` | `30000` | Per-request timeout in milliseconds. |
+| `--limit <n>` | — | Max items to return from a `list` (auto-pages up to this; API caps a page at 500). |
+
+Output defaults to a table in a TTY and JSON when piped; `--output` overrides both.
+
+## Profile config keys
+
+Config is per profile. `pdcli config set <key> <value>` writes to the active profile and
+`pdcli config get <key>` reads it back (`config get` prints `not set` for an unset key).
+These keys are written and read by pdcli:
+
+| Key | Set by | Description |
+| --- | ------ | ----------- |
+| `company_domain` | `auth login` | Bare company subdomain for the profile's API host. |
+| `auth_mode` | `auth login` | `token` or `oauth`. Selects how credentials are resolved. |
+
+```bash
+pdcli config set company_domain acme
+pdcli config get company_domain     # → acme
+pdcli config list                   # all keys for the active profile
+```
+
+The **token is never stored in config** — only in the OS keychain. See
+[Security model](/pdcli/concepts/security/).
+
+## Config file location
+
+Config is managed by [`conf`](https://www.npmjs.com/package/conf) under the project name
+`pdcli`, so the file lives in your platform's standard config directory:
+
+| Platform | Path |
+| -------- | ---- |
+| Linux | `~/.config/pdcli/config.json` (XDG) |
+| macOS | `~/Library/Preferences/pdcli-nodejs/config.json` |
+| Windows | `%APPDATA%\pdcli-nodejs\Config\config.json` |
+
+It holds only `activeProfile` and the non-secret per-profile keys above. Credentials are in
+the OS keychain, not this file.

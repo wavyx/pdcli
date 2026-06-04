@@ -1,0 +1,117 @@
+---
+title: Troubleshooting
+description: Common pdcli failures — auth, rate limits, keychain, stale manifests, custom fields, pipelines — and how to fix each.
+---
+
+Each entry pairs the symptom with the fix. When in doubt, start with `pdcli doctor`, which
+checks config access, keychain, active profile, company domain, token presence, and API
+reachability.
+
+## `401` — invalid or expired token
+
+```text
+Pipedrive API 401: ... (exit 77)
+```
+
+The token is wrong, revoked, or missing. Re-authenticate:
+
+```bash
+pdcli auth status        # shows profile, host, and token presence
+pdcli auth login         # re-enter the token (or --oauth)
+```
+
+OAuth access tokens refresh automatically before expiry and once on a `401`; a persistent
+`401` means the refresh token itself expired — log in again.
+
+## `402` — required suites missing
+
+```text
+Pipedrive API 402: ... (exit 78)
+```
+
+Your Pipedrive plan doesn't include the feature you're calling. The most common case is
+**Projects** on a plan without the Projects suite — `pdcli project list` and friends return
+`402`. There's nothing to retry; upgrade the plan or avoid the command.
+
+## `403` after repeated `429`s — rate-limit hard stop
+
+```text
+Pipedrive API 403: ... (403 after 429: rate-limit escalation — stopping) (exit 77)
+```
+
+Pipedrive escalates sustained rate-limit abuse from `429` to `403`. pdcli treats this as a
+**hard stop** and won't retry into it. **Wait for your token budget to reset** (per the
+`x-ratelimit-reset` window, or midnight server time for the daily budget) before retrying.
+Reduce load: prefer single GETs over lists, and let `backup` pace itself rather than running
+many list commands in parallel. See
+[How pdcli talks to Pipedrive](/pdcli/concepts/api-model/).
+
+## Keychain unavailable (headless Linux)
+
+```text
+OS keychain unavailable. pdcli ... refuses to write them to disk in plaintext. (exit 78)
+```
+
+`auth login` needs an OS keychain to store the token, and **fails by design** rather than
+writing plaintext. On a headless Linux box, either:
+
+- Install a keyring backend: `libsecret` + `gnome-keyring` (and ensure the secret service is
+  running), then `pdcli auth login` again; **or**
+- Skip login entirely and use env-var auth:
+
+  ```bash
+  PDCLI_COMPANY_DOMAIN=acme PDCLI_API_TOKEN=xxxx pdcli deal list
+  ```
+
+Reads and logout degrade gracefully without a keychain — only writes hard-fail. See
+[Security model](/pdcli/concepts/security/).
+
+## `X is not a pdcli command` after an upgrade
+
+```text
+Error: <something> is not a pdcli command.
+Run pdcli help for a list of available commands.
+```
+
+After an upgrade, a stale generated manifest can hide newly added commands. Reinstall to
+regenerate it:
+
+```bash
+npm install -g @wavyx/pdcli
+pdcli --help        # confirm the command now lists
+```
+
+(If you globally linked from source, re-run your install/link step so the manifest
+regenerates.)
+
+## A custom field isn't resolving
+
+If `--field "Name=Value"` errors that the field is unknown, the human name doesn't match a
+field on that entity. List the fields to see the exact names (and their hash keys and option
+labels):
+
+```bash
+pdcli field list deal
+pdcli field get deal "Deal Size"
+```
+
+Match the name exactly as shown. For enum/set fields, the **value** must be an existing option
+label — pdcli maps labels to option IDs, but only for labels that exist. See
+[Custom fields](/pdcli/guides/custom-fields/).
+
+## "Account has N pipelines — pass --pipeline"
+
+```text
+Account has 3 pipelines — pass --pipeline <id> (1=Sales, 2=Renewals, 3=Partners) (exit 64)
+```
+
+`funnel` and `pipeline health` analyze a single pipeline. When the account has more than one,
+they can't guess which — pass `--pipeline` with one of the IDs listed in the message:
+
+```bash
+pdcli pipeline list                 # see IDs and names
+pdcli pipeline health --pipeline 1
+pdcli funnel --pipeline 1
+```
+
+With exactly one pipeline, the flag is optional.

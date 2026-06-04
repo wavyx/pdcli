@@ -64,3 +64,18 @@ describe('renderGithubMarkdown', () => {
     expect(md).not.toContain('secret')
   })
 })
+
+describe('renderWebsiteMdx', () => {
+  it('renders a Starlight page with frontmatter and topic sections', async () => {
+    const { renderWebsiteMdx } = await import('../scripts/gen-commands.mjs')
+    const mdx = renderWebsiteMdx(manifest, 'pdcli')
+
+    expect(mdx).toContain('title: Command reference')
+    expect(mdx).toContain('AUTO-GENERATED')
+    expect(mdx).toContain('## pdcli deal')
+    expect(mdx).toContain('pdcli deal get <id> [flags]')
+    // table cells escape pipes/angle brackets for MDX
+    expect(mdx).not.toContain('<id>|')
+    expect(mdx).toContain('### `pdcli search`')
+  })
+})

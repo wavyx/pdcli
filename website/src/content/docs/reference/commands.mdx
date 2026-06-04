@@ -1,0 +1,1445 @@
+---
+title: Command reference
+description: Every pdcli command, flag, and example — generated from the CLI manifest.
+---
+
+{/* AUTO-GENERATED from the oclif manifest by scripts/gen-commands.mjs — do not edit by hand. */}
+
+All 78 commands in `pdcli` v0.6.0. Every command also
+accepts the [global flags](/pdcli/reference/config/) `--output`, `--jq`,
+`--fields`, `--profile`, `--limit`, `--no-color`, `--verbose`,
+`--no-retry`, and `--timeout`. Run `pdcli <command> --help` for the live version.
+
+## Top-level commands
+
+### `pdcli api`
+
+Make a raw API request (host-locked to your Pipedrive company domain)
+
+```text
+pdcli api <method> <path> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--body` &lt;value&gt; | Request body (JSON string, @file, or pipe stdin) |
+
+```bash
+pdcli api GET /api/v2/deals
+pdcli api GET /api/v1/currencies
+pdcli api POST /api/v2/deals --body '{"title":"New deal"}'
+pdcli api DELETE /api/v1/webhooks/1
+```
+
+### `pdcli audit`
+
+Data-quality audit: stale deals, missing fields, duplicates, overdue pileups
+
+```text
+pdcli audit [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--checks` &lt;value&gt; | Comma-separated subset of checks (stale-deals, no-next-activity, past-close-date, missing-fields, ancient-deals, missing-close-time, duplicate-persons, uncontactable-persons, duplicate-orgs, overdue-activities, currency-missing) |
+| `--strict` | Exit 1 when any must-severity check has findings |
+
+```bash
+pdcli audit
+pdcli audit --checks stale-deals,duplicate-persons --verbose
+pdcli audit --strict   # exit 1 on must-severity findings (CI)
+```
+
+### `pdcli backup`
+
+Export the whole account to a JSON tree (resumable, one file per resource)
+
+```text
+pdcli backup [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--dir` &lt;value&gt; | Target directory for the export |
+| `--resume` | Skip resources already completed in a previous run |
+
+```bash
+pdcli backup
+pdcli backup --dir ./my-backup
+pdcli backup --dir ./my-backup --resume
+```
+
+### `pdcli doctor`
+
+Run diagnostic checks on the CLI environment
+
+```text
+pdcli doctor [flags]
+```
+
+```bash
+pdcli doctor
+```
+
+### `pdcli funnel`
+
+Stage-to-stage conversion approximated from closed deals (final stage reached)
+
+```text
+pdcli funnel [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--period` &lt;value&gt; | Trailing window for closed deals (Nd or Nm) |
+| `--pipeline` &lt;value&gt; | Pipeline ID (required when the account has several) |
+
+```bash
+pdcli funnel
+pdcli funnel --pipeline 1 --period 180d
+```
+
+### `pdcli search`
+
+Search across deals, persons, organizations, products, leads, files, and projects
+
+```text
+pdcli search <term> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--item-types` &lt;value&gt; | Comma-separated item types (deal,person,organization,product,lead,file,mail_attachment,project) |
+| `--exact` | Exact match (allows 1-character terms) |
+
+```bash
+pdcli search "acme"
+pdcli search "acme" --item-types deal,person --output json
+```
+
+### `pdcli version`
+
+Show CLI version and environment info
+
+```text
+pdcli version [flags]
+```
+
+```bash
+pdcli version
+```
+
+## pdcli activity
+
+### `pdcli activity create`
+
+Create an activity
+
+```text
+pdcli activity create [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--subject` &lt;value&gt; | Activity subject |
+| `--type` &lt;value&gt; | Activity type |
+| `--due-date` &lt;value&gt; | Due date (YYYY-MM-DD) |
+| `--due-time` &lt;value&gt; | Due time (HH:MM) |
+| `--duration` &lt;value&gt; | Duration (HH:MM) |
+| `--deal` &lt;value&gt; | Linked deal ID |
+| `--person` &lt;value&gt; | Linked person ID |
+| `--org` &lt;value&gt; | Linked organization ID |
+| `--owner` &lt;value&gt; | Owner (user) ID |
+| `--note` &lt;value&gt; | Activity note |
+| `--done` | Mark the activity as done |
+| `--field` &lt;value&gt; | Custom/standard field as "Name=Value" (repeatable) |
+| `--body` &lt;value&gt; | Raw JSON body to merge (flags win) |
+
+```bash
+pdcli activity create --subject "Demo call" --type call --due-date 2026-06-10
+pdcli activity create --subject "Follow up" --field "Outcome=Positive"
+pdcli activity create --subject "Raw" --body '{"priority":5}'
+```
+
+### `pdcli activity delete`
+
+Delete an activity
+
+```text
+pdcli activity delete <id> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `-y, --yes` | Skip the confirmation prompt |
+
+```bash
+pdcli activity delete 9
+pdcli activity delete 9 --yes
+```
+
+### `pdcli activity get`
+
+Get an activity by ID
+
+```text
+pdcli activity get <id> [flags]
+```
+
+```bash
+pdcli activity get 9
+pdcli activity get 9 --output json
+```
+
+### `pdcli activity list`
+
+List activities
+
+```text
+pdcli activity list [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--owner` &lt;value&gt; | Filter by owner (user) ID |
+| `--deal` &lt;value&gt; | Filter by deal ID |
+| `--person` &lt;value&gt; | Filter by person ID |
+| `--org` &lt;value&gt; | Filter by organization ID |
+| `--type` &lt;value&gt; | Filter by activity type key |
+| `--done` | Only completed activities |
+| `--todo` | Only open (not done) activities |
+
+```bash
+pdcli activity list
+pdcli activity list --todo --deal 42
+pdcli activity list --type call --output json
+```
+
+### `pdcli activity update`
+
+Update an activity (v2 PATCH — only provided fields change)
+
+```text
+pdcli activity update <id> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--subject` &lt;value&gt; | Activity subject |
+| `--type` &lt;value&gt; | Activity type |
+| `--due-date` &lt;value&gt; | Due date (YYYY-MM-DD) |
+| `--due-time` &lt;value&gt; | Due time (HH:MM) |
+| `--duration` &lt;value&gt; | Duration (HH:MM) |
+| `--deal` &lt;value&gt; | Linked deal ID |
+| `--person` &lt;value&gt; | Linked person ID |
+| `--org` &lt;value&gt; | Linked organization ID |
+| `--owner` &lt;value&gt; | Owner (user) ID |
+| `--note` &lt;value&gt; | Activity note |
+| `--done` | Mark the activity as done |
+| `--undone` | Mark the activity as not done |
+| `--field` &lt;value&gt; | Custom/standard field as "Name=Value" (repeatable) |
+| `--body` &lt;value&gt; | Raw JSON body to merge (flags win) |
+
+```bash
+pdcli activity update 9 --subject "Renamed"
+pdcli activity update 9 --done
+pdcli activity update 9 --field "Outcome=Positive"
+```
+
+## pdcli auth
+
+### `pdcli auth login`
+
+Authenticate with Pipedrive (personal API token, or OAuth with --oauth)
+
+```text
+pdcli auth login [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--company` &lt;value&gt; | Company domain ("acme" from acme.pipedrive.com — full URL accepted) |
+| `--api-token` &lt;value&gt; | Personal API token (app.pipedrive.com/settings/api). Prefer the prompt or env so the token stays out of shell history |
+| `--oauth` | Use OAuth 2.0 via your own Developer Hub app (browser flow) |
+| `--client-id` &lt;value&gt; | OAuth app client ID (--oauth; env PDCLI_CLIENT_ID) |
+| `--client-secret` &lt;value&gt; | OAuth app client secret (--oauth; env PDCLI_CLIENT_SECRET) |
+| `--port` &lt;value&gt; | OAuth callback port — must match the app's registered callback URL (--oauth) |
+
+```bash
+pdcli auth login
+pdcli auth login --company acme --api-token <token>
+pdcli auth login --oauth
+pdcli auth login --oauth --client-id <id> --client-secret <secret>
+```
+
+### `pdcli auth logout`
+
+Log out and remove the stored API token
+
+```text
+pdcli auth logout [flags]
+```
+
+```bash
+pdcli auth logout
+```
+
+### `pdcli auth status`
+
+Show current authentication status
+
+```text
+pdcli auth status [flags]
+```
+
+```bash
+pdcli auth status
+```
+
+## pdcli config
+
+### `pdcli config get`
+
+Get a config value for the active profile
+
+```text
+pdcli config get <key> [flags]
+```
+
+```bash
+pdcli config get company_domain
+pdcli config get default_output
+```
+
+### `pdcli config list`
+
+List all config for the active profile
+
+```text
+pdcli config list [flags]
+```
+
+```bash
+pdcli config list
+```
+
+### `pdcli config set`
+
+Set a config value for the active profile
+
+```text
+pdcli config set <key> <value> [flags]
+```
+
+```bash
+pdcli config set company_domain acme
+pdcli config set default_output json
+```
+
+## pdcli deal
+
+### `pdcli deal bulk-update`
+
+Update many deals at once (by --ids, a saved --filter, or ids piped on stdin)
+
+```text
+pdcli deal bulk-update [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--ids` &lt;value&gt; | Comma-separated deal IDs |
+| `--filter` &lt;value&gt; | Pipedrive saved filter ID to select deals |
+| `--stage` &lt;value&gt; | Move to stage ID |
+| `--pipeline` &lt;value&gt; | Move to pipeline ID |
+| `--status` &lt;open\|won\|lost&gt; | Set status |
+| `--owner` &lt;value&gt; | Assign owner (user) ID |
+| `--field` &lt;value&gt; | Custom/standard field as "Name=Value" (repeatable) |
+| `--body` &lt;value&gt; | Raw JSON body to merge (flags win) |
+| `--dry-run` | List the targets without updating anything |
+| `-y, --yes` | Skip the confirmation prompt |
+
+```bash
+pdcli deal bulk-update --ids 1,2,3 --stage 5
+pdcli deal bulk-update --filter 9 --status won
+pdcli deal list --status open --jq '.[].id' | pdcli deal bulk-update --owner 42
+pdcli deal bulk-update --filter 9 --stage 5 --dry-run
+```
+
+### `pdcli deal create`
+
+Create a deal
+
+```text
+pdcli deal create [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--title` &lt;value&gt; | Deal title |
+| `--value` &lt;value&gt; | Deal value |
+| `--currency` &lt;value&gt; | Deal currency (e.g. EUR) |
+| `--status` &lt;open\|won\|lost&gt; | Deal status |
+| `--stage` &lt;value&gt; | Stage ID |
+| `--pipeline` &lt;value&gt; | Pipeline ID |
+| `--person` &lt;value&gt; | Linked person ID |
+| `--org` &lt;value&gt; | Linked organization ID |
+| `--owner` &lt;value&gt; | Owner (user) ID |
+| `--probability` &lt;value&gt; | Success probability (0-100) |
+| `--expected-close-date` &lt;value&gt; | Expected close date (YYYY-MM-DD) |
+| `--field` &lt;value&gt; | Custom/standard field as "Name=Value" (repeatable) |
+| `--body` &lt;value&gt; | Raw JSON body to merge (flags win) |
+
+```bash
+pdcli deal create --title "Acme renewal" --value 5000 --currency EUR
+pdcli deal create --title "Sized" --field "Deal Size=Large"
+pdcli deal create --title "Raw" --body '{"probability":75}'
+```
+
+### `pdcli deal delete`
+
+Delete a deal
+
+```text
+pdcli deal delete <id> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `-y, --yes` | Skip the confirmation prompt |
+
+```bash
+pdcli deal delete 42
+pdcli deal delete 42 --yes
+```
+
+### `pdcli deal get`
+
+Get a deal by ID
+
+```text
+pdcli deal get <id> [flags]
+```
+
+```bash
+pdcli deal get 42
+pdcli deal get 42 --output json
+```
+
+### `pdcli deal list`
+
+List deals
+
+```text
+pdcli deal list [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--status` &lt;open\|won\|lost\|deleted&gt; | Filter by status |
+| `--stage` &lt;value&gt; | Filter by stage ID |
+| `--pipeline` &lt;value&gt; | Filter by pipeline ID |
+| `--owner` &lt;value&gt; | Filter by owner (user) ID |
+| `--person` &lt;value&gt; | Filter by person ID |
+| `--org` &lt;value&gt; | Filter by organization ID |
+
+```bash
+pdcli deal list
+pdcli deal list --status won --limit 50
+pdcli deal list --stage 3 --output json
+```
+
+### `pdcli deal update`
+
+Update a deal (v2 PATCH — only provided fields change)
+
+```text
+pdcli deal update <id> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--title` &lt;value&gt; | Deal title |
+| `--value` &lt;value&gt; | Deal value |
+| `--currency` &lt;value&gt; | Deal currency (e.g. EUR) |
+| `--status` &lt;open\|won\|lost&gt; | Deal status |
+| `--stage` &lt;value&gt; | Stage ID |
+| `--pipeline` &lt;value&gt; | Pipeline ID |
+| `--person` &lt;value&gt; | Linked person ID |
+| `--org` &lt;value&gt; | Linked organization ID |
+| `--owner` &lt;value&gt; | Owner (user) ID |
+| `--probability` &lt;value&gt; | Success probability (0-100) |
+| `--expected-close-date` &lt;value&gt; | Expected close date (YYYY-MM-DD) |
+| `--field` &lt;value&gt; | Custom/standard field as "Name=Value" (repeatable) |
+| `--body` &lt;value&gt; | Raw JSON body to merge (flags win) |
+
+```bash
+pdcli deal update 42 --stage 5
+pdcli deal update 42 --status won
+pdcli deal update 42 --field "Deal Size=Large"
+```
+
+## pdcli field
+
+### `pdcli field get`
+
+Show one field by human name or hashed key
+
+```text
+pdcli field get <entity> <field> [flags]
+```
+
+```bash
+pdcli field get deal "Deal Size"
+pdcli field get deal dcf558aac1ae4e8c4f849ba5e668430d8df9be12
+```
+
+### `pdcli field list`
+
+List fields for an entity, including custom-field hash keys
+
+```text
+pdcli field list <entity> [flags]
+```
+
+```bash
+pdcli field list deal
+pdcli field list person --output json
+```
+
+## pdcli file
+
+### `pdcli file download`
+
+Download a file by ID
+
+```text
+pdcli file download <id> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--out` &lt;value&gt; | Path to write to (default: file name) |
+
+```bash
+pdcli file download 5
+pdcli file download 5 --out ./report.pdf
+```
+
+### `pdcli file get`
+
+Get a file by ID
+
+```text
+pdcli file get <id> [flags]
+```
+
+```bash
+pdcli file get 5
+pdcli file get 5 --output json
+```
+
+### `pdcli file list`
+
+List files
+
+```text
+pdcli file list [flags]
+```
+
+```bash
+pdcli file list
+pdcli file list --limit 50 --output json
+```
+
+### `pdcli file upload`
+
+Upload a file
+
+```text
+pdcli file upload <path> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--deal` &lt;value&gt; | Associate with a deal ID |
+| `--person` &lt;value&gt; | Associate with a person ID |
+| `--org` &lt;value&gt; | Associate with an organization ID |
+
+```bash
+pdcli file upload ./report.pdf
+pdcli file upload ./report.pdf --deal 42
+```
+
+## pdcli filter
+
+### `pdcli filter get`
+
+Get a filter by ID
+
+```text
+pdcli filter get <id> [flags]
+```
+
+```bash
+pdcli filter get 5
+pdcli filter get 5 --output json
+```
+
+### `pdcli filter list`
+
+List filters
+
+```text
+pdcli filter list [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--type` &lt;deals\|leads\|org\|people\|products\|activity\|projects&gt; | Filter by type |
+
+```bash
+pdcli filter list
+pdcli filter list --type deals --output json
+```
+
+## pdcli goal
+
+### `pdcli goal list`
+
+List goals
+
+```text
+pdcli goal list [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--assignee` &lt;value&gt; | Filter by assignee (user) ID |
+| `--type` &lt;value&gt; | Filter by goal type name |
+
+```bash
+pdcli goal list
+pdcli goal list --assignee 7 --type deals_won --output json
+```
+
+## pdcli lead
+
+### `pdcli lead create`
+
+Create a lead
+
+```text
+pdcli lead create [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--title` &lt;value&gt; | Lead title |
+| `--person` &lt;value&gt; | Linked person ID |
+| `--org` &lt;value&gt; | Linked organization ID |
+| `--owner` &lt;value&gt; | Owner (user) ID |
+| `--value` &lt;value&gt; | Lead value amount (requires --currency) |
+| `--currency` &lt;value&gt; | Lead value currency (requires --value) |
+| `--expected-close-date` &lt;value&gt; | Expected close date (YYYY-MM-DD) |
+| `--body` &lt;value&gt; | Raw JSON body to merge (flags win) |
+
+```bash
+pdcli lead create --title "Acme renewal" --value 5000 --currency EUR
+pdcli lead create --title "Linked" --person 4 --org 5
+pdcli lead create --title "Raw" --body '{"visible_to":"3"}'
+```
+
+### `pdcli lead delete`
+
+Delete a lead
+
+```text
+pdcli lead delete <id> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `-y, --yes` | Skip the confirmation prompt |
+
+```bash
+pdcli lead delete adf21080-0e10-11eb-879b-05d71fb426ec
+pdcli lead delete adf21080-0e10-11eb-879b-05d71fb426ec --yes
+```
+
+### `pdcli lead get`
+
+Get a lead by ID
+
+```text
+pdcli lead get <id> [flags]
+```
+
+```bash
+pdcli lead get adf21080-0e10-11eb-879b-05d71fb426ec
+pdcli lead get adf21080-0e10-11eb-879b-05d71fb426ec --output json
+```
+
+### `pdcli lead list`
+
+List leads
+
+```text
+pdcli lead list [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--owner` &lt;value&gt; | Filter by owner (user) ID |
+| `--person` &lt;value&gt; | Filter by person ID |
+| `--org` &lt;value&gt; | Filter by organization ID |
+
+```bash
+pdcli lead list
+pdcli lead list --owner 3 --output json
+```
+
+### `pdcli lead update`
+
+Update a lead (v1 PATCH — only provided fields change)
+
+```text
+pdcli lead update <id> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--title` &lt;value&gt; | Lead title |
+| `--person` &lt;value&gt; | Linked person ID |
+| `--org` &lt;value&gt; | Linked organization ID |
+| `--owner` &lt;value&gt; | Owner (user) ID |
+| `--value` &lt;value&gt; | Lead value amount (requires --currency) |
+| `--currency` &lt;value&gt; | Lead value currency (requires --value) |
+| `--expected-close-date` &lt;value&gt; | Expected close date (YYYY-MM-DD) |
+| `--body` &lt;value&gt; | Raw JSON body to merge (flags win) |
+
+```bash
+pdcli lead update adf21080-0e10-11eb-879b-05d71fb426ec --title "Renamed"
+pdcli lead update adf21080-0e10-11eb-879b-05d71fb426ec --value 7500 --currency USD
+```
+
+## pdcli metrics
+
+### `pdcli metrics velocity`
+
+Sales Velocity Equation: (open × win rate × avg won value) / cycle days
+
+```text
+pdcli metrics velocity [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--period` &lt;value&gt; | Trailing window for closed deals (Nd or Nm) |
+| `--pipeline` &lt;value&gt; | Restrict to a pipeline ID |
+| `--owner` &lt;value&gt; | Restrict to an owner (user) ID |
+
+```bash
+pdcli metrics velocity
+pdcli metrics velocity --period 30d --pipeline 1
+```
+
+## pdcli note
+
+### `pdcli note create`
+
+Create a note
+
+```text
+pdcli note create [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--content` &lt;value&gt; | Note content |
+| `--deal` &lt;value&gt; | Attach to deal ID |
+| `--person` &lt;value&gt; | Attach to person ID |
+| `--org` &lt;value&gt; | Attach to organization ID |
+| `--lead` &lt;value&gt; | Attach to lead ID (UUID) |
+| `--body` &lt;value&gt; | Raw JSON body to merge (flags win) |
+
+```bash
+pdcli note create --content "Called the lead"
+pdcli note create --content "Follow up" --deal 42
+pdcli note create --content "Pinned" --body '{"pinned_to_deal_flag":1}'
+```
+
+### `pdcli note delete`
+
+Delete a note
+
+```text
+pdcli note delete <id> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `-y, --yes` | Skip the confirmation prompt |
+
+```bash
+pdcli note delete 5
+pdcli note delete 5 --yes
+```
+
+### `pdcli note get`
+
+Get a note by ID
+
+```text
+pdcli note get <id> [flags]
+```
+
+```bash
+pdcli note get 5
+pdcli note get 5 --output json
+```
+
+### `pdcli note list`
+
+List notes
+
+```text
+pdcli note list [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--deal` &lt;value&gt; | Filter by deal ID |
+| `--person` &lt;value&gt; | Filter by person ID |
+| `--org` &lt;value&gt; | Filter by organization ID |
+
+```bash
+pdcli note list
+pdcli note list --deal 42 --output json
+```
+
+### `pdcli note update`
+
+Update a note (only provided fields change)
+
+```text
+pdcli note update <id> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--content` &lt;value&gt; | Note content |
+| `--body` &lt;value&gt; | Raw JSON body to merge (flags win) |
+
+```bash
+pdcli note update 5 --content "Revised note"
+pdcli note update 5 --body '{"pinned_to_deal_flag":1}'
+```
+
+## pdcli org
+
+### `pdcli org create`
+
+Create an organization
+
+```text
+pdcli org create [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--name` &lt;value&gt; | Organization name |
+| `--owner` &lt;value&gt; | Owner (user) ID |
+| `--field` &lt;value&gt; | Custom/standard field as "Name=Value" (repeatable) |
+| `--body` &lt;value&gt; | Raw JSON body to merge (flags win) |
+
+```bash
+pdcli org create --name "Acme Corp"
+pdcli org create --name "Tiered" --field "Tier=Gold"
+pdcli org create --name "Raw" --body '{"visible_to":3}'
+```
+
+### `pdcli org delete`
+
+Delete an organization
+
+```text
+pdcli org delete <id> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `-y, --yes` | Skip the confirmation prompt |
+
+```bash
+pdcli org delete 7
+pdcli org delete 7 --yes
+```
+
+### `pdcli org get`
+
+Get an organization by ID
+
+```text
+pdcli org get <id> [flags]
+```
+
+```bash
+pdcli org get 7
+pdcli org get 7 --output json
+```
+
+### `pdcli org import`
+
+Bulk-create organizations from a CSV (headers map to fields, custom fields by name)
+
+```text
+pdcli org import <file> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--dry-run` | Validate every row without creating anything |
+| `-y, --yes` | Skip the confirmation prompt |
+
+```bash
+pdcli org import orgs.csv
+pdcli org import orgs.csv --dry-run
+```
+
+### `pdcli org list`
+
+List organizations
+
+```text
+pdcli org list [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--owner` &lt;value&gt; | Filter by owner (user) ID |
+
+```bash
+pdcli org list
+pdcli org list --owner 3 --output json
+```
+
+### `pdcli org update`
+
+Update an organization (v2 PATCH — only provided fields change)
+
+```text
+pdcli org update <id> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--name` &lt;value&gt; | Organization name |
+| `--owner` &lt;value&gt; | Owner (user) ID |
+| `--field` &lt;value&gt; | Custom/standard field as "Name=Value" (repeatable) |
+| `--body` &lt;value&gt; | Raw JSON body to merge (flags win) |
+
+```bash
+pdcli org update 7 --name "Acme Inc"
+pdcli org update 7 --owner 9
+pdcli org update 7 --field "Tier=Gold"
+```
+
+## pdcli person
+
+### `pdcli person create`
+
+Create a person
+
+```text
+pdcli person create [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--name` &lt;value&gt; | Person name |
+| `--email` &lt;value&gt; | Email address (repeatable; first is primary) |
+| `--phone` &lt;value&gt; | Phone number (repeatable; first is primary) |
+| `--org` &lt;value&gt; | Linked organization ID |
+| `--owner` &lt;value&gt; | Owner (user) ID |
+| `--field` &lt;value&gt; | Custom/standard field as "Name=Value" (repeatable) |
+| `--body` &lt;value&gt; | Raw JSON body to merge (flags win) |
+
+```bash
+pdcli person create --name "Jane Doe" --email jane@acme.com
+pdcli person create --name "Jane" --field "Segment=Enterprise"
+pdcli person create --name "Raw" --body '{"visible_to":"3"}'
+```
+
+### `pdcli person delete`
+
+Delete a person
+
+```text
+pdcli person delete <id> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `-y, --yes` | Skip the confirmation prompt |
+
+```bash
+pdcli person delete 42
+pdcli person delete 42 --yes
+```
+
+### `pdcli person get`
+
+Get a person by ID
+
+```text
+pdcli person get <id> [flags]
+```
+
+```bash
+pdcli person get 5
+pdcli person get 5 --output json
+```
+
+### `pdcli person import`
+
+Bulk-create persons from a CSV (headers map to fields, custom fields by name)
+
+```text
+pdcli person import <file> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--dry-run` | Validate every row without creating anything |
+| `-y, --yes` | Skip the confirmation prompt |
+
+```bash
+pdcli person import people.csv
+pdcli person import people.csv --dry-run
+```
+
+### `pdcli person list`
+
+List persons (contacts)
+
+```text
+pdcli person list [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--owner` &lt;value&gt; | Filter by owner (user) ID |
+| `--org` &lt;value&gt; | Filter by organization ID |
+
+```bash
+pdcli person list
+pdcli person list --org 7 --output json
+```
+
+### `pdcli person update`
+
+Update a person (v2 PATCH — only provided fields change)
+
+```text
+pdcli person update <id> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--name` &lt;value&gt; | Person name |
+| `--email` &lt;value&gt; | Email address (repeatable; first is primary) |
+| `--phone` &lt;value&gt; | Phone number (repeatable; first is primary) |
+| `--org` &lt;value&gt; | Linked organization ID |
+| `--owner` &lt;value&gt; | Owner (user) ID |
+| `--field` &lt;value&gt; | Custom/standard field as "Name=Value" (repeatable) |
+| `--body` &lt;value&gt; | Raw JSON body to merge (flags win) |
+
+```bash
+pdcli person update 42 --name "New name"
+pdcli person update 42 --email new@acme.com
+pdcli person update 42 --field "Segment=Enterprise"
+```
+
+## pdcli pipeline
+
+### `pdcli pipeline get`
+
+Get a pipeline by ID
+
+```text
+pdcli pipeline get <id> [flags]
+```
+
+```bash
+pdcli pipeline get 1
+pdcli pipeline get 1 --output json
+```
+
+### `pdcli pipeline health`
+
+Per-stage pipeline health: value, weighted value, stale deals, missing next steps
+
+```text
+pdcli pipeline health [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--pipeline` &lt;value&gt; | Pipeline ID (required when the account has several) |
+
+```bash
+pdcli pipeline health
+pdcli pipeline health --pipeline 1
+```
+
+### `pdcli pipeline list`
+
+List pipelines
+
+```text
+pdcli pipeline list [flags]
+```
+
+```bash
+pdcli pipeline list
+pdcli pipeline list --output json
+```
+
+## pdcli product
+
+### `pdcli product create`
+
+Create a product
+
+```text
+pdcli product create [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--name` &lt;value&gt; | Product name |
+| `--code` &lt;value&gt; | Product code (SKU) |
+| `--unit` &lt;value&gt; | Unit of measure |
+| `--description` &lt;value&gt; | Product description |
+| `--owner` &lt;value&gt; | Owner (user) ID |
+| `--price` &lt;value&gt; | Unit price (requires --currency) |
+| `--currency` &lt;value&gt; | Price currency (requires --price) |
+| `--field` &lt;value&gt; | Custom/standard field as "Name=Value" (repeatable) |
+| `--body` &lt;value&gt; | Raw JSON body to merge (flags win) |
+
+```bash
+pdcli product create --name "Widget" --code W-1 --price 9.99 --currency EUR
+pdcli product create --name "Sized" --field "Material=Steel"
+pdcli product create --name "Raw" --body '{"tax":19}'
+```
+
+### `pdcli product delete`
+
+Delete a product
+
+```text
+pdcli product delete <id> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `-y, --yes` | Skip the confirmation prompt |
+
+```bash
+pdcli product delete 7
+pdcli product delete 7 --yes
+```
+
+### `pdcli product get`
+
+Get a product by ID
+
+```text
+pdcli product get <id> [flags]
+```
+
+```bash
+pdcli product get 7
+pdcli product get 7 --output json
+```
+
+### `pdcli product list`
+
+List products
+
+```text
+pdcli product list [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--owner` &lt;value&gt; | Filter by owner (user) ID |
+
+```bash
+pdcli product list
+pdcli product list --owner 3 --output json
+```
+
+### `pdcli product update`
+
+Update a product (v2 PATCH — only provided fields change)
+
+```text
+pdcli product update <id> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--name` &lt;value&gt; | Product name |
+| `--code` &lt;value&gt; | Product code (SKU) |
+| `--unit` &lt;value&gt; | Unit of measure |
+| `--description` &lt;value&gt; | Product description |
+| `--owner` &lt;value&gt; | Owner (user) ID |
+| `--price` &lt;value&gt; | Unit price (requires --currency) |
+| `--currency` &lt;value&gt; | Price currency (requires --price) |
+| `--field` &lt;value&gt; | Custom/standard field as "Name=Value" (repeatable) |
+| `--body` &lt;value&gt; | Raw JSON body to merge (flags win) |
+
+```bash
+pdcli product update 7 --name "New name"
+pdcli product update 7 --price 12.50 --currency USD
+pdcli product update 7 --field "Material=Steel"
+```
+
+## pdcli profile
+
+### `pdcli profile current`
+
+Show the active profile
+
+```text
+pdcli profile current [flags]
+```
+
+```bash
+pdcli profile current
+```
+
+### `pdcli profile list`
+
+List all configured profiles
+
+```text
+pdcli profile list [flags]
+```
+
+```bash
+pdcli profile list
+```
+
+### `pdcli profile use`
+
+Switch the active profile
+
+```text
+pdcli profile use <name> [flags]
+```
+
+```bash
+pdcli profile use work
+```
+
+## pdcli project
+
+### `pdcli project create`
+
+Create a project
+
+```text
+pdcli project create [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--title` &lt;value&gt; | Project title |
+| `--description` &lt;value&gt; | Project description |
+| `--status` &lt;value&gt; | Project status |
+| `--start-date` &lt;value&gt; | Start date (YYYY-MM-DD) |
+| `--end-date` &lt;value&gt; | End date (YYYY-MM-DD) |
+| `--owner` &lt;value&gt; | Owner (user) ID |
+| `--board` &lt;value&gt; | Board ID |
+| `--phase` &lt;value&gt; | Phase ID |
+| `--body` &lt;value&gt; | Raw JSON body to merge (flags win) |
+
+```bash
+pdcli project create --title "Launch"
+pdcli project create --title "Launch" --owner 3 --status open
+pdcli project create --title "Raw" --body '{"deal_ids":[1,2]}'
+```
+
+### `pdcli project delete`
+
+Delete a project
+
+```text
+pdcli project delete <id> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `-y, --yes` | Skip the confirmation prompt |
+
+```bash
+pdcli project delete 7
+pdcli project delete 7 --yes
+```
+
+### `pdcli project get`
+
+Get a project by ID
+
+```text
+pdcli project get <id> [flags]
+```
+
+```bash
+pdcli project get 3
+pdcli project get 3 --output json
+```
+
+### `pdcli project list`
+
+List projects
+
+```text
+pdcli project list [flags]
+```
+
+```bash
+pdcli project list
+pdcli project list --output json
+```
+
+### `pdcli project update`
+
+Update a project (v2 PATCH — only provided fields change)
+
+```text
+pdcli project update <id> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--title` &lt;value&gt; | Project title |
+| `--description` &lt;value&gt; | Project description |
+| `--status` &lt;value&gt; | Project status |
+| `--start-date` &lt;value&gt; | Start date (YYYY-MM-DD) |
+| `--end-date` &lt;value&gt; | End date (YYYY-MM-DD) |
+| `--owner` &lt;value&gt; | Owner (user) ID |
+| `--board` &lt;value&gt; | Board ID |
+| `--phase` &lt;value&gt; | Phase ID |
+| `--body` &lt;value&gt; | Raw JSON body to merge (flags win) |
+
+```bash
+pdcli project update 7 --title "Relaunch"
+pdcli project update 7 --status closed
+pdcli project update 7 --owner 9
+```
+
+## pdcli stage
+
+### `pdcli stage get`
+
+Get a stage by ID
+
+```text
+pdcli stage get <id> [flags]
+```
+
+```bash
+pdcli stage get 5
+pdcli stage get 5 --output json
+```
+
+### `pdcli stage list`
+
+List stages
+
+```text
+pdcli stage list [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--pipeline` &lt;value&gt; | Filter by pipeline ID |
+
+```bash
+pdcli stage list
+pdcli stage list --pipeline 1 --output json
+```
+
+## pdcli user
+
+### `pdcli user me`
+
+Show the authenticated user
+
+```text
+pdcli user me [flags]
+```
+
+```bash
+pdcli user me
+```
+
+## pdcli webhook
+
+### `pdcli webhook create`
+
+Create a webhook
+
+```text
+pdcli webhook create [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--url` &lt;value&gt; | Webhook subscription URL |
+| `--event-action` &lt;create\|change\|delete\|*&gt; | Event action to subscribe to |
+| `--event-object` &lt;activity\|deal\|lead\|note\|organization\|person\|product\|user\|pipeline\|stage\|*&gt; | Event object to subscribe to |
+| `--name` &lt;value&gt; | Webhook name |
+| `--version` &lt;value&gt; | Webhook payload version |
+| `--http-auth-user` &lt;value&gt; | HTTP basic auth username for the endpoint |
+| `--http-auth-password` &lt;value&gt; | HTTP basic auth password for the endpoint |
+
+```bash
+pdcli webhook create --url https://example.com/hook --event-action change --event-object deal
+pdcli webhook create --url https://example.com/hook --event-action "*" --event-object "*"
+```
+
+### `pdcli webhook delete`
+
+Delete a webhook
+
+```text
+pdcli webhook delete <id> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `-y, --yes` | Skip the confirmation prompt |
+
+```bash
+pdcli webhook delete 3
+pdcli webhook delete 3 --yes
+```
+
+### `pdcli webhook list`
+
+List webhooks
+
+```text
+pdcli webhook list [flags]
+```
+
+```bash
+pdcli webhook list
+pdcli webhook list --output json
+```
+

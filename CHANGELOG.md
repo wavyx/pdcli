@@ -4,6 +4,21 @@ All notable changes to `pdcli` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/).
 
+## [0.6.0] - 2026-06-04
+
+### Added
+
+- Documentation site (Astro + Starlight) at wavyx.github.io/pdcli:
+  quickstarts (including a dedicated AI-agent quickstart), guides for every
+  feature area, automation recipes, concepts, and a command reference
+  generated from the CLI manifest.
+- Machine-readable docs for AI agents: `llms.txt`, `llms-full.txt`, and
+  `llms-small.txt`.
+- Native tarballs (linux x64/arm64, macOS x64/arm64, Windows x64) attached
+  to every GitHub Release for non-npm installs.
+- Shell completion docs (`pdcli autocomplete bash|zsh|fish`).
+- `bin/dev.js` development runner (no manifest cache).
+
 ## [0.5.0] - 2026-06-04
 
 ### Added
