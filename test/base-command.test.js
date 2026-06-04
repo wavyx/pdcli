@@ -256,3 +256,65 @@ describe('BaseCommand OAuth mode', () => {
     )
   })
 })
+
+describe('BaseCommand output formats and filters', () => {
+  beforeEach(() => {
+    nock.cleanAll()
+    mockLoadConfig.mockReturnValue({ activeProfile: 'default' })
+    mockResolveCredentials.mockResolvedValue({
+      mode: 'token',
+      companyDomain: 'acme',
+      token: 'test-token',
+      source: 'profile',
+    })
+  })
+
+  it('--output yaml renders YAML', async () => {
+    nock(API_BASE)
+      .get('/api/v2/users/me')
+      .reply(200, { success: true, data: { id: 1, name: 'Yaml User' } })
+
+    const stdout = await captureLogs(ApiCmd, ['--output', 'yaml'])
+    expect(stdout).toContain('name: Yaml User')
+  })
+
+  it('--output csv renders CSV with column headers', async () => {
+    nock(API_BASE)
+      .get('/api/v2/users/me')
+      .reply(200, {
+        success: true,
+        data: { id: 1, name: 'Csv User', email: 'c@a.com' },
+      })
+
+    const stdout = await captureLogs(ApiCmd, ['--output', 'csv'])
+    expect(stdout).toContain('ID,Name,Email')
+    expect(stdout).toContain('1,Csv User,c@a.com')
+  })
+
+  it('--jq filters the JSON output', async () => {
+    nock(API_BASE)
+      .get('/api/v2/users/me')
+      .reply(200, { success: true, data: { id: 1, name: 'Jq User' } })
+
+    const stdout = await captureLogs(ApiCmd, ['--jq', '.[0].name'])
+    expect(stdout).toContain('Jq User')
+    expect(stdout).not.toContain('"id"')
+  })
+
+  it('--fields limits table columns', async () => {
+    nock(API_BASE)
+      .get('/api/v2/users/me')
+      .reply(200, {
+        success: true,
+        data: { id: 1, name: 'Field User', email: 'f@a.com' },
+      })
+
+    const origIsTTY = process.stdout.isTTY
+    process.stdout.isTTY = true
+    const stdout = await captureLogs(ApiCmd, ['--fields', 'id,email'])
+    process.stdout.isTTY = origIsTTY
+
+    expect(stdout).toContain('f@a.com')
+    expect(stdout).not.toContain('Field User')
+  })
+})
