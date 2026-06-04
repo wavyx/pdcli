@@ -98,6 +98,7 @@ pdcli doctor                             # diagnose auth/keychain/connectivity
 
 - `--output table|json|yaml|csv` everywhere; table in a TTY, JSON when piped.
 - Deterministic [sysexits](https://man.freebsd.org/cgi/man.cgi?query=sysexits) exit codes for scripting.
+- **Docs: [wavyx.github.io/pdcli](https://wavyx.github.io/pdcli)** — guides, cookbook, AI-agent quickstart, [`llms.txt`](https://wavyx.github.io/pdcli/llms.txt).
 - Full reference: [docs/commands.md](docs/commands.md) (generated from the CLI manifest).
 
 ## License
