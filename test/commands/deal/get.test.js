@@ -108,3 +108,16 @@ describe('deal get table mode without custom fields', () => {
     expect(stdout).toContain('Plain deal')
   })
 })
+
+describe('outputRecord without an entity', () => {
+  it('renders custom_fields raw when no entity is given', async () => {
+    const { outputRecord } = await import('../../../src/lib/entity-view.js')
+    const lines = []
+    const cmd = {
+      resolveFormat: () => 'table',
+      outputResults: async (rows) => lines.push(JSON.stringify(rows)),
+    }
+    await outputRecord(cmd, { id: 1, custom_fields: { [HASH]: 11 } })
+    expect(lines[0]).toContain(HASH)
+  })
+})
