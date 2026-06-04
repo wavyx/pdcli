@@ -2,7 +2,7 @@
 
 Command-line interface for [Pipedrive](https://www.pipedrive.com/) — fast, scriptable, built for terminals, CI pipelines, and AI agents.
 
-> **Status: pre-release (v0.1 in development).** Not affiliated with or endorsed by Pipedrive.
+> Not affiliated with or endorsed by Pipedrive.
 
 ## Install
 
@@ -10,22 +10,57 @@ Command-line interface for [Pipedrive](https://www.pipedrive.com/) — fast, scr
 npm install -g @wavyx/pdcli
 ```
 
-## Quick start
+## Authenticate
 
 ```bash
-pdcli auth login          # company domain + API token (stored in your OS keychain)
-pdcli user me
-pdcli deal list --limit 10
-pdcli deal list --output json | jq '.[].id'
-pdcli field list deal     # custom fields with their hash keys
-pdcli search "acme"
-pdcli api GET /api/v1/currencies   # raw, host-locked escape hatch
+pdcli auth login            # personal API token (app.pipedrive.com/settings/api)
+pdcli auth login --oauth    # OAuth 2.0 via your own Developer Hub app
+pdcli auth status
 ```
 
-- Token lives **only** in the OS keychain — never in plaintext on disk.
-- `--output table|json` on every command; table in a TTY, JSON when piped.
+Credentials live **only in your OS keychain** — never in plaintext on disk. OAuth
+access tokens refresh automatically. CI/scripts can use env vars instead:
+`PDCLI_COMPANY_DOMAIN=acme PDCLI_API_TOKEN=... pdcli deal list`
+
+## Read
+
+```bash
+pdcli deal list --status open --limit 20
+pdcli deal get 42
+pdcli person list --org 7 --output json | jq '.[].id'
+pdcli activity list --todo
+pdcli search "acme"
+pdcli field list deal           # custom fields with their hash keys
+```
+
+## Write
+
+```bash
+pdcli deal create --title "Acme renewal" --value 5000 --currency EUR --stage 3
+pdcli deal update 42 --status won
+pdcli activity create --subject "Follow up" --type call --due-date 2026-06-10 --deal 42
+pdcli product create --name "Consulting" --price 150 --currency EUR
+pdcli deal delete 42            # asks first; --yes to skip
+```
+
+Custom fields by **human name** — labels and option IDs resolve automatically:
+
+```bash
+pdcli deal create --title "Sized" --field "Deal Size=Large" --field "Score=4.5"
+pdcli deal update 42 --body '{"probability":75}'   # raw JSON escape hatch
+```
+
+## Anything else
+
+```bash
+pdcli api GET /api/v2/pipelines          # raw, host-locked to YOUR domain
+pdcli api POST /api/v2/deals --body '{"title":"Raw deal"}'
+pdcli doctor                             # diagnose auth/keychain/connectivity
+```
+
+- `--output table|json` everywhere; table in a TTY, JSON when piped.
 - Deterministic [sysexits](https://man.freebsd.org/cgi/man.cgi?query=sysexits) exit codes for scripting.
-- CI: `PDCLI_COMPANY_DOMAIN=acme PDCLI_API_TOKEN=... pdcli deal list`
+- Full reference: [docs/commands.md](docs/commands.md) (generated from the CLI manifest).
 
 ## License
 
