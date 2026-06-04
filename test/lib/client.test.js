@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import nock from 'nock'
 import { createClient } from '../../src/lib/client.js'
 import { ApiError, RateLimitError } from '../../src/lib/errors.js'
@@ -606,5 +606,91 @@ describe('pageV2 with an empty response body', () => {
     }
 
     expect(items).toEqual([])
+  })
+})
+
+describe('OAuth mode', () => {
+  beforeEach(() => nock.cleanAll())
+
+  it('sends Authorization Bearer and uses the api_domain origin', async () => {
+    const oauthClient = createClient({
+      apiDomain: 'https://acme.pipedrive.com',
+      token: 'oauth-access',
+      authMode: 'oauth',
+      retry: false,
+      timeout: 5000,
+    })
+    const scope = nock('https://acme.pipedrive.com')
+      .get('/api/v2/deals')
+      .matchHeader('authorization', 'Bearer oauth-access')
+      .matchHeader('x-api-token', (v) => v === undefined)
+      .reply(200, { success: true, data: [] })
+
+    await oauthClient.get('/api/v2/deals')
+    expect(scope.isDone()).toBe(true)
+  })
+
+  it('host-locks to the api_domain', async () => {
+    const oauthClient = createClient({
+      apiDomain: 'https://acme.pipedrive.com',
+      token: 'oauth-access',
+      authMode: 'oauth',
+      retry: false,
+      timeout: 5000,
+    })
+    nock.disableNetConnect()
+    try {
+      await expect(
+        oauthClient.get('https://other.pipedrive.com/api/v2/deals'),
+      ).rejects.toThrow(/Pipedrive company host/i)
+    } finally {
+      nock.enableNetConnect()
+    }
+  })
+
+  it('refreshes once via onRefresh on 401 and retries with the new token', async () => {
+    const onRefresh = vi.fn().mockResolvedValue('refreshed-access')
+    const oauthClient = createClient({
+      apiDomain: 'https://acme.pipedrive.com',
+      token: 'expired-access',
+      authMode: 'oauth',
+      onRefresh,
+      retry: true,
+      timeout: 5000,
+    })
+    const scope = nock('https://acme.pipedrive.com')
+      .get('/api/v2/users/me')
+      .matchHeader('authorization', 'Bearer expired-access')
+      .reply(401, { success: false, error: 'expired' })
+      .get('/api/v2/users/me')
+      .matchHeader('authorization', 'Bearer refreshed-access')
+      .reply(200, { success: true, data: { id: 1 } })
+
+    const result = await oauthClient.get('/api/v2/users/me')
+    expect(result.data.id).toBe(1)
+    expect(onRefresh).toHaveBeenCalledOnce()
+    expect(scope.isDone()).toBe(true)
+  })
+
+  it('throws ApiError when the refreshed token is also rejected', async () => {
+    const onRefresh = vi.fn().mockResolvedValue('still-bad')
+    const oauthClient = createClient({
+      apiDomain: 'https://acme.pipedrive.com',
+      token: 'expired-access',
+      authMode: 'oauth',
+      onRefresh,
+      retry: true,
+      timeout: 5000,
+    })
+    nock('https://acme.pipedrive.com')
+      .get('/api/v2/users/me')
+      .times(2)
+      .reply(401, { success: false, error: 'expired' })
+
+    await expect(oauthClient.get('/api/v2/users/me')).rejects.toMatchObject({
+      statusCode: 401,
+      exitCode: 77,
+    })
+    expect(onRefresh).toHaveBeenCalledOnce()
   })
 })

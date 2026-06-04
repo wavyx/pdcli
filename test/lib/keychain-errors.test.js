@@ -32,3 +32,12 @@ describe('keychain when entry access throws', () => {
     await expect(deleteToken('locked-profile')).resolves.toBeUndefined()
   })
 })
+
+describe('OAuth slot when entry access throws', () => {
+  it('getOAuthTokens returns null, deleteOAuthTokens swallows', async () => {
+    const { getOAuthTokens, deleteOAuthTokens } =
+      await import('../../src/lib/keychain.js')
+    await expect(getOAuthTokens('locked')).resolves.toBeNull()
+    await expect(deleteOAuthTokens('locked')).resolves.toBeUndefined()
+  })
+})

@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockDeleteToken = vi.fn()
+const mockDeleteOAuthTokens = vi.fn()
 vi.mock('../../../src/lib/keychain.js', () => ({
   deleteToken: mockDeleteToken,
+  deleteOAuthTokens: mockDeleteOAuthTokens,
 }))
 
 vi.mock('../../../src/lib/config.js', () => ({
@@ -24,5 +26,12 @@ describe('auth logout', () => {
     expect(mockDeleteToken).toHaveBeenCalledWith('default')
     expect(stdout).toContain('Logged out')
     expect(stdout).toContain('default')
+  })
+})
+
+describe('auth logout clears OAuth tokens too', () => {
+  it('deletes both keychain slots', async () => {
+    await runCmd(LogoutCommand)
+    expect(mockDeleteOAuthTokens).toHaveBeenCalledWith('default')
   })
 })

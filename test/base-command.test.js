@@ -2,13 +2,22 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import nock from 'nock'
 
 const mockResolveCredentials = vi.fn()
+const mockRefreshAccessToken = vi.fn()
 vi.mock('../src/lib/auth.js', async (importOriginal) => {
   const actual = await importOriginal()
   return {
     ...actual,
     resolveCredentials: mockResolveCredentials,
+    refreshAccessToken: mockRefreshAccessToken,
   }
 })
+
+const mockSetOAuthTokens = vi.fn()
+vi.mock('../src/lib/keychain.js', () => ({
+  getToken: vi.fn().mockResolvedValue(null),
+  getOAuthTokens: vi.fn().mockResolvedValue(null),
+  setOAuthTokens: mockSetOAuthTokens,
+}))
 
 const mockLoadConfig = vi.fn()
 vi.mock('../src/lib/config.js', () => ({
@@ -178,6 +187,72 @@ describe('BaseCommand', () => {
 
     await expect(captureLogs(ApiCmd, ['--no-retry'])).rejects.toThrow(
       /Rate limited/,
+    )
+  })
+})
+
+describe('BaseCommand OAuth mode', () => {
+  beforeEach(() => {
+    nock.cleanAll()
+    mockLoadConfig.mockReturnValue({ activeProfile: 'default' })
+    mockRefreshAccessToken.mockReset()
+    mockSetOAuthTokens.mockReset()
+    mockResolveCredentials.mockResolvedValue({
+      mode: 'oauth',
+      apiDomain: 'https://acme.pipedrive.com',
+      token: 'oauth-access',
+      source: 'profile',
+      oauth: {
+        accessToken: 'oauth-access',
+        refreshToken: 'rt-1',
+        expiresAt: Date.now() + 3600_000,
+        apiDomain: 'https://acme.pipedrive.com',
+        clientId: 'cid',
+        clientSecret: 'csec',
+      },
+    })
+  })
+
+  it('builds a Bearer client from the api_domain', async () => {
+    nock(API_BASE)
+      .get('/api/v2/users/me')
+      .matchHeader('authorization', 'Bearer oauth-access')
+      .reply(200, { success: true, data: { id: 1, name: 'OAuth User' } })
+
+    const stdout = await captureLogs(ApiCmd, ['--output', 'json'])
+    expect(stdout).toContain('OAuth User')
+  })
+
+  it('refreshes on 401, persists, and retries', async () => {
+    mockRefreshAccessToken.mockResolvedValue({
+      accessToken: 'fresh-access',
+      refreshToken: 'rt-2',
+      expiresIn: 3599,
+      apiDomain: 'https://acme.pipedrive.com',
+    })
+
+    nock(API_BASE)
+      .get('/api/v2/users/me')
+      .matchHeader('authorization', 'Bearer oauth-access')
+      .reply(401, { success: false, error: 'expired' })
+      .get('/api/v2/users/me')
+      .matchHeader('authorization', 'Bearer fresh-access')
+      .reply(200, { success: true, data: { id: 1, name: 'Refreshed' } })
+
+    const stdout = await captureLogs(ApiCmd, ['--output', 'json'])
+
+    expect(stdout).toContain('Refreshed')
+    expect(mockRefreshAccessToken).toHaveBeenCalledWith({
+      refreshToken: 'rt-1',
+      clientId: 'cid',
+      clientSecret: 'csec',
+    })
+    expect(mockSetOAuthTokens).toHaveBeenCalledWith(
+      'default',
+      expect.objectContaining({
+        accessToken: 'fresh-access',
+        refreshToken: 'rt-2',
+      }),
     )
   })
 })
