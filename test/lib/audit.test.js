@@ -345,6 +345,44 @@ describe('runChecks', () => {
     expect(check.items.some((i) => i.kind === 'fuzzy')).toBe(false)
   })
 
+  it('does not count the informational note as a finding (cap exceeded)', () => {
+    const organizations = Array.from({ length: FUZZY_ORG_MAX + 1 }, (_, i) => ({
+      id: i + 1,
+      name: `Org ${i}`,
+    }))
+    const results = runChecks(dataset({ organizations }), { now: NOW })
+    const check = byName(results, 'duplicate-orgs')
+    // No duplicates exist, only the skip note → count must be 0, note kept.
+    expect(check.count).toBe(0)
+    expect(check.items.some((i) => i.kind === 'note')).toBe(true)
+  })
+
+  it('reports fuzzy org pairs with their original names, not normalized', () => {
+    const results = runChecks(
+      dataset({
+        organizations: [
+          { id: 1, name: 'Acme' },
+          { id: 2, name: 'Acmee' },
+          { id: 3, name: 'Globex GmbH' },
+          { id: 4, name: 'Globexx GmbH' },
+        ],
+      }),
+      { now: NOW },
+    )
+    const check = byName(results, 'duplicate-orgs')
+    const allNames = check.items
+      .filter((i) => i.kind === 'fuzzy')
+      .flatMap((i) => i.names)
+    // Original spellings (casing + legal suffix) must survive into the report.
+    expect(allNames).toContain('Globex GmbH')
+    expect(allNames).toContain('Globexx GmbH')
+    expect(allNames).toContain('Acme')
+    expect(allNames).toContain('Acmee')
+    // Normalized forms must NOT appear.
+    expect(allNames).not.toContain('globex')
+    expect(allNames).not.toContain('acme')
+  })
+
   it('groups overdue activities by owner', () => {
     const results = runChecks(
       dataset({

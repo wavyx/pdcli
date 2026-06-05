@@ -90,7 +90,7 @@ pdcli funnel [flags]
 
 - `--period <value>` — Trailing window for closed deals (Nd or Nm)
 - `--pipeline <value>` — Pipeline ID (required when the account has several)
-- `--exact` — Mine real stage transitions from each deal’s changelog instead of approximating from the final stage (one request per deal)
+- `--exact` — Mine real stage transitions from each deal’s changelog instead of approximating from the final stage (one request per deal). --period scopes only closed (won/lost) deals; open deals are always included.
 
 Examples:
 

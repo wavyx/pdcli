@@ -37,13 +37,22 @@ describe('person merge', () => {
     nock.cleanAll()
   })
 
-  it('merges the loser into the survivor and prints the survivor record', async () => {
+  it('looks up both records, merges, then re-fetches the survivor (v2)', async () => {
     mockConfirmAction.mockResolvedValue(true)
-    const scope = mockApi()
+    const loserScope = mockApi()
+      .get('/api/v2/persons/123')
+      .reply(200, { success: true, data: { id: 123, name: 'John Smith' } })
+    const winnerScope = mockApi()
+      .get('/api/v2/persons/456')
+      .reply(200, { success: true, data: { id: 456, name: 'Jon Smith' } })
+    const mergeScope = mockApi()
       .put('/api/v1/persons/123/merge', { merge_with_id: 456 })
+      .reply(200, { success: true, data: { id: 456 } })
+    const refetchScope = mockApi()
+      .get('/api/v2/persons/456')
       .reply(200, {
         success: true,
-        data: { id: 456, name: 'Survivor', merge_what_id: 123 },
+        data: { id: 456, name: 'Jon Smith', org_id: 7 },
       })
 
     const stdout = await runCmd(PersonMergeCommand, [
@@ -54,16 +63,29 @@ describe('person merge', () => {
       'json',
     ])
 
-    expect(scope.isDone()).toBe(true)
-    expect(JSON.parse(stdout).id).toBe(456)
-    expect(JSON.parse(stdout).name).toBe('Survivor')
+    expect(loserScope.isDone()).toBe(true)
+    expect(winnerScope.isDone()).toBe(true)
+    expect(mergeScope.isDone()).toBe(true)
+    expect(refetchScope.isDone()).toBe(true)
+    const out = JSON.parse(stdout)
+    expect(out.id).toBe(456)
+    expect(out.org_id).toBe(7)
   })
 
-  it('confirms naming the record that will be deleted', async () => {
+  it('confirms with both record names and defaults to NO', async () => {
     mockConfirmAction.mockResolvedValue(true)
+    mockApi()
+      .get('/api/v2/persons/123')
+      .reply(200, { success: true, data: { id: 123, name: 'John Smith' } })
+    mockApi()
+      .get('/api/v2/persons/456')
+      .reply(200, { success: true, data: { id: 456, name: 'Jon Smith' } })
     mockApi()
       .put('/api/v1/persons/123/merge', { merge_with_id: 456 })
       .reply(200, { success: true, data: { id: 456 } })
+    mockApi()
+      .get('/api/v2/persons/456')
+      .reply(200, { success: true, data: { id: 456, name: 'Jon Smith' } })
 
     await runCmd(PersonMergeCommand, [
       '123',
@@ -73,18 +95,54 @@ describe('person merge', () => {
       'json',
     ])
 
-    const [message, skip] = mockConfirmAction.mock.calls[0]
+    const [message, skip, options] = mockConfirmAction.mock.calls[0]
     expect(message).toContain('123')
     expect(message).toContain('456')
-    expect(message).toMatch(/123 will be deleted/i)
+    expect(message).toContain('John Smith')
+    expect(message).toContain('Jon Smith')
+    expect(message).toMatch(/DELETED/i)
     expect(skip).toBe(false)
+    expect(options).toEqual({ default: false })
   })
 
-  it('skips the prompt with --yes', async () => {
+  it('fails before any merge when the loser lookup 404s', async () => {
     mockConfirmAction.mockResolvedValue(true)
-    const scope = mockApi()
+    const loserScope = mockApi()
+      .get('/api/v2/persons/123')
+      .reply(404, { success: false, error: 'Person not found' })
+
+    await expect(
+      PersonMergeCommand.run(['123', '--into', '456']),
+    ).rejects.toThrow(/404|not found/i)
+
+    expect(loserScope.isDone()).toBe(true)
+    expect(mockConfirmAction).not.toHaveBeenCalled()
+  })
+
+  it('fails before any merge when the survivor lookup 404s', async () => {
+    mockConfirmAction.mockResolvedValue(true)
+    mockApi()
+      .get('/api/v2/persons/123')
+      .reply(200, { success: true, data: { id: 123, name: 'John Smith' } })
+    const winnerScope = mockApi()
+      .get('/api/v2/persons/456')
+      .reply(404, { success: false, error: 'Person not found' })
+
+    await expect(
+      PersonMergeCommand.run(['123', '--into', '456']),
+    ).rejects.toThrow(/404|not found/i)
+
+    expect(winnerScope.isDone()).toBe(true)
+    expect(mockConfirmAction).not.toHaveBeenCalled()
+  })
+
+  it('skips the lookups and prompt with --yes', async () => {
+    const mergeScope = mockApi()
       .put('/api/v1/persons/123/merge', { merge_with_id: 456 })
       .reply(200, { success: true, data: { id: 456 } })
+    const refetchScope = mockApi()
+      .get('/api/v2/persons/456')
+      .reply(200, { success: true, data: { id: 456, name: 'Jon Smith' } })
 
     await runCmd(PersonMergeCommand, [
       '123',
@@ -95,15 +153,18 @@ describe('person merge', () => {
       'json',
     ])
 
-    expect(mockConfirmAction).toHaveBeenCalledWith(expect.any(String), true)
-    expect(scope.isDone()).toBe(true)
+    expect(mockConfirmAction).not.toHaveBeenCalled()
+    expect(mergeScope.isDone()).toBe(true)
+    expect(refetchScope.isDone()).toBe(true)
   })
 
-  it('skips the prompt with -y', async () => {
-    mockConfirmAction.mockResolvedValue(true)
-    const scope = mockApi()
+  it('skips the lookups and prompt with -y', async () => {
+    const mergeScope = mockApi()
       .put('/api/v1/persons/123/merge', { merge_with_id: 456 })
       .reply(200, { success: true, data: { id: 456 } })
+    mockApi()
+      .get('/api/v2/persons/456')
+      .reply(200, { success: true, data: { id: 456, name: 'Jon Smith' } })
 
     await runCmd(PersonMergeCommand, [
       '123',
@@ -114,21 +175,25 @@ describe('person merge', () => {
       'json',
     ])
 
-    expect(mockConfirmAction).toHaveBeenCalledWith(expect.any(String), true)
-    expect(scope.isDone()).toBe(true)
+    expect(mockConfirmAction).not.toHaveBeenCalled()
+    expect(mergeScope.isDone()).toBe(true)
   })
 
-  it('aborts without calling the API when declined', async () => {
+  it('aborts without merging when declined', async () => {
     mockConfirmAction.mockResolvedValue(false)
-    nock.disableNetConnect()
+    const loserScope = mockApi()
+      .get('/api/v2/persons/123')
+      .reply(200, { success: true, data: { id: 123, name: 'John Smith' } })
+    const winnerScope = mockApi()
+      .get('/api/v2/persons/456')
+      .reply(200, { success: true, data: { id: 456, name: 'Jon Smith' } })
 
-    try {
-      await expect(
-        PersonMergeCommand.run(['123', '--into', '456']),
-      ).rejects.toThrow(/abort/i)
-    } finally {
-      nock.enableNetConnect()
-    }
+    await expect(
+      PersonMergeCommand.run(['123', '--into', '456']),
+    ).rejects.toThrow(/abort/i)
+
+    expect(loserScope.isDone()).toBe(true)
+    expect(winnerScope.isDone()).toBe(true)
   })
 
   it('rejects merging a record into itself (exit 64)', async () => {
@@ -142,5 +207,38 @@ describe('person merge', () => {
     } finally {
       nock.enableNetConnect()
     }
+  })
+
+  it('still succeeds (exit 0) with a warning when the survivor re-fetch 404s', async () => {
+    const mergeScope = mockApi()
+      .put('/api/v1/persons/123/merge', { merge_with_id: 456 })
+      .reply(200, { success: true, data: { id: 456 } })
+    const refetchScope = mockApi()
+      .get('/api/v2/persons/456')
+      .reply(404, { success: false, error: 'Person not found' })
+
+    const warnings = []
+    const errSpy = vi.spyOn(console, 'error').mockImplementation((...chunk) => {
+      warnings.push(chunk.map(String).join(' '))
+    })
+
+    let stdout
+    try {
+      stdout = await runCmd(PersonMergeCommand, [
+        '123',
+        '--into',
+        '456',
+        '--yes',
+        '--output',
+        'json',
+      ])
+    } finally {
+      errSpy.mockRestore()
+    }
+
+    expect(mergeScope.isDone()).toBe(true)
+    expect(refetchScope.isDone()).toBe(true)
+    expect(JSON.parse(stdout).id).toBe(456)
+    expect(warnings.join('')).toMatch(/could not load the survivor/i)
   })
 })

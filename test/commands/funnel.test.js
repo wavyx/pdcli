@@ -383,6 +383,55 @@ describe('funnel --exact (mined stage transitions)', () => {
     expect(stdout).toContain('100%')
   })
 
+  it('drops the per-row Won column and reports won as a single summary line', async () => {
+    mockScope([{ id: 30, status: 'won', stage_id: 2 }])
+    mockApi()
+      .get('/api/v1/deals/30/changelog')
+      .query(true)
+      .reply(200, {
+        success: true,
+        data: [
+          stageRow(1, 2),
+          { field_key: 'status', old_value: 'open', new_value: 'won' },
+        ],
+        additional_data: { next_cursor: null },
+      })
+
+    const stdout = await runCmd(FunnelCommand, ['--exact', '--output', 'table'])
+
+    // The 'Won' column header must no longer be present per-row.
+    expect(stdout).not.toContain('Won (')
+    expect(stdout).not.toMatch(/│\s*Won\s*│/)
+    // The won total is reported once, under the table, as a summary line.
+    expect(stdout).toMatch(/Won:\s*1/)
+  })
+
+  it("labels the per-row ratio 'Entered vs prev' (entries are non-monotonic)", async () => {
+    mockScope([{ id: 30, status: 'won', stage_id: 2 }])
+    mockApi()
+      .get('/api/v1/deals/30/changelog')
+      .query(true)
+      .reply(200, {
+        success: true,
+        data: [stageRow(1, 2)],
+        additional_data: { next_cursor: null },
+      })
+
+    const stdout = await runCmd(FunnelCommand, ['--exact', '--output', 'table'])
+
+    // Renamed so it is not misread as funnel conversion (it can exceed 100%).
+    expect(stdout).toContain('Entered vs prev')
+    expect(stdout).not.toContain('Conv. from prev')
+  })
+
+  it('documents that --period scopes only closed deals in --exact mode', () => {
+    const desc = FunnelCommand.flags.exact.description
+    // Open deals are always mined; --period only narrows won/lost.
+    expect(desc).toMatch(/--period/)
+    expect(desc).toMatch(/closed/i)
+    expect(desc).toMatch(/open deals are always included/i)
+  })
+
   it('does NOT warn when mining 100 or fewer deals', async () => {
     mockScope([{ id: 1, status: 'open', stage_id: 1 }])
     mockApi()
@@ -408,5 +457,67 @@ describe('funnel --exact (mined stage transitions)', () => {
     }
 
     expect(stderr.join('')).not.toMatch(/deals/)
+  })
+
+  it('skips deals whose changelog fails to fetch and warns once after mining', async () => {
+    // Three deals: deal 40 succeeds, deal 41 returns 404, deal 42 returns 500.
+    // The funnel must still render from the survivor, and a single stderr
+    // warning must mention the 2 skipped deals.
+    mockScope([
+      { id: 40, status: 'won', stage_id: 2 },
+      { id: 41, status: 'open', stage_id: 1 },
+      { id: 42, status: 'open', stage_id: 1 },
+    ])
+    mockApi()
+      .get('/api/v1/deals/40/changelog')
+      .query(true)
+      .reply(200, {
+        success: true,
+        data: [stageRow(1, 2)],
+        additional_data: { next_cursor: null },
+      })
+    mockApi()
+      .get('/api/v1/deals/41/changelog')
+      .query(true)
+      .reply(404, { success: false, error: 'Deal not found' })
+    mockApi()
+      .get('/api/v1/deals/42/changelog')
+      .query(true)
+      .reply(500, { success: false, error: 'Server error' })
+
+    const stderr = []
+    const spy = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation((chunk) => {
+        stderr.push(String(chunk))
+        return true
+      })
+    let stdout
+    try {
+      // --no-retry so the 500 surfaces immediately without backoff sleeps.
+      stdout = await runCmd(FunnelCommand, [
+        '--exact',
+        '--no-retry',
+        '--output',
+        'json',
+      ])
+    } finally {
+      spy.mockRestore()
+    }
+
+    const rows = JSON.parse(stdout)
+    // Survivor deal 40 (1 -> 2) entered both stages.
+    expect(rows[0].entered).toBe(1)
+    expect(rows[1].entered).toBe(1)
+
+    const text = stderr.join('')
+    expect(text).toMatch(
+      /skipped 2 deal\(s\) whose changelog could not be fetched/,
+    )
+    // exactly one such warning line
+    const warnings = text
+      .split('\n')
+      .filter((l) => /could not be fetched/.test(l))
+    expect(warnings).toHaveLength(1)
   })
 })

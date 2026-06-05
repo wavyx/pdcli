@@ -62,6 +62,69 @@ describe('alias set', () => {
     expect(thrown.exitCode ?? thrown.oclif?.exit).toBe(64)
     expect(mockSetAlias).not.toHaveBeenCalled()
   })
+
+  async function runSetExpectingError(argv) {
+    const config = await Config.load(process.cwd())
+    let thrown
+    try {
+      await AliasSetCommand.run(argv, config)
+    } catch (err) {
+      thrown = err
+    }
+    return thrown
+  }
+
+  it('rejects a name containing a dot with exit 64', async () => {
+    mockGetAliases.mockReturnValue({})
+    const thrown = await runSetExpectingError(['my.alias', 'deal list'])
+
+    expect(thrown).toBeDefined()
+    expect(thrown.message).toMatch(/\./)
+    expect(thrown.exitCode ?? thrown.oclif?.exit).toBe(64)
+    expect(mockSetAlias).not.toHaveBeenCalled()
+  })
+
+  it('rejects a name that matches an oclif topic with exit 64', async () => {
+    // `deal` is a topic but NOT a command (findCommand returns false),
+    // so the plain shadow check misses it — this is the verified bug.
+    mockGetAliases.mockReturnValue({})
+    const thrown = await runSetExpectingError(['deal', 'person list'])
+
+    expect(thrown).toBeDefined()
+    expect(thrown.message).toMatch(/topic/i)
+    expect(thrown.exitCode ?? thrown.oclif?.exit).toBe(64)
+    expect(mockSetAlias).not.toHaveBeenCalled()
+  })
+
+  it('rejects a self-referential command (first token equals name) with exit 64', async () => {
+    mockGetAliases.mockReturnValue({})
+    const thrown = await runSetExpectingError(['x', 'x --status won'])
+
+    expect(thrown).toBeDefined()
+    expect(thrown.message).toMatch(/self/i)
+    expect(thrown.exitCode ?? thrown.oclif?.exit).toBe(64)
+    expect(mockSetAlias).not.toHaveBeenCalled()
+  })
+
+  it('rejects a command whose first token transitively cycles back with exit 64', async () => {
+    // Existing: b -> "a g". New: a -> "b f". a -> b -> a is a cycle.
+    mockGetAliases.mockReturnValue({ b: 'a g' })
+    const thrown = await runSetExpectingError(['a', 'b f'])
+
+    expect(thrown).toBeDefined()
+    expect(thrown.message.toLowerCase()).toContain('cycle')
+    expect(thrown.exitCode ?? thrown.oclif?.exit).toBe(64)
+    expect(mockSetAlias).not.toHaveBeenCalled()
+  })
+
+  it('allows a command whose first token is an alias that does NOT cycle back', async () => {
+    // Existing: b -> "deal list" (terminates at a real token). a -> "b f" is fine.
+    mockGetAliases.mockReturnValue({ b: 'deal list' })
+    const config = await Config.load(process.cwd())
+    await AliasSetCommand.run(['a', 'b f'], config)
+
+    expect(mockSetAlias).toHaveBeenCalledWith('a', 'b f')
+  })
 })
 
 describe('alias list', () => {

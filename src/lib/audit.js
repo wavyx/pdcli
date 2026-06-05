@@ -164,16 +164,18 @@ export const AUDIT_CHECKS = [
       for (const org of data.organizations) {
         const key = normalizeOrgName(org.name)
         if (!key) continue
-        byName.set(key, [...(byName.get(key) ?? []), org.id])
+        const group = byName.get(key) ?? { ids: [], original: org.name }
+        group.ids.push(org.id)
+        byName.set(key, group)
       }
       const exact = [...byName.entries()]
-        .filter(([, ids]) => ids.length > 1)
-        .map(([name, ids]) => ({ kind: 'exact', name, ids }))
+        .filter(([, group]) => group.ids.length > 1)
+        .map(([name, group]) => ({ kind: 'exact', name, ids: group.ids }))
 
       // Normalized names that did NOT collide exactly are fuzzy candidates;
       // exact-duplicate groups are already reported above, so skip them here.
       const singles = [...byName.entries()].filter(
-        ([, ids]) => ids.length === 1,
+        ([, group]) => group.ids.length === 1,
       )
 
       if (singles.length > FUZZY_ORG_MAX) {
@@ -189,14 +191,15 @@ export const AUDIT_CHECKS = [
       const fuzzy = []
       for (let i = 0; i < singles.length; i++) {
         for (let j = i + 1; j < singles.length; j++) {
-          const [nameA, [idA]] = singles[i]
-          const [nameB, [idB]] = singles[j]
+          const [nameA, groupA] = singles[i]
+          const [nameB, groupB] = singles[j]
           const score = jaroWinkler(nameA, nameB)
           if (score >= FUZZY_ORG_THRESHOLD) {
             fuzzy.push({
               kind: 'fuzzy',
-              names: [nameA, nameB],
-              ids: [idA, idB].sort((a, b) => a - b),
+              // Report original spellings so the orgs are findable in Pipedrive.
+              names: [groupA.original, groupB.original],
+              ids: [groupA.ids[0], groupB.ids[0]].sort((a, b) => a - b),
               score: Math.round(score * 10000) / 10000,
             })
           }
@@ -309,13 +312,16 @@ export function runChecks(data, { now, only } = {}) {
     (check) => {
       const overdueTotal = check.name === 'overdue-activities'
       const items = check.run(data, { now })
+      // Informational rows (kind:'note') stay in items but are not findings,
+      // so they never contribute to the count consumers branch on.
+      const findings = items.filter((i) => i.kind !== 'note')
       return {
         name: check.name,
         severity: check.severity,
         title: check.title,
         count: overdueTotal
-          ? items.reduce((sum, i) => sum + i.overdue, 0)
-          : items.length,
+          ? findings.reduce((sum, i) => sum + i.overdue, 0)
+          : findings.length,
         items,
       }
     },

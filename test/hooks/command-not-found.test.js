@@ -175,4 +175,89 @@ describe('command-not-found hook', () => {
     expect(runCommand).toHaveBeenCalledWith('deal:list', [])
     expect(exitCalls).toContain(0)
   })
+
+  describe('recursive alias guard', () => {
+    // findCommand always returns null: the alias target is never a real
+    // command, so oclif keeps re-firing command-not-found. This is the
+    // real OOM shape.
+    const findCommand = vi.fn(() => null)
+
+    it('terminates a self-referential alias (x -> x) with exit 64', async () => {
+      // Alias x expands to "x", which is not a command, so runCommand
+      // re-fires the hook for "x" — the exact re-entry that OOMs.
+      getAlias.mockReturnValue('x')
+      const runCommand = vi.fn(async (commandId, restArgv) => {
+        await hook({
+          id: commandId,
+          argv: restArgv,
+          config: { runCommand, findCommand },
+        })
+      })
+
+      await expect(
+        hook({ id: 'x', argv: [], config: { runCommand, findCommand } }),
+      ).rejects.toBeInstanceOf(ExitSignal)
+
+      expect(exitCalls).toContain(64)
+      const writes = stderrSpy.mock.calls.map((c) => c[0]).join('')
+      expect(writes).toMatch(/x/)
+      expect(writes.toLowerCase()).toContain('cycle')
+    })
+
+    it('terminates a mutual alias cycle (a -> b, b -> a) with exit 64', async () => {
+      // a expands to "b", b expands to "a" — ping-pong re-entry.
+      getAlias.mockImplementation((name) => {
+        if (name === 'a') return 'b f'
+        if (name === 'b') return 'a g'
+        return undefined
+      })
+      const runCommand = vi.fn(async (commandId, restArgv) => {
+        await hook({
+          id: commandId,
+          argv: restArgv,
+          config: { runCommand, findCommand },
+        })
+      })
+
+      await expect(
+        hook({ id: 'a', argv: [], config: { runCommand, findCommand } }),
+      ).rejects.toBeInstanceOf(ExitSignal)
+
+      expect(exitCalls).toContain(64)
+      // The guard must not have recursed unboundedly.
+      expect(runCommand.mock.calls.length).toBeLessThan(15)
+    })
+
+    it('does not false-positive across two distinct alias invocations in one process', async () => {
+      // First invocation: wd -> "deal list" (a real command). Resolves clean.
+      getAlias.mockReturnValue('deal list')
+      const realFindCommand = vi.fn((id) => (id === 'deal:list' ? {} : null))
+      const runCommand1 = vi.fn().mockResolvedValue(undefined)
+
+      await expect(
+        hook({
+          id: 'wd',
+          argv: [],
+          config: { runCommand: runCommand1, findCommand: realFindCommand },
+        }),
+      ).rejects.toBeInstanceOf(ExitSignal)
+      expect(exitCalls).toContain(0)
+      expect(exitCalls).not.toContain(64)
+
+      // Reset captured exits; second distinct invocation must also succeed
+      // (guard state from the first must have been cleared).
+      exitCalls.length = 0
+      const runCommand2 = vi.fn().mockResolvedValue(undefined)
+
+      await expect(
+        hook({
+          id: 'open',
+          argv: [],
+          config: { runCommand: runCommand2, findCommand: realFindCommand },
+        }),
+      ).rejects.toBeInstanceOf(ExitSignal)
+      expect(exitCalls).toContain(0)
+      expect(exitCalls).not.toContain(64)
+    })
+  })
 })

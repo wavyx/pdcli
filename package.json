@@ -68,6 +68,9 @@
       "field": {
         "description": "Custom-field discovery and name/key resolution"
       },
+      "metrics": {
+        "description": "Sales metrics and KPIs"
+      },
       "user": {
         "description": "Users"
       },
@@ -76,6 +79,9 @@
       },
       "config": {
         "description": "Configuration"
+      },
+      "alias": {
+        "description": "Command shortcuts (alias set/list/unset)"
       }
     },
     "hooks": {

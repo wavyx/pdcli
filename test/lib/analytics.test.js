@@ -275,6 +275,39 @@ describe('computeExactFunnel', () => {
     new_value: newStatus,
   })
 
+  it('derives the starting stage from the OLDEST row when the changelog is newest-first', () => {
+    // The live Pipedrive changelog returns rows NEWEST-FIRST. Chronological
+    // history here is 1->2 (oldest), 2->3, 3->2 (newest). The true starting
+    // stage is 1 (the oldest row's old_value), NOT 3 (the first row's
+    // old_value in newest-first order). Rows carry 'time' (YYYY-MM-DD HH:MM:SS,
+    // lexicographically sortable) and arrive newest-first.
+    const stageAt = (oldId, newId, time) => ({
+      field_key: 'stage_id',
+      old_value: String(oldId),
+      new_value: String(newId),
+      time,
+    })
+    const transitionsByDeal = [
+      {
+        dealId: 1,
+        stageId: 2,
+        rows: [
+          stageAt(3, 2, '2026-01-03 10:00:00'), // newest
+          stageAt(2, 3, '2026-01-02 10:00:00'),
+          stageAt(1, 2, '2026-01-01 10:00:00'), // oldest → true start is 1
+        ],
+      },
+    ]
+
+    const rows = computeExactFunnel(transitionsByDeal, STAGES)
+
+    // Qualified (stage 1) is the TRUE starting stage and must be counted.
+    expect(rows[0]).toMatchObject({ stage: 'Qualified', entered: 1 })
+    // Demo (stage 2) and Negotiation (stage 3) were both observed via new_value.
+    expect(rows[1]).toMatchObject({ stage: 'Demo', entered: 1 })
+    expect(rows[2]).toMatchObject({ stage: 'Negotiation', entered: 1 })
+  })
+
   it('counts distinct deals that ENTERED each stage from observed transitions', () => {
     const transitionsByDeal = [
       // deal A: 1 -> 2 -> 3, then won

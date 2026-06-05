@@ -45,24 +45,50 @@ export default class OrgMergeCommand extends BaseCommand {
       })
     }
 
-    const ok = await confirmAction(
-      `Merge organization ${args.id} into ${flags.into}? ` +
-        `Organization ${args.id} will be deleted.`,
-      flags.yes,
-    )
-    if (!ok) {
-      throw new CliError('Aborted', { exitCode: 1 })
+    // Unless --yes, look up BOTH records first so the prompt can name them and
+    // a bad id hard-fails BEFORE the irreversible merge. With --yes we skip the
+    // lookups and the prompt entirely to save rate-limit budget.
+    if (!flags.yes) {
+      const loser = await this.apiClient.get(`/api/v2/organizations/${args.id}`)
+      const winner = await this.apiClient.get(
+        `/api/v2/organizations/${flags.into}`,
+      )
+
+      const ok = await confirmAction(
+        `Merge organization ${args.id} "${loser.data?.name}" into ` +
+          `${flags.into} "${winner.data?.name}"? ` +
+          `Organization ${args.id} "${loser.data?.name}" will be DELETED.`,
+        false,
+        { default: false },
+      )
+      if (!ok) {
+        throw new CliError('Aborted', { exitCode: 1 })
+      }
     }
 
     // The v1 merge response only carries { id }; re-fetch the full survivor
     // from v2 so output matches `org get`.
-    await this.apiClient.put(`/api/v1/organizations/${args.id}/merge`, {
-      body: { merge_with_id: flags.into },
-    })
+    const merge = await this.apiClient.put(
+      `/api/v1/organizations/${args.id}/merge`,
+      { body: { merge_with_id: flags.into } },
+    )
 
     this.logToStderr(`Merged organization ${args.id} into ${flags.into}`)
 
-    const body = await this.apiClient.get(`/api/v2/organizations/${flags.into}`)
-    await outputRecord(this, body.data, 'org')
+    let record
+    try {
+      const body = await this.apiClient.get(
+        `/api/v2/organizations/${flags.into}`,
+      )
+      record = body.data
+    } catch {
+      // The merge already succeeded and is irreversible; an eventual-consistency
+      // 404 or transient 500 on the re-fetch must not look like a failure, or an
+      // agent would retry the destructive op. Warn and emit the minimal id.
+      this.logToStderr('Warning: merged, but could not load the survivor view')
+      record = { id: merge.data?.id ?? flags.into }
+    }
+
+    await outputRecord(this, record, 'org')
   }
 }

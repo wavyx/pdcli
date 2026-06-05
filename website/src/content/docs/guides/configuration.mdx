@@ -88,6 +88,9 @@ Aliases are stored **globally**, not per profile — they're shared across every
 A name that would shadow a real pdcli command is refused (exit 64), so an alias can never
 mask a built-in.
 
+Aliases execute with your full credentials and can wrap destructive commands (`api` DELETE,
+`merge`) — review aliases in shared configs before running them.
+
 ## Precedence
 
 For any setting, the most specific source wins:

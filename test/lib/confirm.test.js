@@ -26,4 +26,13 @@ describe('confirmAction', () => {
     const result = await confirmAction('Delete?', false)
     expect(result).toBe(false)
   })
+
+  it('passes a default of false to the prompt when requested', async () => {
+    mockConfirm.mockResolvedValue(false)
+    await confirmAction('Merge?', false, { default: false })
+    expect(mockConfirm).toHaveBeenCalledWith({
+      message: 'Merge?',
+      default: false,
+    })
+  })
 })

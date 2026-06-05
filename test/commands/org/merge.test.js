@@ -37,17 +37,20 @@ describe('org merge', () => {
     nock.cleanAll()
   })
 
-  it('merges then re-fetches and prints the survivor organization', async () => {
+  it('looks up both records, merges, then re-fetches and prints the survivor', async () => {
     mockConfirmAction.mockResolvedValue(true)
+    const loserScope = mockApi()
+      .get('/api/v2/organizations/123')
+      .reply(200, { success: true, data: { id: 123, name: 'Acme Inc' } })
+    const winnerScope = mockApi()
+      .get('/api/v2/organizations/456')
+      .reply(200, { success: true, data: { id: 456, name: 'Acme LLC' } })
     const mergeScope = mockApi()
       .put('/api/v1/organizations/123/merge', { merge_with_id: 456 })
       .reply(200, { success: true, data: { id: 456 } })
-    const fetchScope = mockApi()
+    const refetchScope = mockApi()
       .get('/api/v2/organizations/456')
-      .reply(200, {
-        success: true,
-        data: { id: 456, name: 'Survivor Org' },
-      })
+      .reply(200, { success: true, data: { id: 456, name: 'Acme LLC' } })
 
     const stdout = await runCmd(OrgMergeCommand, [
       '123',
@@ -57,38 +60,79 @@ describe('org merge', () => {
       'json',
     ])
 
+    expect(loserScope.isDone()).toBe(true)
+    expect(winnerScope.isDone()).toBe(true)
     expect(mergeScope.isDone()).toBe(true)
-    expect(fetchScope.isDone()).toBe(true)
+    expect(refetchScope.isDone()).toBe(true)
     expect(JSON.parse(stdout).id).toBe(456)
-    expect(JSON.parse(stdout).name).toBe('Survivor Org')
+    expect(JSON.parse(stdout).name).toBe('Acme LLC')
   })
 
-  it('confirms naming the record that will be deleted', async () => {
+  it('confirms with both record names and defaults to NO', async () => {
     mockConfirmAction.mockResolvedValue(true)
+    mockApi()
+      .get('/api/v2/organizations/123')
+      .reply(200, { success: true, data: { id: 123, name: 'Acme Inc' } })
+    mockApi()
+      .get('/api/v2/organizations/456')
+      .reply(200, { success: true, data: { id: 456, name: 'Acme LLC' } })
     mockApi()
       .put('/api/v1/organizations/123/merge', { merge_with_id: 456 })
       .reply(200, { success: true, data: { id: 456 } })
     mockApi()
       .get('/api/v2/organizations/456')
-      .reply(200, { success: true, data: { id: 456, name: 'Survivor Org' } })
+      .reply(200, { success: true, data: { id: 456, name: 'Acme LLC' } })
 
     await runCmd(OrgMergeCommand, ['123', '--into', '456', '--output', 'json'])
 
-    const [message, skip] = mockConfirmAction.mock.calls[0]
+    const [message, skip, options] = mockConfirmAction.mock.calls[0]
     expect(message).toContain('123')
     expect(message).toContain('456')
-    expect(message).toMatch(/123 will be deleted/i)
+    expect(message).toContain('Acme Inc')
+    expect(message).toContain('Acme LLC')
+    expect(message).toMatch(/DELETED/i)
     expect(skip).toBe(false)
+    expect(options).toEqual({ default: false })
   })
 
-  it('skips the prompt with --yes', async () => {
+  it('fails before any merge when the loser lookup 404s', async () => {
     mockConfirmAction.mockResolvedValue(true)
+    const loserScope = mockApi()
+      .get('/api/v2/organizations/123')
+      .reply(404, { success: false, error: 'Organization not found' })
+
+    await expect(OrgMergeCommand.run(['123', '--into', '456'])).rejects.toThrow(
+      /404|not found/i,
+    )
+
+    expect(loserScope.isDone()).toBe(true)
+    expect(mockConfirmAction).not.toHaveBeenCalled()
+  })
+
+  it('fails before any merge when the survivor lookup 404s', async () => {
+    mockConfirmAction.mockResolvedValue(true)
+    mockApi()
+      .get('/api/v2/organizations/123')
+      .reply(200, { success: true, data: { id: 123, name: 'Acme Inc' } })
+    const winnerScope = mockApi()
+      .get('/api/v2/organizations/456')
+      .reply(404, { success: false, error: 'Organization not found' })
+
+    await expect(OrgMergeCommand.run(['123', '--into', '456'])).rejects.toThrow(
+      /404|not found/i,
+    )
+
+    expect(winnerScope.isDone()).toBe(true)
+    expect(mockConfirmAction).not.toHaveBeenCalled()
+  })
+
+  it('skips the lookups and prompt with --yes', async () => {
     const mergeScope = mockApi()
       .put('/api/v1/organizations/123/merge', { merge_with_id: 456 })
       .reply(200, { success: true, data: { id: 456 } })
-    mockApi()
+    const refetchScope = mockApi()
       .get('/api/v2/organizations/456')
-      .reply(200, { success: true, data: { id: 456, name: 'Survivor Org' } })
+      .reply(200, { success: true, data: { id: 456, name: 'Acme LLC' } })
 
     await runCmd(OrgMergeCommand, [
       '123',
@@ -99,18 +143,18 @@ describe('org merge', () => {
       'json',
     ])
 
-    expect(mockConfirmAction).toHaveBeenCalledWith(expect.any(String), true)
+    expect(mockConfirmAction).not.toHaveBeenCalled()
     expect(mergeScope.isDone()).toBe(true)
+    expect(refetchScope.isDone()).toBe(true)
   })
 
-  it('skips the prompt with -y', async () => {
-    mockConfirmAction.mockResolvedValue(true)
+  it('skips the lookups and prompt with -y', async () => {
     const mergeScope = mockApi()
       .put('/api/v1/organizations/123/merge', { merge_with_id: 456 })
       .reply(200, { success: true, data: { id: 456 } })
     mockApi()
       .get('/api/v2/organizations/456')
-      .reply(200, { success: true, data: { id: 456, name: 'Survivor Org' } })
+      .reply(200, { success: true, data: { id: 456, name: 'Acme LLC' } })
 
     await runCmd(OrgMergeCommand, [
       '123',
@@ -121,21 +165,25 @@ describe('org merge', () => {
       'json',
     ])
 
-    expect(mockConfirmAction).toHaveBeenCalledWith(expect.any(String), true)
+    expect(mockConfirmAction).not.toHaveBeenCalled()
     expect(mergeScope.isDone()).toBe(true)
   })
 
-  it('aborts without calling the API when declined', async () => {
+  it('aborts without merging when declined', async () => {
     mockConfirmAction.mockResolvedValue(false)
-    nock.disableNetConnect()
+    const loserScope = mockApi()
+      .get('/api/v2/organizations/123')
+      .reply(200, { success: true, data: { id: 123, name: 'Acme Inc' } })
+    const winnerScope = mockApi()
+      .get('/api/v2/organizations/456')
+      .reply(200, { success: true, data: { id: 456, name: 'Acme LLC' } })
 
-    try {
-      await expect(
-        OrgMergeCommand.run(['123', '--into', '456']),
-      ).rejects.toThrow(/abort/i)
-    } finally {
-      nock.enableNetConnect()
-    }
+    await expect(OrgMergeCommand.run(['123', '--into', '456'])).rejects.toThrow(
+      /abort/i,
+    )
+
+    expect(loserScope.isDone()).toBe(true)
+    expect(winnerScope.isDone()).toBe(true)
   })
 
   it('rejects merging a record into itself (exit 64)', async () => {
@@ -149,5 +197,38 @@ describe('org merge', () => {
     } finally {
       nock.enableNetConnect()
     }
+  })
+
+  it('still succeeds (exit 0) with a warning when the survivor re-fetch 404s', async () => {
+    const mergeScope = mockApi()
+      .put('/api/v1/organizations/123/merge', { merge_with_id: 456 })
+      .reply(200, { success: true, data: { id: 456 } })
+    const refetchScope = mockApi()
+      .get('/api/v2/organizations/456')
+      .reply(404, { success: false, error: 'Organization not found' })
+
+    const warnings = []
+    const errSpy = vi.spyOn(console, 'error').mockImplementation((...chunk) => {
+      warnings.push(chunk.map(String).join(' '))
+    })
+
+    let stdout
+    try {
+      stdout = await runCmd(OrgMergeCommand, [
+        '123',
+        '--into',
+        '456',
+        '--yes',
+        '--output',
+        'json',
+      ])
+    } finally {
+      errSpy.mockRestore()
+    }
+
+    expect(mergeScope.isDone()).toBe(true)
+    expect(refetchScope.isDone()).toBe(true)
+    expect(JSON.parse(stdout).id).toBe(456)
+    expect(warnings.join('')).toMatch(/could not load the survivor/i)
   })
 })

@@ -88,10 +88,11 @@ describe('metrics coverage', () => {
               type: { name: 'deals_won' },
               expected_outcome: { target: 99, tracking_metric: 'quantity' },
             },
-            // kept: tracking_metric sum even though type is not revenue_forecast
+            // dropped: an unknown sum goal is NOT a revenue goal when a real
+            // revenue_forecast goal exists
             {
               id: 'ccc333',
-              type: { name: 'deals_won' },
+              type: { name: 'pipeline_velocity' },
               expected_outcome: { target: 40000, tracking_metric: 'sum' },
             },
           ],
@@ -102,10 +103,6 @@ describe('metrics coverage', () => {
       .get('/api/v1/goals/aaa111/results')
       .query(true)
       .reply(200, { success: true, data: { progress: 25000 } })
-    mockApi()
-      .get('/api/v1/goals/ccc333/results')
-      .query(true)
-      .reply(200, { success: true, data: { progress: 15000 } })
 
     const stdout = await runCmd(CoverageCommand, [
       '--pipeline',
@@ -115,13 +112,13 @@ describe('metrics coverage', () => {
     ])
     const c = JSON.parse(stdout)
 
-    // target = 60000 + 40000 = 100000; progress = 25000 + 15000 = 40000
-    // remaining = 60000; coverage = 180000 / 60000 = 3 → healthy
+    // only the revenue_forecast goal counts: target 60000, progress 25000
+    // remaining = 35000; coverage = 180000 / 35000 ≈ 5.14 → healthy
     expect(c.weightedOpen).toBe(180000)
-    expect(c.goalTarget).toBe(100000)
-    expect(c.progress).toBe(40000)
-    expect(c.remaining).toBe(60000)
-    expect(c.coverage).toBeCloseTo(3)
+    expect(c.goalTarget).toBe(60000)
+    expect(c.progress).toBe(25000)
+    expect(c.remaining).toBe(35000)
+    expect(c.coverage).toBeCloseTo(180000 / 35000)
     expect(c.verdict).toBe('healthy')
   })
 
@@ -366,6 +363,171 @@ describe('metrics coverage', () => {
     expect(c.remaining).toBe(0)
     expect(c.coverage).toBeNull()
     expect(c.verdict).toBe('covered')
+  })
+
+  it('errors with exit 64 when matched goals use multiple currencies', async () => {
+    mockPipelineHealthFetch()
+    mockApi()
+      .get('/api/v1/goals/find')
+      .query(true)
+      .reply(200, {
+        success: true,
+        data: {
+          goals: [
+            {
+              id: 'usd1',
+              type: { name: 'revenue_forecast' },
+              expected_outcome: {
+                target: 60000,
+                tracking_metric: 'sum',
+                currency_id: 1,
+              },
+            },
+            {
+              id: 'eur1',
+              type: { name: 'revenue_forecast' },
+              expected_outcome: {
+                target: 40000,
+                tracking_metric: 'sum',
+                currency_id: 2,
+              },
+            },
+          ],
+        },
+      })
+
+    let caught
+    try {
+      await CoverageCommand.run(['--pipeline', '1'])
+    } catch (err) {
+      caught = err
+    }
+    expect(caught).toBeDefined()
+    expect(caught.exitCode ?? caught.oclif?.exit).toBe(64)
+    expect(caught.message).toMatch(/multiple currencies/i)
+    expect(caught.message).toMatch(/1/)
+    expect(caught.message).toMatch(/2/)
+    expect(caught.message).toMatch(/--target/)
+  })
+
+  it('matches a display-cased "Revenue forecast" goal type', async () => {
+    mockPipelineHealthFetch()
+    mockApi()
+      .get('/api/v1/goals/find')
+      .query(true)
+      .reply(200, {
+        success: true,
+        data: {
+          goals: [
+            {
+              id: 'disp1',
+              type: { name: 'Revenue forecast' },
+              expected_outcome: { target: 90000, tracking_metric: 'sum' },
+            },
+          ],
+        },
+      })
+    mockApi()
+      .get('/api/v1/goals/disp1/results')
+      .query(true)
+      .reply(200, { success: true, data: { progress: 0 } })
+
+    const stdout = await runCmd(CoverageCommand, [
+      '--pipeline',
+      '1',
+      '--output',
+      'json',
+    ])
+    const c = JSON.parse(stdout)
+    expect(c.goalTarget).toBe(90000)
+  })
+
+  it('excludes a deals_won sum goal when a revenue_forecast goal exists', async () => {
+    mockPipelineHealthFetch()
+    mockApi()
+      .get('/api/v1/goals/find')
+      .query(true)
+      .reply(200, {
+        success: true,
+        data: {
+          goals: [
+            {
+              id: 'rev1',
+              type: { name: 'revenue_forecast' },
+              expected_outcome: { target: 100000, tracking_metric: 'sum' },
+            },
+            // deals_won with sum tracking metric: must NOT join the quota
+            {
+              id: 'won1',
+              type: { name: 'deals_won' },
+              expected_outcome: { target: 500000, tracking_metric: 'sum' },
+            },
+          ],
+        },
+      })
+    mockApi()
+      .get('/api/v1/goals/rev1/results')
+      .query(true)
+      .reply(200, { success: true, data: { progress: 0 } })
+    // No results interceptor for won1: if it were matched the request would
+    // fail (nock has no interceptor) and the target would be wrong anyway.
+
+    const stdout = await runCmd(CoverageCommand, [
+      '--pipeline',
+      '1',
+      '--output',
+      'json',
+    ])
+    const c = JSON.parse(stdout)
+    expect(c.goalTarget).toBe(100000)
+  })
+
+  it('falls back to a deals_won-only sum goal and emits a stderr note', async () => {
+    mockPipelineHealthFetch()
+    mockApi()
+      .get('/api/v1/goals/find')
+      .query(true)
+      .reply(200, {
+        success: true,
+        data: {
+          goals: [
+            {
+              id: 'won1',
+              type: { name: 'deals_won' },
+              expected_outcome: { target: 70000, tracking_metric: 'sum' },
+            },
+          ],
+        },
+      })
+    mockApi()
+      .get('/api/v1/goals/won1/results')
+      .query(true)
+      .reply(200, { success: true, data: { progress: 0 } })
+
+    const stderrChunks = []
+    const stderrSpy = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation((chunk) => {
+        stderrChunks.push(String(chunk))
+        return true
+      })
+
+    let stdout
+    try {
+      stdout = await runCmd(CoverageCommand, [
+        '--pipeline',
+        '1',
+        '--output',
+        'json',
+      ])
+    } finally {
+      stderrSpy.mockRestore()
+    }
+
+    const c = JSON.parse(stdout)
+    expect(c.goalTarget).toBe(70000)
+    const note = stderrChunks.join('')
+    expect(note).toMatch(/deals_won/)
   })
 
   it('handles an account with no pipelines (undefined pipeline id)', async () => {

@@ -3,7 +3,7 @@ import BaseCommand from '../base-command.js'
 import { collectPages } from '../lib/pagination.js'
 import { parsePeriod, formatApiDatetime } from '../lib/period.js'
 import { computeFunnel, computeExactFunnel } from '../lib/analytics.js'
-import { CliError } from '../lib/errors.js'
+import { CliError, ApiError } from '../lib/errors.js'
 
 /** Token cost of one GET /deals/{id}/changelog request (rate-limit budget). */
 const CHANGELOG_COST = 20
@@ -31,7 +31,9 @@ export default class FunnelCommand extends BaseCommand {
     exact: Flags.boolean({
       description:
         'Mine real stage transitions from each deal’s changelog instead ' +
-        'of approximating from the final stage (one request per deal)',
+        'of approximating from the final stage (one request per deal). ' +
+        '--period scopes only closed (won/lost) deals; open deals are ' +
+        'always included.',
       default: false,
     }),
   }
@@ -92,14 +94,20 @@ export default class FunnelCommand extends BaseCommand {
         stage: { header: 'Stage' },
         entered: { header: 'Entered (observed)' },
         conversionFromPrev: {
-          header: 'Conv. from prev',
+          // Not funnel conversion — exact entries are non-monotonic so this
+          // ratio can exceed 100%. Labelled to avoid that misreading.
+          header: 'Entered vs prev',
           get: (row) =>
             row.conversionFromPrev == null
               ? ''
               : `${(row.conversionFromPrev * 100).toFixed(0)}%`,
         },
-        won: { header: 'Won' },
       })
+      // `won` is a single total (identical on every row), so the per-row Won
+      // column just repeated it confusingly — report it once under the table.
+      if (this.resolveFormat() === 'table') {
+        this.log(`Won: ${exact[0]?.won ?? 0}`)
+      }
       return
     }
 
@@ -141,17 +149,34 @@ export default class FunnelCommand extends BaseCommand {
     }
 
     const transitionsByDeal = []
+    let skipped = 0
     for (const deal of deals) {
-      const rows = await collectPages(
-        this.apiClient.pageV2(`/api/v1/deals/${deal.id}/changelog`, {
-          limit: 500,
-        }),
+      try {
+        const rows = await collectPages(
+          this.apiClient.pageV2(`/api/v1/deals/${deal.id}/changelog`, {
+            limit: 500,
+          }),
+        )
+        transitionsByDeal.push({
+          dealId: deal.id,
+          stageId: deal.stage_id,
+          rows,
+        })
+      } catch (err) {
+        // One bad changelog request must not abort the whole mine: skip the
+        // deal, count it, and warn once after mining completes.
+        if (err instanceof ApiError) {
+          skipped++
+          continue
+        }
+        throw err
+      }
+    }
+
+    if (skipped > 0) {
+      process.stderr.write(
+        `skipped ${skipped} deal(s) whose changelog could not be fetched\n`,
       )
-      transitionsByDeal.push({
-        dealId: deal.id,
-        stageId: deal.stage_id,
-        rows,
-      })
     }
 
     return computeExactFunnel(transitionsByDeal, stages, { pipelineId })

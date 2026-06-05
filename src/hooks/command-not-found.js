@@ -4,10 +4,35 @@ import { getAlias } from '../lib/aliases.js'
 
 const debug = createDebug('pd:command-not-found')
 
+const MAX_ALIAS_DEPTH = 10
+
+// Tracks alias names expanded within a single process. The hook re-enters
+// itself through oclif's runCommand dispatcher (same module instance), so a
+// module-level Set survives across those re-entrant invocations and lets us
+// detect cycles before they exhaust the stack/heap. Cleared by the root
+// invocation in `finally` so distinct alias runs in one process (e.g. tests,
+// or a long-lived embedding) don't false-positive against each other.
+const aliasChain = new Set()
+
 export default async function commandNotFound(options) {
   const alias = getAlias(options.id)
 
   if (alias) {
+    // Cycle/runaway detection: a repeated alias name (self or mutual) or a
+    // chain deeper than MAX_ALIAS_DEPTH means we'd re-enter forever.
+    if (aliasChain.has(options.id) || aliasChain.size >= MAX_ALIAS_DEPTH) {
+      const cycle = [...aliasChain, options.id].join(' -> ')
+      aliasChain.clear()
+      process.stderr.write(
+        `${chalk.red('Error:')} alias cycle detected: ${chalk.yellow(cycle)}\n`,
+      )
+      process.exit(64)
+    }
+
+    // This invocation owns cleanup only if it started a fresh chain.
+    const isRoot = aliasChain.size === 0
+    aliasChain.add(options.id)
+
     debug('expanding alias %s -> %s', options.id, alias)
     const aliasArgv = alias.split(/\s+/).filter(Boolean)
     const fullArgv = [...aliasArgv, ...(options.argv ?? [])]
@@ -29,6 +54,8 @@ export default async function commandNotFound(options) {
     } catch (err) {
       debug('alias execution failed: %s', err.message)
       process.exit(err.exitCode ?? 1)
+    } finally {
+      if (isRoot) aliasChain.clear()
     }
   }
 

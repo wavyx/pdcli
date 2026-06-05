@@ -50,7 +50,7 @@ npm run test:coverage    # suite + coverage report
 Run a **single test file** while iterating:
 
 ```bash
-npx vitest run test/deal/list.test.js
+npx vitest run test/commands/deal/list.test.js
 ```
 
 ### Coverage

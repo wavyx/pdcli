@@ -126,7 +126,12 @@ export function computeExactFunnel(transitionsByDeal, stages, options = {}) {
   let won = 0
 
   for (const { dealId, stageId, rows } of transitionsByDeal) {
-    const stageRows = rows.filter((r) => r.field_key === 'stage_id')
+    // The live changelog returns rows newest-first; don't assume an order.
+    // Sort stage rows by their 'time' ascending (YYYY-MM-DD HH:MM:SS sorts
+    // lexicographically) so the oldest transition is first.
+    const stageRows = rows
+      .filter((r) => r.field_key === 'stage_id')
+      .sort((a, b) => String(a.time ?? '').localeCompare(String(b.time ?? '')))
     const entered = new Set()
 
     // starting stage: oldest transition's source, else the deal's current stage

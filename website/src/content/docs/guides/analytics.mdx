@@ -86,7 +86,14 @@ pdcli funnel --pipeline 1 --exact
 
 The accuracy costs one request per deal. Above 100 deals, pdcli warns on stderr about the
 request volume before it starts mining (the rate limiter then paces the calls); the table
-trades the approximate `Reached` / `Open` columns for an observed `Entered` count and `Won`.
+trades the approximate `Reached` / `Open` columns for an observed `Entered` count, with the
+won total reported on a single summary line under the table. The per-stage ratio is labelled
+`Entered vs prev` rather than a conversion percentage, because exact entries are
+non-monotonic and the ratio can exceed 100%.
+
+In `--exact` mode, `--period` scopes only the closed (won/lost) deals it mines; **open deals
+are always included** regardless of the window. If a single deal's changelog can't be fetched,
+that deal is skipped (not the whole run) and pdcli notes how many were skipped on stderr.
 
 ## `metrics coverage`
 

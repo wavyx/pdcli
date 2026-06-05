@@ -10,6 +10,25 @@ function toGoalDate(date) {
   return date.toISOString().slice(0, 10)
 }
 
+/** Normalize a goal type name for comparison: lowercased, spaces→underscores. */
+function normalizeGoalType(name) {
+  return String(name ?? '')
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+}
+
+/**
+ * Known non-revenue goal type names. A `sum` tracking metric on one of these
+ * (e.g. a deals_won value goal) must not silently join the revenue quota.
+ */
+const NON_REVENUE_TYPES = new Set([
+  'deals_won',
+  'deals_progressed',
+  'deals_started',
+  'activities_completed',
+  'activities_added',
+])
+
 export default class MetricsCoverageCommand extends BaseCommand {
   static description =
     'Pipeline coverage: probability-weighted open pipeline vs the revenue still needed to hit quota'
@@ -104,8 +123,12 @@ export default class MetricsCoverageCommand extends BaseCommand {
   /**
    * Find the active revenue goal(s) via the v1 Goals API and read their
    * progress. The find enum has no `revenue_forecast`, so query without a
-   * type and filter client-side on type.name or the sum tracking metric.
-   * Targets and progress are summed across all matching goals.
+   * type and filter client-side. Prefer goals whose type normalizes to
+   * `revenue_forecast`; otherwise fall back to `sum` goals that are not a
+   * known non-revenue type (so a deals_won sum goal does not silently join
+   * the quota). A lone non-revenue sum goal is used as a last resort with a
+   * stderr note. Targets/progress are summed across matched goals, which must
+   * share a single currency.
    * @param {string} period
    * @param {Date} now
    */
@@ -117,15 +140,60 @@ export default class MetricsCoverageCommand extends BaseCommand {
       query: { 'period.start': periodStart, 'period.end': periodEnd },
     })
 
-    const goals = (found.data?.goals ?? []).filter(
-      (g) =>
-        g.type?.name === 'revenue_forecast' ||
-        g.expected_outcome?.tracking_metric === 'sum',
+    const allGoals = found.data?.goals ?? []
+
+    // True revenue goals: type name normalizes to revenue_forecast.
+    const revenueGoals = allGoals.filter(
+      (g) => normalizeGoalType(g.type?.name) === 'revenue_forecast',
     )
+    // Fallback: value (`sum`) goals whose type is NOT a known non-revenue type.
+    // A deals_won sum goal must not silently join the revenue quota.
+    const fallbackGoals = allGoals.filter(
+      (g) =>
+        g.expected_outcome?.tracking_metric === 'sum' &&
+        normalizeGoalType(g.type?.name) !== 'revenue_forecast' &&
+        !NON_REVENUE_TYPES.has(normalizeGoalType(g.type?.name)),
+    )
+
+    let goals = revenueGoals.length > 0 ? revenueGoals : fallbackGoals
+
+    // If nothing matched even loosely, fall back to any sum goal so a lone
+    // deals_won value goal can still serve as the quota — but flag what we used.
+    if (goals.length === 0) {
+      const sumGoals = allGoals.filter(
+        (g) => g.expected_outcome?.tracking_metric === 'sum',
+      )
+      if (sumGoals.length > 0) {
+        const types = [
+          ...new Set(sumGoals.map((g) => normalizeGoalType(g.type?.name))),
+        ].join(', ')
+        process.stderr.write(
+          `Note: no revenue_forecast goal found; using sum goal(s) of type ` +
+            `'${types}' as the quota.\n`,
+        )
+        goals = sumGoals
+      }
+    }
 
     if (goals.length === 0) {
       throw new CliError(
         'No active revenue goal found — create one in Pipedrive or pass --target',
+        { exitCode: 64 },
+      )
+    }
+
+    // Coverage cannot sum targets/progress across mixed currencies.
+    const currencyIds = [
+      ...new Set(
+        goals
+          .map((g) => g.expected_outcome?.currency_id)
+          .filter((id) => id != null),
+      ),
+    ]
+    if (currencyIds.length > 1) {
+      throw new CliError(
+        `Goals use multiple currencies (ids: ${currencyIds.join(', ')}) — ` +
+          `coverage cannot mix them; pass --target to set a single quota.`,
         { exitCode: 64 },
       )
     }
