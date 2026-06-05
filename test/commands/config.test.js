@@ -3,11 +3,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 const mockGetProfileConfig = vi.fn()
 const mockSetProfileConfig = vi.fn()
 const mockGetProfileData = vi.fn()
+const mockDeleteProfileConfig = vi.fn()
 vi.mock('../../src/lib/config.js', () => ({
   loadConfig: vi.fn().mockReturnValue({ activeProfile: 'default' }),
   getProfileConfig: mockGetProfileConfig,
   setProfileConfig: mockSetProfileConfig,
   getProfileData: mockGetProfileData,
+  deleteProfileConfig: mockDeleteProfileConfig,
 }))
 
 const { default: ConfigGetCommand } =
@@ -16,6 +18,8 @@ const { default: ConfigSetCommand } =
   await import('../../src/commands/config/set.js')
 const { default: ConfigListCommand } =
   await import('../../src/commands/config/list.js')
+const { default: ConfigUnsetCommand } =
+  await import('../../src/commands/config/unset.js')
 import { runCmd } from '../helpers.js'
 
 describe('config get', () => {
@@ -45,6 +49,10 @@ describe('config get', () => {
 })
 
 describe('config set', () => {
+  beforeEach(() => {
+    mockSetProfileConfig.mockReset()
+  })
+
   it('stores the value for the active profile', async () => {
     const stdout = await runCmd(ConfigSetCommand, ['default_output', 'json'])
 
@@ -55,6 +63,50 @@ describe('config set', () => {
     )
     expect(stdout).toContain('default_output')
     expect(stdout).toContain('json')
+  })
+
+  it('rejects an invalid default_output value with exit 64', async () => {
+    await expect(
+      ConfigSetCommand.run(['default_output', 'xml']),
+    ).rejects.toThrow(/table.*json.*yaml.*csv/)
+    expect(mockSetProfileConfig).not.toHaveBeenCalled()
+  })
+
+  it('still accepts arbitrary values for unvalidated keys', async () => {
+    await runCmd(ConfigSetCommand, ['company_domain', 'acme'])
+    expect(mockSetProfileConfig).toHaveBeenCalledWith(
+      'default',
+      'company_domain',
+      'acme',
+    )
+  })
+})
+
+describe('config unset', () => {
+  beforeEach(() => {
+    mockDeleteProfileConfig.mockReset()
+    mockGetProfileConfig.mockReset()
+  })
+
+  it('removes a set key and confirms', async () => {
+    mockGetProfileConfig.mockReturnValue('json')
+
+    const stdout = await runCmd(ConfigUnsetCommand, ['default_output'])
+
+    expect(mockDeleteProfileConfig).toHaveBeenCalledWith(
+      'default',
+      'default_output',
+    )
+    expect(stdout).toContain('default_output')
+  })
+
+  it('reports when the key was not set and does not delete', async () => {
+    mockGetProfileConfig.mockReturnValue(undefined)
+
+    const stdout = await runCmd(ConfigUnsetCommand, ['nope'])
+
+    expect(mockDeleteProfileConfig).not.toHaveBeenCalled()
+    expect(stdout).toContain('not set')
   })
 })
 
