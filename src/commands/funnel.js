@@ -2,8 +2,13 @@ import { Flags } from '@oclif/core'
 import BaseCommand from '../base-command.js'
 import { collectPages } from '../lib/pagination.js'
 import { parsePeriod, formatApiDatetime } from '../lib/period.js'
-import { computeFunnel } from '../lib/analytics.js'
+import { computeFunnel, computeExactFunnel } from '../lib/analytics.js'
 import { CliError } from '../lib/errors.js'
+
+/** Token cost of one GET /deals/{id}/changelog request (rate-limit budget). */
+const CHANGELOG_COST = 20
+/** Above this deal count, mining gets expensive — warn before proceeding. */
+const MINE_WARN_THRESHOLD = 100
 
 export default class FunnelCommand extends BaseCommand {
   static description =
@@ -22,6 +27,12 @@ export default class FunnelCommand extends BaseCommand {
     }),
     pipeline: Flags.integer({
       description: 'Pipeline ID (required when the account has several)',
+    }),
+    exact: Flags.boolean({
+      description:
+        'Mine real stage transitions from each deal’s changelog instead ' +
+        'of approximating from the final stage (one request per deal)',
+      default: false,
     }),
   }
 
@@ -71,6 +82,27 @@ export default class FunnelCommand extends BaseCommand {
       ),
     ])
 
+    if (flags.exact) {
+      const exact = await this.mineExactFunnel(
+        [...open, ...won, ...lost],
+        stages,
+        pipelineId,
+      )
+      await this.outputResults(exact, {
+        stage: { header: 'Stage' },
+        entered: { header: 'Entered (observed)' },
+        conversionFromPrev: {
+          header: 'Conv. from prev',
+          get: (row) =>
+            row.conversionFromPrev == null
+              ? ''
+              : `${(row.conversionFromPrev * 100).toFixed(0)}%`,
+        },
+        won: { header: 'Won' },
+      })
+      return
+    }
+
     const funnel = computeFunnel([...won, ...lost], open, stages, {
       pipelineId,
     })
@@ -88,5 +120,40 @@ export default class FunnelCommand extends BaseCommand {
       openCount: { header: 'Open now' },
       openValue: { header: 'Open value' },
     })
+  }
+
+  /**
+   * Mine real stage transitions from each deal's v1 changelog. The changelog
+   * uses a flat v2-style cursor (additional_data.next_cursor on a v1 path), so
+   * the v2 pager works directly. Warns on stderr before mining a large set —
+   * each request costs 20 tokens — then lets the client's rate limiter pace it.
+   * @param {object[]} deals deals to mine (current stage_id needed per deal)
+   * @param {object[]} stages
+   * @param {number} pipelineId
+   */
+  async mineExactFunnel(deals, stages, pipelineId) {
+    if (deals.length > MINE_WARN_THRESHOLD) {
+      process.stderr.write(
+        `Mining stage history for ${deals.length} deals ` +
+          `(~${deals.length} requests, ${CHANGELOG_COST} tokens each); ` +
+          `rate limiting may slow this down.\n`,
+      )
+    }
+
+    const transitionsByDeal = []
+    for (const deal of deals) {
+      const rows = await collectPages(
+        this.apiClient.pageV2(`/api/v1/deals/${deal.id}/changelog`, {
+          limit: 500,
+        }),
+      )
+      transitionsByDeal.push({
+        dealId: deal.id,
+        stageId: deal.stage_id,
+        rows,
+      })
+    }
+
+    return computeExactFunnel(transitionsByDeal, stages, { pipelineId })
   }
 }

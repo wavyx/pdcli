@@ -4,6 +4,8 @@ import {
   computeVelocity,
   computeFunnel,
   computeHealth,
+  computeExactFunnel,
+  computeCoverage,
 } from '../../src/lib/analytics.js'
 
 const NOW = new Date('2026-06-04T12:00:00Z')
@@ -260,6 +262,148 @@ describe('computeFunnel defaults', () => {
   })
 })
 
+describe('computeExactFunnel', () => {
+  // stage_id transition row helper (values are STRINGIFIED ints, as the API returns)
+  const stage = (oldId, newId) => ({
+    field_key: 'stage_id',
+    old_value: oldId == null ? null : String(oldId),
+    new_value: String(newId),
+  })
+  const status = (newStatus) => ({
+    field_key: 'status',
+    old_value: 'open',
+    new_value: newStatus,
+  })
+
+  it('counts distinct deals that ENTERED each stage from observed transitions', () => {
+    const transitionsByDeal = [
+      // deal A: 1 -> 2 -> 3, then won
+      {
+        dealId: 1,
+        stageId: 3,
+        rows: [stage(1, 2), stage(2, 3), status('won')],
+      },
+      // deal B: 1 -> 2, then lost
+      { dealId: 2, stageId: 2, rows: [stage(1, 2), status('lost')] },
+      // deal C: created directly in stage 3, no stage transitions → enters 3 ONLY
+      { dealId: 3, stageId: 3, rows: [] },
+    ]
+
+    const rows = computeExactFunnel(transitionsByDeal, STAGES)
+
+    expect(rows).toHaveLength(3)
+    // Qualified (stage 1): A + B entered (started there). C did NOT.
+    expect(rows[0]).toMatchObject({ stage: 'Qualified', entered: 2 })
+    // Demo (stage 2): A + B entered.
+    expect(rows[1]).toMatchObject({ stage: 'Demo', entered: 2 })
+    // Negotiation (stage 3): A + C entered (B never reached it).
+    expect(rows[2]).toMatchObject({ stage: 'Negotiation', entered: 2 })
+  })
+
+  it('computes stage->next conversion and a won count', () => {
+    const transitionsByDeal = [
+      {
+        dealId: 1,
+        stageId: 3,
+        rows: [stage(1, 2), stage(2, 3), status('won')],
+      },
+      { dealId: 2, stageId: 2, rows: [stage(1, 2), status('lost')] },
+      { dealId: 3, stageId: 3, rows: [] },
+    ]
+
+    const rows = computeExactFunnel(transitionsByDeal, STAGES)
+
+    // first stage has no previous → null conversion
+    expect(rows[0].conversionFromPrev).toBeNull()
+    // Qualified(2) -> Demo(2): 2/2 = 1
+    expect(rows[1].conversionFromPrev).toBeCloseTo(1)
+    // Demo(2) -> Negotiation(2): 2/2 = 1
+    expect(rows[2].conversionFromPrev).toBeCloseTo(1)
+    // won count = deals with a status row new_value === 'won'
+    expect(rows[0].won).toBe(1)
+    expect(rows[1].won).toBe(1)
+    expect(rows[2].won).toBe(1)
+  })
+
+  it('does NOT inflate later stages with skipped earlier stages (exact, not approximation)', () => {
+    // deal jumped straight from stage 1 to stage 3, never entering stage 2
+    const transitionsByDeal = [{ dealId: 1, stageId: 3, rows: [stage(1, 3)] }]
+    const rows = computeExactFunnel(transitionsByDeal, STAGES)
+    expect(rows[0]).toMatchObject({ stage: 'Qualified', entered: 1 })
+    expect(rows[1]).toMatchObject({ stage: 'Demo', entered: 0 })
+    expect(rows[2]).toMatchObject({ stage: 'Negotiation', entered: 1 })
+  })
+
+  it('counts a distinct deal only once per stage even if it re-enters', () => {
+    // deal bounced 1 -> 2 -> 1 -> 2: stage 2 entered twice, but distinct count = 1
+    const transitionsByDeal = [
+      { dealId: 1, stageId: 2, rows: [stage(1, 2), stage(2, 1), stage(1, 2)] },
+    ]
+    const rows = computeExactFunnel(transitionsByDeal, STAGES)
+    expect(rows[0].entered).toBe(1)
+    expect(rows[1].entered).toBe(1)
+    expect(rows[2].entered).toBe(0)
+  })
+
+  it('returns null conversion when nothing entered the previous stage', () => {
+    // only deal enters stage 3 directly; stage 2 entered by nobody
+    const transitionsByDeal = [{ dealId: 1, stageId: 3, rows: [] }]
+    const rows = computeExactFunnel(transitionsByDeal, STAGES)
+    expect(rows[1].entered).toBe(0)
+    // Negotiation conversion divides by Demo(0) → null
+    expect(rows[2].conversionFromPrev).toBeNull()
+  })
+
+  it('ignores stage transitions to/from stages outside the filtered pipeline', () => {
+    const stages = [
+      ...STAGES,
+      { id: 9, name: 'Other', pipeline_id: 2, order_nr: 0 },
+    ]
+    // deal moved into stage 9 (other pipeline) then back to 2
+    const transitionsByDeal = [
+      { dealId: 1, stageId: 2, rows: [stage(1, 9), stage(9, 2)] },
+    ]
+    const rows = computeExactFunnel(transitionsByDeal, stages, {
+      pipelineId: 1,
+    })
+    expect(rows.map((r) => r.stage)).toEqual([
+      'Qualified',
+      'Demo',
+      'Negotiation',
+    ])
+    // stage 9 is excluded; deal still counted at stage 1 (initial) and stage 2
+    expect(rows[0].entered).toBe(1)
+    expect(rows[1].entered).toBe(1)
+    expect(rows[2].entered).toBe(0)
+  })
+
+  it('ignores non-stage, non-status changelog rows', () => {
+    const transitionsByDeal = [
+      {
+        dealId: 1,
+        stageId: 2,
+        rows: [
+          { field_key: 'title', old_value: 'A', new_value: 'B' },
+          { field_key: 'value', old_value: '0', new_value: '100' },
+          stage(1, 2),
+        ],
+      },
+    ]
+    const rows = computeExactFunnel(transitionsByDeal, STAGES)
+    expect(rows[0].entered).toBe(1)
+    expect(rows[1].entered).toBe(1)
+    expect(rows[0].won).toBe(0)
+  })
+
+  it('works without an options argument and with no deals', () => {
+    const rows = computeExactFunnel([], STAGES)
+    expect(rows).toHaveLength(3)
+    expect(rows.every((r) => r.entered === 0)).toBe(true)
+    expect(rows[0].won).toBe(0)
+    expect(rows[0].conversionFromPrev).toBeNull()
+  })
+})
+
 describe('null-value tolerance', () => {
   it('treats null won values as zero', () => {
     const v = computeVelocity(
@@ -295,5 +439,76 @@ describe('null-value tolerance', () => {
     const rows = computeHealth(open, STAGES, [], { now: NOW })
     expect(rows[0].openValue).toBe(0)
     expect(rows[0].weightedValue).toBe(0)
+  })
+})
+
+describe('computeCoverage', () => {
+  it('divides weighted pipeline by the remaining-to-target gap', () => {
+    // remaining = 100000 - 40000 = 60000; coverage = 180000 / 60000 = 3
+    const c = computeCoverage({
+      weightedOpen: 180000,
+      goalTarget: 100000,
+      progress: 40000,
+    })
+    expect(c.weightedOpen).toBe(180000)
+    expect(c.goalTarget).toBe(100000)
+    expect(c.progress).toBe(40000)
+    expect(c.remaining).toBe(60000)
+    expect(c.coverage).toBeCloseTo(3)
+    expect(c.verdict).toBe('healthy')
+  })
+
+  it('classifies a borderline ratio (>=2 and <3)', () => {
+    // remaining = 60000; coverage = 150000 / 60000 = 2.5
+    const c = computeCoverage({
+      weightedOpen: 150000,
+      goalTarget: 100000,
+      progress: 40000,
+    })
+    expect(c.coverage).toBeCloseTo(2.5)
+    expect(c.verdict).toBe('borderline')
+  })
+
+  it('classifies a low ratio (<2)', () => {
+    // remaining = 60000; coverage = 60000 / 60000 = 1
+    const c = computeCoverage({
+      weightedOpen: 60000,
+      goalTarget: 100000,
+      progress: 40000,
+    })
+    expect(c.coverage).toBeCloseTo(1)
+    expect(c.verdict).toBe('low')
+  })
+
+  it('reports "covered" with null coverage when progress meets the target', () => {
+    // remaining clamps to 0 → no gap left to cover → coverage is moot
+    const c = computeCoverage({
+      weightedOpen: 50000,
+      goalTarget: 100000,
+      progress: 100000,
+    })
+    expect(c.remaining).toBe(0)
+    expect(c.coverage).toBeNull()
+    expect(c.verdict).toBe('covered')
+  })
+
+  it('reports "covered" when progress exceeds the target (remaining clamps to 0)', () => {
+    const c = computeCoverage({
+      weightedOpen: 50000,
+      goalTarget: 100000,
+      progress: 130000,
+    })
+    expect(c.remaining).toBe(0)
+    expect(c.coverage).toBeNull()
+    expect(c.verdict).toBe('covered')
+  })
+
+  it('defaults progress to 0 when omitted', () => {
+    // remaining = 100000; coverage = 300000 / 100000 = 3
+    const c = computeCoverage({ weightedOpen: 300000, goalTarget: 100000 })
+    expect(c.progress).toBe(0)
+    expect(c.remaining).toBe(100000)
+    expect(c.coverage).toBeCloseTo(3)
+    expect(c.verdict).toBe('healthy')
   })
 })
