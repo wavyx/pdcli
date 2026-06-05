@@ -98,7 +98,8 @@ describe('api --jq', () => {
       'GET',
       '/api/v1/currencies',
       '--jq',
-      '.[0].data | length',
+      // single envelope passes to jq unwrapped since 0.9
+      '.data | length',
     ])
 
     expect(stdout.trim()).toBe('2')

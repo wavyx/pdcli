@@ -34,14 +34,19 @@ Table output:
 ## Filter with `--jq`
 
 `--jq` runs a [jq](https://jqlang.github.io/jq/) expression over the JSON result. The
-native jq binary is bundled and loaded only when you actually use the flag. The input
-is always an array, so index with `.[]`:
+native jq binary is bundled and loaded only when you actually use the flag. Lists
+arrive as arrays (index with `.[]`); single records arrive as the bare object, so a
+`get` filters directly:
 
 ```bash
 pdcli deal list --jq '.[].id'
 pdcli deal list --jq '.[] | {id, title, value}'
 pdcli deal list --status won --jq '[.[].value] | add'
+pdcli deal get 42 --jq '.title'
 ```
+
+(Before 0.9, single records were wrapped in a one-element array and needed `.[0]` —
+that indirection is gone.)
 
 `--jq` overrides `--output` and `--fields` — you get exactly what the expression
 produces.

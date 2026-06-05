@@ -14,7 +14,13 @@ function setPath(obj, path, value) {
   }
   node[parts[parts.length - 1]] = value
 }
+import os from 'node:os'
+import fs from 'node:fs'
+import path from 'node:path'
+
+const confDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pdcli-alias-test-'))
 const mockConf = {
+  path: path.join(confDir, 'config.json'),
   get: vi.fn((key) => {
     if (key === 'aliases') return store.aliases
     return undefined
@@ -138,6 +144,173 @@ describe('aliases', () => {
       expect(getAlias('my.alias')).toBe('deal list')
       unsetAlias('my.alias')
       expect(getAlias('my.alias')).toBeUndefined()
+    })
+  })
+
+  describe('write locking', () => {
+    const lockDir = () => mockConf.path + '.aliases.lock'
+
+    beforeEach(() => {
+      fs.rmSync(lockDir(), { recursive: true, force: true })
+    })
+
+    it('creates and removes the lock around a write', () => {
+      // Spy on mkdir/rmdir by checking the lock is gone after, and that a
+      // write while we hold it fails — proving the same path is used.
+      setAlias('locked-roundtrip', 'deal list')
+      expect(fs.existsSync(lockDir())).toBe(false)
+      expect(getAlias('locked-roundtrip')).toBe('deal list')
+    })
+
+    it('throws exit 75 when another process holds a fresh lock', () => {
+      fs.mkdirSync(lockDir())
+      try {
+        expect(() => setAlias('blocked', 'x')).toThrow(/another pdcli/i)
+        let code
+        try {
+          setAlias('blocked', 'x')
+        } catch (err) {
+          code = err.exitCode
+        }
+        expect(code).toBe(75)
+        expect(getAlias('blocked')).toBeUndefined()
+      } finally {
+        fs.rmdirSync(lockDir())
+      }
+    })
+
+    it('breaks a stale lock (older than 5s) and completes the write', () => {
+      fs.mkdirSync(lockDir())
+      const old = (Date.now() - 10_000) / 1000
+      fs.utimesSync(lockDir(), old, old)
+
+      setAlias('after-stale', 'deal list')
+      expect(getAlias('after-stale')).toBe('deal list')
+      expect(fs.existsSync(lockDir())).toBe(false)
+    })
+
+    it('retries immediately when the lock vanishes between mkdir and stat', () => {
+      fs.mkdirSync(lockDir())
+      // First stat throws ENOENT (lock vanished — another process released
+      // or stale-broke it); the loop must retry and complete the write.
+      const realStat = fs.statSync
+      let calls = 0
+      const spy = vi.spyOn(fs, 'statSync').mockImplementation((p, ...a) => {
+        if (String(p) === lockDir() && calls++ === 0) {
+          fs.rmdirSync(lockDir()) // simulate the concurrent release
+          const err = new Error('ENOENT')
+          err.code = 'ENOENT'
+          throw err
+        }
+        return realStat(p, ...a)
+      })
+      try {
+        setAlias('race-survivor', 'deal list')
+      } finally {
+        spy.mockRestore()
+      }
+      expect(getAlias('race-survivor')).toBe('deal list')
+      expect(fs.existsSync(lockDir())).toBe(false)
+    })
+
+    it('tolerates the lock being stale-broken mid-write (release ENOENT)', () => {
+      // If a concurrent process stale-breaks our lock while we hold it, the
+      // release must not turn a successful write into a spurious failure.
+      const spy = vi.spyOn(fs, 'rmdirSync').mockImplementation(() => {
+        const err = new Error('ENOENT')
+        err.code = 'ENOENT'
+        throw err
+      })
+      try {
+        expect(() => setAlias('broken-lock', 'deal list')).not.toThrow()
+      } finally {
+        spy.mockRestore()
+      }
+      expect(getAlias('broken-lock')).toBe('deal list')
+      fs.rmSync(lockDir(), { recursive: true, force: true })
+    })
+
+    it('never turns a successful write into a failure on release errors', () => {
+      // The mutation persisted (conf wrote atomically) — a failed lock
+      // release must not report failure; the stale-breaker reaps leftovers.
+      const spy = vi.spyOn(fs, 'rmdirSync').mockImplementation(() => {
+        const err = new Error('EPERM')
+        err.code = 'EPERM'
+        throw err
+      })
+      try {
+        expect(() => setAlias('eperm-release', 'x')).not.toThrow()
+      } finally {
+        spy.mockRestore()
+        fs.rmSync(lockDir(), { recursive: true, force: true })
+      }
+      expect(getAlias('eperm-release')).toBe('x')
+    })
+
+    it('wraps unwritable-config acquisition failures in a clear CliError (78)', () => {
+      const spy = vi.spyOn(fs, 'mkdirSync').mockImplementation(() => {
+        const err = new Error('EACCES: permission denied')
+        err.code = 'EACCES'
+        throw err
+      })
+      let thrown
+      try {
+        setAlias('eperm-acquire', 'x')
+      } catch (err) {
+        thrown = err
+      } finally {
+        spy.mockRestore()
+      }
+      expect(thrown.exitCode).toBe(78)
+      expect(thrown.message).toMatch(/config directory is not writable/i)
+      expect(thrown.message).not.toMatch(/\.lock/)
+      expect(getAlias('eperm-acquire')).toBeUndefined()
+    })
+
+    it('names the underlying message when the acquire error has no code', () => {
+      const spy = vi.spyOn(fs, 'mkdirSync').mockImplementation(() => {
+        throw new Error('disk exploded')
+      })
+      let thrown
+      try {
+        setAlias('no-code', 'x')
+      } catch (err) {
+        thrown = err
+      } finally {
+        spy.mockRestore()
+      }
+      expect(thrown.exitCode).toBe(78)
+      expect(thrown.message).toMatch(/disk exploded/)
+    })
+
+    it('surfaces a non-ENOENT failure while breaking a stale lock', () => {
+      fs.mkdirSync(lockDir())
+      const old = (Date.now() - 10_000) / 1000
+      fs.utimesSync(lockDir(), old, old)
+      const realRmdir = fs.rmdirSync.bind(fs)
+      const spy = vi.spyOn(fs, 'rmdirSync').mockImplementation(() => {
+        const err = new Error('EPERM stale-break')
+        err.code = 'EPERM'
+        throw err
+      })
+      try {
+        expect(() => setAlias('stale-eperm', 'x')).toThrow(/EPERM stale-break/)
+      } finally {
+        spy.mockRestore()
+        realRmdir(lockDir())
+      }
+    })
+
+    it('unsetAlias takes the same lock', () => {
+      setAlias('to-remove', 'deal list')
+      fs.mkdirSync(lockDir())
+      try {
+        expect(() => unsetAlias('to-remove')).toThrow(/another pdcli/i)
+      } finally {
+        fs.rmdirSync(lockDir())
+      }
+      unsetAlias('to-remove')
+      expect(getAlias('to-remove')).toBeUndefined()
     })
   })
 })

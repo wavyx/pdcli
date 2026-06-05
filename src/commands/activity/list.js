@@ -56,6 +56,6 @@ export default class ActivityListCommand extends BaseCommand {
       this.apiClient.pageV2('/api/v2/activities', query),
       limit,
     )
-    await this.outputResults(items, columns)
+    await this.outputResults(items, columns, { entity: 'activity' })
   }
 }

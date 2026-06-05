@@ -24,7 +24,7 @@ export default class BaseCommand extends Command {
     }),
     'resolve-fields': Flags.boolean({
       description:
-        'Resolve custom-field hash keys to names (and option ids to labels) in json/yaml/csv output of single-record get commands',
+        'Resolve custom-field hash keys to names (and option ids to labels) in json/yaml/csv output of get and core list commands',
       helpGroup: 'GLOBAL',
       default: false,
     }),
@@ -151,12 +151,31 @@ export default class BaseCommand extends Command {
   /**
    * @param {object | object[]} data
    * @param {Record<string, import('./lib/output/table.js').Column>} columns
+   * @param {{ entity?: string }} [options] entity context enables
+   *   --resolve-fields custom-field resolution on machine-format lists
    */
-  async outputResults(data, columns) {
+  async outputResults(data, columns, { entity } = {}) {
+    if (
+      entity &&
+      this.flags['resolve-fields'] &&
+      this.resolveFormat() !== 'table' &&
+      Array.isArray(data) &&
+      data.some((row) => row?.custom_fields)
+    ) {
+      const { getFields, makeResolver } = await import('./lib/fields.js')
+      // getFields is memoized per run — one defs fetch covers the whole list.
+      const resolver = makeResolver(await getFields(this.apiClient, entity))
+      data = data.map((row) =>
+        row?.custom_fields ? resolver.resolveCustomFields(row) : row,
+      )
+    }
+
     if (this.flags.jq) {
       // node-jq ships a native binary — load it only when actually used.
+      // Single records pass UNWRAPPED: `--jq .id` works on a get without
+      // the historical `.[0]` indirection (changed in 0.9.0).
       const { run } = await import('node-jq')
-      const input = JSON.stringify(Array.isArray(data) ? data : [data])
+      const input = JSON.stringify(data)
       const result = await run(this.flags.jq, input, {
         input: 'string',
         output: 'pretty',
