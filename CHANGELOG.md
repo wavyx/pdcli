@@ -4,6 +4,49 @@ All notable changes to `pdcli` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/).
 
+## [0.8.0] - 2026-06-05
+
+### Added
+
+- `person merge <id> --into <survivor>` and `org merge <id> --into <survivor>`
+  — fold duplicate records via Pipedrive's native merge. The positional id is
+  the losing record (deleted); the confirmation names both records and
+  defaults to No. `--yes` skips the prompt for scripts.
+- `funnel --exact` — mines real stage transitions from each deal's changelog
+  instead of approximating from final stages. Stage entry is derived from the
+  transition graph, so deals created mid-funnel count only the stages they
+  actually entered. Failed changelog fetches are skipped with a warning.
+  Machine output is `{ rows, won }`.
+- `metrics coverage` — open pipeline vs the revenue still needed for quota.
+  The classic 3x rule drives the verdict on raw pipeline value; a
+  probability-weighted coverage ratio is reported alongside. Quota comes from
+  active revenue goals (Goals API) or `--target`. Goals in mixed currencies
+  refuse to sum (exit 64).
+- `alias set/list/unset` — user-defined command shortcuts, expanded by the
+  command-not-found hook. Cycles, self-references, topic shadowing, and
+  dotted names are rejected at write time; runtime expansion is guarded
+  against cycles and runaway depth. Destructive payloads warn at set time.
+- `--resolve-fields` — opt-in resolution of custom-field hash keys to names
+  (and option ids to labels) in JSON/yaml/csv output of single-record get
+  commands. Duplicate field names disambiguate instead of clobbering.
+- `audit` duplicate-orgs now also reports fuzzy near-matches
+  (Jaro-Winkler 0.92+) with original org names and a score, tagged
+  `kind: "fuzzy"`.
+- `config unset <key>`; `config set default_output` validates its value.
+- `lead label list` and `file remote-link` (link a Google Drive file to a
+  deal, person, or organization).
+- Animated terminal demo in the README; CONTRIBUTING guide (repo + docs site).
+
+### Changed
+
+- **audit output contract:** duplicate-orgs items now carry a `kind` field
+  (`exact` | `fuzzy` | `note`); fuzzy items use `names` (plural) and `score`.
+  The per-check `count` counts findings only (informational notes excluded)
+  and now includes fuzzy matches — consumers gating on duplicate-orgs counts
+  should account for the new kinds.
+- Aborting a confirmation prompt with Ctrl-C or a closed stdin now exits
+  cleanly as "Aborted" instead of an internal error.
+
 ## [0.7.0] - 2026-06-05
 
 ### Added
