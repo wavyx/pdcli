@@ -187,4 +187,33 @@ describe('resolveCustomFields fallbacks', () => {
     })
     expect(resolved.custom_fields.Tags).toEqual(['A', 99])
   })
+
+  it('disambiguates duplicate field names instead of clobbering values', () => {
+    // Accounts can hold two custom fields with the same name; the second
+    // must not silently overwrite the first in resolved output.
+    const hashA = 'a'.repeat(40)
+    const hashB = 'b'.repeat(40)
+    const dupResolver = makeResolver([
+      {
+        id: 1,
+        field_code: hashA,
+        field_name: 'Deal Size',
+        field_type: 'varchar',
+      },
+      {
+        id: 2,
+        field_code: hashB,
+        field_name: 'Deal Size',
+        field_type: 'varchar',
+      },
+    ])
+    const resolved = dupResolver.resolveCustomFields({
+      custom_fields: { [hashA]: 'big', [hashB]: null },
+    })
+    expect(resolved.custom_fields['Deal Size']).toBe('big')
+    expect(
+      resolved.custom_fields[`Deal Size (${hashB.slice(0, 8)})`],
+    ).toBeNull()
+    expect(Object.keys(resolved.custom_fields)).toHaveLength(2)
+  })
 })

@@ -10,15 +10,21 @@ import { flattenRecord } from './output/record.js'
  *   for entities without resolvable custom fields (notes, files, webhooks, …)
  */
 export async function outputRecord(cmd, record, entity) {
-  if (cmd.resolveFormat() === 'table') {
-    if (
-      entity &&
-      record.custom_fields &&
-      Object.keys(record.custom_fields).length
-    ) {
-      const defs = await getFields(cmd.apiClient, entity)
-      record = makeResolver(defs).resolveCustomFields(record)
-    }
+  const isTable = cmd.resolveFormat() === 'table'
+
+  // Table always resolves custom fields for readability; non-table formats
+  // stay raw for scriptability unless --resolve-fields opts in.
+  if (
+    (isTable || cmd.flags['resolve-fields']) &&
+    entity &&
+    record.custom_fields &&
+    Object.keys(record.custom_fields).length
+  ) {
+    const defs = await getFields(cmd.apiClient, entity)
+    record = makeResolver(defs).resolveCustomFields(record)
+  }
+
+  if (isTable) {
     await cmd.outputResults(flattenRecord(record), {
       field: { header: 'Field' },
       value: { header: 'Value' },

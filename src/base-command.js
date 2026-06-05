@@ -22,6 +22,12 @@ export default class BaseCommand extends Command {
       description: 'Comma-separated fields to display',
       helpGroup: 'GLOBAL',
     }),
+    'resolve-fields': Flags.boolean({
+      description:
+        'Resolve custom-field hash keys to names (and option ids to labels) in json/yaml/csv output of single-record get commands',
+      helpGroup: 'GLOBAL',
+      default: false,
+    }),
     profile: Flags.string({
       description: 'Named auth profile to use',
       helpGroup: 'GLOBAL',
@@ -118,9 +124,13 @@ export default class BaseCommand extends Command {
     })
   }
 
-  /** The profile's `default_output` config value, when valid. */
+  /**
+   * The profile's `default_output` config value, when valid. Safe to call
+   * before parsing completes (handleError runs for parse failures too,
+   * when `this.flags` is still undefined).
+   */
   storedDefaultOutput() {
-    const stored = loadConfig(this.flags.profile).default_output
+    const stored = loadConfig(this.flags?.profile).default_output
     return ['table', 'json', 'yaml', 'csv'].includes(stored)
       ? stored
       : undefined

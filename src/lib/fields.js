@@ -105,7 +105,10 @@ export function makeResolver(defs) {
 
       const resolved = {}
       for (const [key, value] of Object.entries(record.custom_fields)) {
-        const name = this.keyToName(key) ?? key
+        let name = this.keyToName(key) ?? key
+        // Duplicate field names exist in real accounts — disambiguate with
+        // a key fragment rather than silently clobbering the first value.
+        if (name in resolved) name = `${name} (${key.slice(0, 8)})`
         let displayValue = value
         if (Array.isArray(value)) {
           displayValue = value.map((v) => this.optionIdToLabel(key, v) ?? v)
