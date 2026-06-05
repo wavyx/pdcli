@@ -34,7 +34,7 @@ describe('deal list', () => {
   it('lists deals across cursor pages as JSON', async () => {
     mockApi()
       .get('/api/v2/deals')
-      .query({ limit: '100' })
+      .query({ limit: '500' })
       .reply(200, {
         success: true,
         data: [
@@ -44,7 +44,7 @@ describe('deal list', () => {
         additional_data: { next_cursor: 'abc' },
       })
       .get('/api/v2/deals')
-      .query({ limit: '100', cursor: 'abc' })
+      .query({ limit: '500', cursor: 'abc' })
       .reply(200, {
         success: true,
         data: [{ id: 3, title: 'Third', value: 300, currency: 'USD' }],
@@ -84,7 +84,7 @@ describe('deal list', () => {
   it('passes status and stage filters as query params', async () => {
     mockApi()
       .get('/api/v2/deals')
-      .query({ limit: '100', status: 'won', stage_id: '3' })
+      .query({ limit: '500', status: 'won', stage_id: '3' })
       .reply(200, { success: true, data: [{ id: 9, title: 'Won deal' }] })
 
     const stdout = await runCmd(DealListCommand, [
@@ -99,10 +99,62 @@ describe('deal list', () => {
     expect(JSON.parse(stdout)[0].id).toBe(9)
   })
 
+  it('defaults the per-request page size to 500', async () => {
+    mockApi()
+      .get('/api/v2/deals')
+      .query({ limit: '500' })
+      .reply(200, { success: true, data: [{ id: 1, title: 'A' }] })
+
+    const stdout = await runCmd(DealListCommand, ['--output', 'json'])
+
+    expect(JSON.parse(stdout)[0].id).toBe(1)
+  })
+
+  it('maps power-params to their query params', async () => {
+    mockApi()
+      .get('/api/v2/deals')
+      .query({
+        limit: '500',
+        filter_id: '5',
+        ids: '1,2,3',
+        sort_by: 'update_time',
+        sort_direction: 'desc',
+        updated_since: '2025-01-01T10:20:00Z',
+        updated_until: '2025-02-01T10:20:00Z',
+      })
+      .reply(200, { success: true, data: [{ id: 1, title: 'A' }] })
+
+    const stdout = await runCmd(DealListCommand, [
+      '--filter',
+      '5',
+      '--ids',
+      '1,2,3',
+      '--sort-by',
+      'update_time',
+      '--sort-direction',
+      'desc',
+      '--updated-since',
+      '2025-01-01T10:20:00Z',
+      '--updated-until',
+      '2025-02-01T10:20:00Z',
+      '--output',
+      'json',
+    ])
+
+    expect(JSON.parse(stdout)[0].id).toBe(1)
+  })
+
+  it('rejects more than 100 ids with exit code 64', async () => {
+    const ids = Array.from({ length: 101 }, (_, i) => i + 1).join(',')
+    await expect(
+      runCmd(DealListCommand, ['--ids', ids, '--output', 'json']),
+    ).rejects.toMatchObject({ oclif: { exit: 64 } })
+  })
+
   it('renders a table with the deal columns', async () => {
     mockApi()
       .get('/api/v2/deals')
-      .query({ limit: '100' })
+      .query({ limit: '500' })
       .reply(200, {
         success: true,
         data: [
@@ -128,7 +180,7 @@ describe('deal list edge cases', () => {
   it('renders an empty value cell when the deal has no value', async () => {
     mockApi()
       .get('/api/v2/deals')
-      .query({ limit: '100' })
+      .query({ limit: '500' })
       .reply(200, {
         success: true,
         data: [{ id: 5, title: 'No value deal', status: 'open' }],
@@ -144,7 +196,7 @@ describe('deal list value without currency', () => {
   it('renders the bare amount', async () => {
     mockApi()
       .get('/api/v2/deals')
-      .query({ limit: '100' })
+      .query({ limit: '500' })
       .reply(200, {
         success: true,
         data: [{ id: 6, title: 'Currencyless', value: 500 }],
