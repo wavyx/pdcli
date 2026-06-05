@@ -212,8 +212,9 @@ export function createClient({
         continue
       }
 
-      if (res.status === 204) return null
-
+      // Binary callers always get the {buffer, contentType} shape — a 204
+      // yields an empty buffer rather than null (pre-unification parity;
+      // file/download destructures the result).
       if (binary) {
         if (!res.ok) {
           throw ApiError.fromResponse(res.status, await res.text(), path)
@@ -223,6 +224,8 @@ export function createClient({
           contentType: res.headers.get('content-type'),
         }
       }
+
+      if (res.status === 204) return null
 
       const text = await res.text()
       if (!res.ok) {

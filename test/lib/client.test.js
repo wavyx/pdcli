@@ -1104,4 +1104,12 @@ describe('unified transport: retry/refresh on non-JSON paths', () => {
       }),
     ).rejects.toThrow(/rate-limit escalation/)
   })
+
+  it('download returns an empty buffer on 204, not null', async () => {
+    nock(BASE).get('/api/v1/files/9/download').reply(204)
+
+    const res = await tokenClient().download('/api/v1/files/9/download')
+    expect(res).not.toBeNull()
+    expect(res.buffer.byteLength).toBe(0)
+  })
 })

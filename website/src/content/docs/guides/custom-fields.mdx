@@ -81,9 +81,10 @@ pdcli deal get 1 --output json --resolve-fields
 
 This is **opt-in**: it applies to the `get` commands and the core `list` commands
 (`deal`, `person`, `org`, `activity`, `product` — one field-definitions fetch covers the
-whole list). The table view always resolves. If two custom fields share the same name,
-the second is disambiguated with a short key fragment (e.g. `Region (a1b2c3d4)`) so
-neither value is clobbered.
+whole list). On lists, resolution affects json/yaml/csv only (list tables don't render
+custom-field columns); on `get`, the table view always resolves. If two custom fields
+share the same name, the second is disambiguated with a short key fragment (e.g.
+`Region (a1b2c3d4)`) so neither value is clobbered.
 
 ## Writing: `--field "Name=Value"`
 

@@ -11,12 +11,16 @@ function sleepSync(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 }
 
-/** Release the lock; the dir being gone already (stale-broken) is benign. */
+/**
+ * Release the lock. Never throws: the mutation already persisted, so a
+ * failed release must not convert success into a reported failure (a
+ * leftover dir goes stale in 5s and is reaped by the next writer).
+ */
 function releaseLock(lockDir) {
   try {
     fs.rmdirSync(lockDir)
-  } catch (err) {
-    if (err?.code !== 'ENOENT') throw err
+  } catch {
+    /* benign: stale-broken concurrently, or unremovable — reaped later */
   }
 }
 
@@ -41,16 +45,24 @@ function withAliasLock(fn) {
         releaseLock(lockDir)
       }
     } catch (err) {
-      if (err?.code !== 'EEXIST') throw err
+      if (err?.code !== 'EEXIST') {
+        // Not contention — the config dir itself is unusable. Name the real
+        // problem instead of leaking the lock implementation detail.
+        throw new CliError(
+          `Cannot update aliases: the config directory is not writable (${err?.code ?? err?.message})`,
+          { exitCode: 78 },
+        )
+      }
       // Held by someone else — break it if stale, otherwise wait and retry.
+      let stale
       try {
-        const age = Date.now() - fs.statSync(lockDir).mtimeMs
-        if (age > LOCK_STALE_MS) {
-          fs.rmdirSync(lockDir)
-          continue
-        }
+        stale = Date.now() - fs.statSync(lockDir).mtimeMs > LOCK_STALE_MS
       } catch {
         continue // lock vanished between mkdir and stat — retry immediately
+      }
+      if (stale) {
+        fs.rmdirSync(lockDir) // a real failure here must surface, not retry
+        continue
       }
       if (attempt < LOCK_RETRIES) sleepSync(LOCK_RETRY_MS)
     }

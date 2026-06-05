@@ -230,32 +230,75 @@ describe('aliases', () => {
       fs.rmSync(lockDir(), { recursive: true, force: true })
     })
 
-    it('propagates non-ENOENT release failures', () => {
+    it('never turns a successful write into a failure on release errors', () => {
+      // The mutation persisted (conf wrote atomically) — a failed lock
+      // release must not report failure; the stale-breaker reaps leftovers.
       const spy = vi.spyOn(fs, 'rmdirSync').mockImplementation(() => {
         const err = new Error('EPERM')
         err.code = 'EPERM'
         throw err
       })
       try {
-        expect(() => setAlias('eperm-release', 'x')).toThrow(/EPERM/)
+        expect(() => setAlias('eperm-release', 'x')).not.toThrow()
       } finally {
         spy.mockRestore()
         fs.rmSync(lockDir(), { recursive: true, force: true })
       }
+      expect(getAlias('eperm-release')).toBe('x')
     })
 
-    it('propagates non-EEXIST acquisition failures (e.g. readonly dir)', () => {
+    it('wraps unwritable-config acquisition failures in a clear CliError (78)', () => {
       const spy = vi.spyOn(fs, 'mkdirSync').mockImplementation(() => {
-        const err = new Error('EPERM')
+        const err = new Error('EACCES: permission denied')
+        err.code = 'EACCES'
+        throw err
+      })
+      let thrown
+      try {
+        setAlias('eperm-acquire', 'x')
+      } catch (err) {
+        thrown = err
+      } finally {
+        spy.mockRestore()
+      }
+      expect(thrown.exitCode).toBe(78)
+      expect(thrown.message).toMatch(/config directory is not writable/i)
+      expect(thrown.message).not.toMatch(/\.lock/)
+      expect(getAlias('eperm-acquire')).toBeUndefined()
+    })
+
+    it('names the underlying message when the acquire error has no code', () => {
+      const spy = vi.spyOn(fs, 'mkdirSync').mockImplementation(() => {
+        throw new Error('disk exploded')
+      })
+      let thrown
+      try {
+        setAlias('no-code', 'x')
+      } catch (err) {
+        thrown = err
+      } finally {
+        spy.mockRestore()
+      }
+      expect(thrown.exitCode).toBe(78)
+      expect(thrown.message).toMatch(/disk exploded/)
+    })
+
+    it('surfaces a non-ENOENT failure while breaking a stale lock', () => {
+      fs.mkdirSync(lockDir())
+      const old = (Date.now() - 10_000) / 1000
+      fs.utimesSync(lockDir(), old, old)
+      const realRmdir = fs.rmdirSync.bind(fs)
+      const spy = vi.spyOn(fs, 'rmdirSync').mockImplementation(() => {
+        const err = new Error('EPERM stale-break')
         err.code = 'EPERM'
         throw err
       })
       try {
-        expect(() => setAlias('eperm-acquire', 'x')).toThrow(/EPERM/)
+        expect(() => setAlias('stale-eperm', 'x')).toThrow(/EPERM stale-break/)
       } finally {
         spy.mockRestore()
+        realRmdir(lockDir())
       }
-      expect(getAlias('eperm-acquire')).toBeUndefined()
     })
 
     it('unsetAlias takes the same lock', () => {
