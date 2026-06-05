@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="326" viewBox="0 0 720 326" role="img" aria-label="Animated demo of pdcli running pipeline health and a winning deal update">
+<style>
+text { font-family: 'SFMono-Regular', 'JetBrains Mono', 'Fira Code', Consolas, ui-monospace, monospace; font-size: 14px; white-space: pre; }
+.bar { fill: #6b7d72; font-size: 12px; }
+.prompt { fill: #4ade80; }
+.cmd { fill: #e6efe9; }
+.fg { fill: #cdddd3; }
+.dim { fill: #6b7d72; }
+.ok { fill: #4ade80; }
+.cur { fill: #4ade80; }
+</style>
+<rect x="0" y="0" width="720" height="326" rx="14" fill="#0c1611"/>
+<rect x="0" y="0" width="720" height="40" rx="14" fill="#0a120e"/>
+<rect x="0" y="26" width="720" height="14" fill="#0a120e"/>
+<circle class="dot" cx="28" cy="20" r="6" fill="#ff5f56"/><circle class="dot" cx="48" cy="20" r="6" fill="#ffbd2e"/><circle class="dot" cx="68" cy="20" r="6" fill="#27c93f"/>
+<text x="100" y="24" class="bar">zsh · ~/acme</text>
+<g opacity="1"><clipPath id="type0"><rect x="22" y="62" height="22" width="0"><animate attributeName="width" begin="0s" dur="1.6s" from="0" to="176.4" fill="freeze" repeatCount="1"/><set attributeName="width" to="0" begin="6s"/></rect></clipPath><text x="22" y="84" class="prompt">❯ </text><text x="38.8" y="84" class="cmd" clip-path="url(#type0)">pdcli pipeline health</text><rect x="215.2" y="70" width="8.4" height="16" class="cur" opacity="0"><animate attributeName="opacity" values="0;1" begin="0s" dur="0.01s" fill="freeze"/><animate attributeName="opacity" values="1;0" begin="5.8s" dur="0.01s" fill="freeze"/><animate attributeName="opacity" values="1;0;1" begin="1.6s" dur="0.8s" repeatCount="indefinite"/></rect><g opacity="0"><text x="22" y="128" class="dim">┌ SALES PIPELINE ───────────────── Q2 ┐</text><text x="22" y="150" class="fg">Qualified     18 deals    €142,000</text><text x="22" y="172" class="fg">Contact       11 deals    € 98,500</text><text x="22" y="194" class="fg">Proposal       7 deals    € 76,200</text><text x="22" y="216" class="fg">Negotiation    4 deals    € 51,000</text><text x="22" y="238" class="dim">─────────────────────────────────────</text><text x="22" y="260" class="ok">weighted forecast          €221,480</text><text x="22" y="282" class="dim">win rate 32% · avg cycle 24d</text><animate attributeName="opacity" values="0;1" begin="1.8s" dur="0.3s" fill="freeze"/><set attributeName="opacity" to="0" begin="6s"/></g><set attributeName="opacity" to="0" begin="6s"/><set attributeName="opacity" to="1" begin="12s"/></g><g opacity="0"><clipPath id="type1"><rect x="22" y="62" height="22" width="0"><animate attributeName="width" begin="6s" dur="1.6s" from="0" to="294" fill="freeze" repeatCount="1"/><set attributeName="width" to="0" begin="12s"/></rect></clipPath><text x="22" y="84" class="prompt">❯ </text><text x="38.8" y="84" class="cmd" clip-path="url(#type1)">pdcli deal update 4821 --status won</text><rect x="332.8" y="70" width="8.4" height="16" class="cur" opacity="0"><animate attributeName="opacity" values="0;1" begin="6s" dur="0.01s" fill="freeze"/><animate attributeName="opacity" values="1;0" begin="11.8s" dur="0.01s" fill="freeze"/><animate attributeName="opacity" values="1;0;1" begin="7.6s" dur="0.8s" repeatCount="indefinite"/></rect><g opacity="0"><text x="22" y="128" class="ok">✓ Acme renewal → Won · activity logged</text><animate attributeName="opacity" values="0;1" begin="7.8s" dur="0.3s" fill="freeze"/><set attributeName="opacity" to="0" begin="12s"/></g><set attributeName="opacity" to="1" begin="6s"/><set attributeName="opacity" to="0" begin="12s"/></g>
+<rect x="0" y="0" width="1" height="1" fill="none" opacity="0"><animate attributeName="opacity" values="0;0" dur="12s" repeatCount="indefinite"/></rect>
+</svg>

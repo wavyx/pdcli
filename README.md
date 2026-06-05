@@ -4,6 +4,10 @@
 [![codecov](https://codecov.io/gh/wavyx/pdcli/branch/main/graph/badge.svg)](https://codecov.io/gh/wavyx/pdcli)
 [![npm](https://img.shields.io/npm/v/%40wavyx%2Fpdcli)](https://www.npmjs.com/package/@wavyx/pdcli)
 
+<p align="center">
+  <img src="docs/demo.svg" alt="pdcli demo — running pipeline health and a winning deal update" width="720">
+</p>
+
 Command-line interface for [Pipedrive](https://www.pipedrive.com/) — fast, scriptable, built for terminals, CI pipelines, and AI agents.
 
 > Not affiliated with or endorsed by Pipedrive.
