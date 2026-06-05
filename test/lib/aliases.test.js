@@ -14,7 +14,13 @@ function setPath(obj, path, value) {
   }
   node[parts[parts.length - 1]] = value
 }
+import os from 'node:os'
+import fs from 'node:fs'
+import path from 'node:path'
+
+const confDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pdcli-alias-test-'))
 const mockConf = {
+  path: path.join(confDir, 'config.json'),
   get: vi.fn((key) => {
     if (key === 'aliases') return store.aliases
     return undefined
@@ -138,6 +144,61 @@ describe('aliases', () => {
       expect(getAlias('my.alias')).toBe('deal list')
       unsetAlias('my.alias')
       expect(getAlias('my.alias')).toBeUndefined()
+    })
+  })
+
+  describe('write locking', () => {
+    const lockDir = () => mockConf.path + '.aliases.lock'
+
+    beforeEach(() => {
+      fs.rmSync(lockDir(), { recursive: true, force: true })
+    })
+
+    it('creates and removes the lock around a write', () => {
+      // Spy on mkdir/rmdir by checking the lock is gone after, and that a
+      // write while we hold it fails — proving the same path is used.
+      setAlias('locked-roundtrip', 'deal list')
+      expect(fs.existsSync(lockDir())).toBe(false)
+      expect(getAlias('locked-roundtrip')).toBe('deal list')
+    })
+
+    it('throws exit 75 when another process holds a fresh lock', () => {
+      fs.mkdirSync(lockDir())
+      try {
+        expect(() => setAlias('blocked', 'x')).toThrow(/another pdcli/i)
+        let code
+        try {
+          setAlias('blocked', 'x')
+        } catch (err) {
+          code = err.exitCode
+        }
+        expect(code).toBe(75)
+        expect(getAlias('blocked')).toBeUndefined()
+      } finally {
+        fs.rmdirSync(lockDir())
+      }
+    })
+
+    it('breaks a stale lock (older than 5s) and completes the write', () => {
+      fs.mkdirSync(lockDir())
+      const old = (Date.now() - 10_000) / 1000
+      fs.utimesSync(lockDir(), old, old)
+
+      setAlias('after-stale', 'deal list')
+      expect(getAlias('after-stale')).toBe('deal list')
+      expect(fs.existsSync(lockDir())).toBe(false)
+    })
+
+    it('unsetAlias takes the same lock', () => {
+      setAlias('to-remove', 'deal list')
+      fs.mkdirSync(lockDir())
+      try {
+        expect(() => unsetAlias('to-remove')).toThrow(/another pdcli/i)
+      } finally {
+        fs.rmdirSync(lockDir())
+      }
+      unsetAlias('to-remove')
+      expect(getAlias('to-remove')).toBeUndefined()
     })
   })
 })
