@@ -8,3 +8,4 @@ website/
 dist/
 tmp/
 design/
+.playwright-mcp/
