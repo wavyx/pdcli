@@ -72,11 +72,14 @@ as one JSON object per line, **truncated at 25 items** with a "… N more" foote
 Open deals untouched for >14 days
   {"id":204,"title":"Acme renewal","days":31}
   {"id":311,"title":"Globex expansion","days":19}
-  … 16 more
+  {"id":340,"title":"Initech seats","days":17}
 
 Persons sharing the same email
   {"email":"jane@acme.com","ids":[88,142]}
 ```
+
+A check with more than 25 findings prints the first 25 followed by a
+`… N more` footer (N = total − 25).
 
 For full machine-readable output (no truncation), use `--output json` — every check
 includes its full `items` array.

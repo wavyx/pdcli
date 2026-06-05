@@ -13,7 +13,7 @@ command shares the same ladder.
 | ---- | ------- | ----------------- | ----------------------- |
 | `0` | Success | 2xx | Continue. |
 | `1` | Generic error | — | Inspect the message; safe to surface and stop. `audit --strict` returns 1 on must-severity findings. |
-| `64` | Usage / bad flags | — | A flag, argument, or value is wrong (e.g. an invalid `--period`, an unknown `--checks` name, or several pipelines with no `--pipeline`). Fix the invocation — retrying won't help. |
+| `64` | Invalid input value | — | A value pdcli validated and rejected (e.g. an invalid `--period`, an unknown `--checks` name, several pipelines with no `--pipeline`, a CSV missing its name column). Fix the invocation — retrying won't help. Note: an unknown flag or missing argument is caught by the parser and exits `70`. |
 | `65` | Data / validation | `400`, `422` | The request body was rejected. Fix the payload (bad field value, missing required field). Don't retry unchanged. |
 | `69` | Service unavailable | `5xx` | Pipedrive is down or erroring. pdcli already retried 5xx with backoff; safe to retry later. |
 | `70` | Internal CLI bug | — | An unexpected error inside pdcli. File an issue; retrying won't help. |
@@ -30,9 +30,9 @@ back to `1`, and an unexpected throw inside the CLI exits `70`.
 In **table mode** the message goes to stderr in human form; `--verbose` adds the request
 path, status code, and `error_info` from Pipedrive's error envelope.
 
-In **JSON mode** (`--output json`, or any piped command) the error is written to **stderr**
-as a single JSON object — stdout stays clean so a successful-looking pipe can't swallow a
-failure:
+In **JSON mode** (an explicit `--output json`, or `default_output json` set in the
+profile) the error is written to **stderr** as a single JSON object — stdout stays
+clean so a successful-looking pipe can't swallow a failure:
 
 ```json
 {

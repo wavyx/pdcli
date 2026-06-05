@@ -1,0 +1,158 @@
+/* pdcli — "Clarity" theme (designer handoff, design/dir-clarity.jsx)
+   Site-wide Starlight skin: token ramps, fonts, and docs chrome.
+   Homepage-only styles live in home.css. */
+
+/* Self-hosted fonts (base-path safe on GitHub Pages) */
+@import '@fontsource-variable/plus-jakarta-sans';
+@import '@fontsource-variable/jetbrains-mono';
+
+/* ── Token ramps ──────────────────────────────────────────────── */
+
+/* Dark mode (Starlight default scope) */
+:root {
+  --sl-color-white: #eaf2ed;
+  --sl-color-gray-1: #c6d4cc;
+  --sl-color-gray-2: #9eb0a7;
+  --sl-color-gray-3: #6e8278;
+  --sl-color-gray-4: #41524a;
+  --sl-color-gray-5: #2a3b31;
+  --sl-color-gray-6: #14211a;
+  --sl-color-black: #0a120e;
+
+  --sl-color-accent-low: #2a2769;
+  --sl-color-accent: #5b54e6;
+  --sl-color-accent-high: #9a95ff;
+
+  /* Clarity green ramp (decorative accent) */
+  --sl-color-green-low: #16382a;
+  --sl-color-green: #33bd73;
+  --sl-color-green-high: #7fd9a6;
+
+  --pd-green: #33bd73;
+  --pd-green-bright: #3fce80;
+  --pd-mint: rgba(51, 189, 115, 0.14);
+  --pd-inline-code-bg: #15321f;
+  --pd-surface: #101b15;
+  --pd-border: #1d2c24;
+  --pd-border-strong: #2a3b31;
+  --pd-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.4), 0 18px 40px -20px rgba(0, 0, 0, 0.6);
+  --pd-shadow-lg: 0 40px 90px -30px rgba(0, 0, 0, 0.7);
+
+  --sl-font:
+    'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', system-ui, sans-serif;
+  --sl-font-mono:
+    'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* Light mode */
+:root[data-theme='light'],
+[data-theme='light'] ::backdrop {
+  --sl-color-white: #0e1b14;
+  --sl-color-gray-1: #1d2c24;
+  --sl-color-gray-2: #3a4b42;
+  --sl-color-gray-3: #586b61;
+  --sl-color-gray-4: #8a978f;
+  --sl-color-gray-5: #d6ddd8;
+  --sl-color-gray-6: #e7ebe9;
+  --sl-color-gray-7: #f6f8f7;
+  --sl-color-black: #ffffff;
+
+  --sl-color-accent-low: #e6e4fb;
+  --sl-color-accent: #5b54e6;
+  --sl-color-accent-high: #4a43d4;
+
+  --sl-color-green-low: #e7f6ec;
+  --sl-color-green: #1a7a4c;
+  --sl-color-green-high: #135c39;
+
+  --pd-green: #1a7a4c;
+  --pd-green-bright: #1fa75a;
+  --pd-mint: #e7f6ec;
+  --pd-inline-code-bg: #e7f6ec;
+  --pd-surface: #ffffff;
+  --pd-border: #e7ebe9;
+  --pd-border-strong: #d6ddd8;
+  --pd-shadow:
+    0 1px 2px rgba(14, 27, 20, 0.05), 0 10px 30px -12px rgba(14, 27, 20, 0.12);
+  --pd-shadow-lg: 0 30px 70px -30px rgba(14, 27, 20, 0.28);
+}
+
+/* Terminal palette — code surfaces stay dark in BOTH themes (design signature) */
+:root,
+:root[data-theme='light'] {
+  --pd-code-bg: #0c1611;
+  --pd-code-bd: #1b2b22;
+  --pd-code-fg: #d7e5dd;
+}
+
+/* ── Docs chrome ──────────────────────────────────────────────── */
+
+/* Headings: Clarity display weight + tight tracking */
+.sl-markdown-content :is(h1, h2, h3, h4),
+.content-panel h1 {
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+
+/* Inline code in prose: green on mint (from the design's `code` chips).
+   `.not-content` exclusion keeps it out of the homepage sections, which
+   style their own <code>. The dedicated --pd-inline-code-bg is solid in
+   dark mode so the chip stays visible on tinted surfaces (asides). */
+.sl-markdown-content code:not(:is(pre, a) code):not(:where(.not-content *)) {
+  color: var(--pd-green);
+  background: var(--pd-inline-code-bg);
+  border-radius: 6px;
+  font-weight: 600;
+  padding: 0.1em 0.4em;
+}
+
+/* Sidebar: active page = mint pill with green text */
+.sidebar-content a[aria-current='page'],
+.sidebar-content a[aria-current='page']:hover,
+.sidebar-content a[aria-current='page']:focus {
+  background-color: var(--pd-mint);
+  color: var(--pd-green);
+  font-weight: 700;
+}
+
+/* Table headers: mono eyebrow treatment */
+.sl-markdown-content table th {
+  font-family: var(--sl-font-mono);
+  font-size: var(--sl-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sl-color-gray-2);
+}
+
+/* Asides: pull the default blue/purple toward the brand palette —
+   note = indigo (accent), tip = green; caution/danger keep their
+   semantic orange/red. */
+.starlight-aside--note {
+  --sl-color-asides-border: var(--sl-color-accent);
+  --sl-color-asides-text-accent: var(--sl-color-accent-high);
+  background-color: var(--sl-color-accent-low);
+}
+:root[data-theme='light'] .starlight-aside--note {
+  --sl-color-asides-text-accent: var(--sl-color-accent);
+}
+.starlight-aside--tip {
+  --sl-color-asides-border: var(--pd-green);
+  --sl-color-asides-text-accent: var(--sl-color-green-high);
+  background-color: var(--sl-color-green-low);
+}
+:root[data-theme='light'] .starlight-aside--tip {
+  --sl-color-asides-text-accent: var(--sl-color-green);
+}
+
+/* Mobile table-of-contents bar inherits the soft background */
+mobile-starlight-toc nav {
+  background-color: var(--sl-color-bg-nav);
+}
+
+/* Code blocks: rounded, dark, mono — Expressive Code config does the
+   heavy lifting (astro.config.mjs); this keeps copy buttons legible. */
+.expressive-code .frame {
+  --code-background: var(--pd-code-bg);
+}

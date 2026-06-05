@@ -2,8 +2,6 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import starlightLlmsTxt from 'starlight-llms-txt';
-import remarkGfm from 'remark-gfm';
-import { unified } from '@astrojs/markdown-remark';
 
 // pdcli — Astro + Starlight config for GitHub Pages (project site)
 // Live URL: https://wavyx.github.io/pdcli
@@ -11,9 +9,10 @@ export default defineConfig({
   site: 'https://wavyx.github.io',
   base: '/pdcli',
 
-  // GFM tables in .mdx; smartypants off so code examples keep literal
-  // `--flags` and straight quotes.
-  markdown: { processor: unified({ smartypants: false, remarkPlugins: [remarkGfm] }) },
+  // GFM tables in .md/.mdx (the MDX pipeline inherits these classic options,
+  // unlike a custom `processor`); smartypants off so code examples keep
+  // literal `--flags` and straight quotes.
+  markdown: { gfm: true, smartypants: false },
 
   integrations: [
     starlight({
@@ -29,6 +28,51 @@ export default defineConfig({
       ],
       editLink: {
         baseUrl: 'https://github.com/wavyx/pdcli/edit/main/website/',
+      },
+      // Social cards — twitter:card summary_large_image needs an image.
+      head: [
+        {
+          tag: 'meta',
+          attrs: {
+            property: 'og:image',
+            content: 'https://wavyx.github.io/pdcli/og.png',
+          },
+        },
+        {
+          tag: 'meta',
+          attrs: {
+            name: 'twitter:image',
+            content: 'https://wavyx.github.io/pdcli/og.png',
+          },
+        },
+      ],
+      // "Clarity" design system (designer handoff) — tokens + homepage.
+      customCss: ['./src/styles/theme.css', './src/styles/home.css'],
+      components: {
+        Header: './src/components/Header.astro',
+        Footer: './src/components/Footer.astro',
+        // Light-first default (stored user choice always wins).
+        ThemeProvider: './src/components/ThemeProvider.astro',
+      },
+      // Code blocks stay terminal-dark in BOTH themes (design signature).
+      expressiveCode: {
+        themes: ['github-dark'],
+        useStarlightDarkModeSwitch: false,
+        useStarlightUiThemeColors: false,
+        styleOverrides: {
+          borderRadius: '14px',
+          borderColor: '#1b2b22',
+          codeBackground: '#0c1611',
+          codeFontFamily:
+            "'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace",
+          frames: {
+            terminalBackground: '#0c1611',
+            terminalTitlebarBackground: '#0c1611',
+            editorBackground: '#0c1611',
+            editorTabBarBackground: '#0c1611',
+            shadowColor: 'transparent',
+          },
+        },
       },
       plugins: [
         // /llms.txt, /llms-full.txt, /llms-small.txt for AI agents

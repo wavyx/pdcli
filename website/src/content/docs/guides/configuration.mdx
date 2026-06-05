@@ -78,9 +78,10 @@ For any setting, the most specific source wins:
 command-line flag  >  environment variable  >  profile config
 ```
 
-So `--company acme` overrides `PDCLI_COMPANY_DOMAIN`, which overrides the profile's
-`company_domain`. Likewise an explicit `--api-token` or `PDCLI_API_TOKEN` overrides
-the keychain token for that run.
+So `PDCLI_COMPANY_DOMAIN=acme pdcli deal list` overrides the profile's
+`company_domain`, and `PDCLI_API_TOKEN` overrides the keychain token for that run.
+(The `--company` and `--api-token` flags exist only on `pdcli auth login`, where
+they take precedence over the environment.)
 
 ## Environment variables
 

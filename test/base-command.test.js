@@ -349,3 +349,90 @@ describe('--jq with array data', () => {
     expect(stdout).toContain('B')
   })
 })
+
+describe('resolveFormat with default_output', () => {
+  class FormatCmd extends BaseCommand {
+    static skipAuth = true
+    async run() {
+      this.log(`format:${this.resolveFormat()}`)
+    }
+  }
+
+  beforeEach(() => {
+    mockLoadConfig.mockReturnValue({ activeProfile: 'default' })
+  })
+
+  it('honors the profile default_output when no --output flag is given', async () => {
+    mockLoadConfig.mockReturnValue({
+      activeProfile: 'default',
+      default_output: 'yaml',
+    })
+    const stdout = await captureLogs(FormatCmd, [])
+    expect(stdout).toContain('format:yaml')
+  })
+
+  it('lets an explicit --output flag override default_output', async () => {
+    mockLoadConfig.mockReturnValue({
+      activeProfile: 'default',
+      default_output: 'yaml',
+    })
+    const stdout = await captureLogs(FormatCmd, ['--output', 'csv'])
+    expect(stdout).toContain('format:csv')
+  })
+
+  it('ignores an invalid stored default_output and falls back', async () => {
+    mockLoadConfig.mockReturnValue({
+      activeProfile: 'default',
+      default_output: 'bogus',
+    })
+    const stdout = await captureLogs(FormatCmd, [])
+    // vitest runs piped (non-TTY), so the fallback is json
+    expect(stdout).toContain('format:json')
+  })
+
+  it('emits JSON errors when default_output is json (no --output flag)', async () => {
+    mockLoadConfig.mockReturnValue({
+      activeProfile: 'default',
+      default_output: 'json',
+    })
+    class FailCmd extends BaseCommand {
+      static skipAuth = true
+      async run() {
+        throw new AuthRequiredError()
+      }
+    }
+    const writes = []
+    const spy = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation((chunk) => {
+        writes.push(String(chunk))
+        return true
+      })
+    await expect(FailCmd.run([])).rejects.toThrow()
+    spy.mockRestore()
+    const payload = JSON.parse(writes.join(''))
+    expect(payload.error).toBe('AuthRequiredError')
+    expect(payload.exitCode).toBe(77)
+  })
+
+  it('keeps human-form errors when no flag and no stored default', async () => {
+    mockLoadConfig.mockReturnValue({ activeProfile: 'default' })
+    class FailCmd extends BaseCommand {
+      static skipAuth = true
+      async run() {
+        throw new AuthRequiredError()
+      }
+    }
+    const writes = []
+    const spy = vi
+      .spyOn(process.stderr, 'write')
+      .mockImplementation((chunk) => {
+        writes.push(String(chunk))
+        return true
+      })
+    // piped (non-TTY) but no explicit intent → human error, not JSON
+    await expect(FailCmd.run([])).rejects.toThrow(/auth login/i)
+    spy.mockRestore()
+    expect(() => JSON.parse(writes.join(''))).toThrow()
+  })
+})

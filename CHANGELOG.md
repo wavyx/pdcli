@@ -4,6 +4,34 @@ All notable changes to `pdcli` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/).
 
+## [0.7.0] - 2026-06-05
+
+### Added
+
+- `default_output` profile config key is now honored: set
+  `pdcli config set default_output json` and every command (including
+  error output) defaults to that format when no `--output` flag is given.
+  An explicit flag still wins; invalid stored values fall back to the
+  table-in-TTY / JSON-when-piped default.
+- Docs website redesigned with the "Clarity" design system: new landing
+  page (animated terminal, quickstart, feature grid, live CLI stats),
+  light-first theme with dark mode, custom header/footer, social cards,
+  and brand fonts (Plus Jakarta Sans + JetBrains Mono) across all pages.
+- Homepage stats (version, command/topic/format counts) are generated
+  from the CLI manifest at docs-build time so they can never drift.
+
+### Fixed
+
+- Command-reference, config, and exit-code tables on the docs site
+  rendered as raw pipe characters; all GFM tables now render properly.
+- Documentation corrected against the implementation: autocomplete
+  shells, exit-code 64 semantics, JSON error-output trigger, rate-limit
+  header behavior, `--company`/`--api-token` flag scoping, and the
+  audit `--verbose` example.
+- Accessibility on the docs site: theme-toggle labeling, decorative
+  terminal/SVG content hidden from screen readers, heading hierarchy,
+  and WCAG AA contrast for footer and small-text elements.
+
 ## [0.6.0] - 2026-06-04
 
 ### Added
@@ -16,7 +44,7 @@ All notable changes to `pdcli` are documented here. Format follows
   `llms-small.txt`.
 - Native tarballs (linux x64/arm64, macOS x64/arm64, Windows x64) attached
   to every GitHub Release for non-npm installs.
-- Shell completion docs (`pdcli autocomplete bash|zsh|fish`).
+- Shell completion docs (`pdcli autocomplete bash|zsh|powershell`).
 - `bin/dev.js` development runner (no manifest cache).
 
 ## [0.5.0] - 2026-06-04
@@ -100,7 +128,7 @@ All notable changes to `pdcli` are documented here. Format follows
   pagination and `--limit`.
 - Custom-field discovery and resolution: `field list/get` plus automatic
   name/label resolution in table output.
-- Global `search` (itemSearch).
+- Global `search` (itemSearch) and `user me` (v1 users endpoint).
 - Host-locked raw escape hatch: `pdcli api <METHOD> <path>` (v1 + v2).
 - `doctor` diagnostics and `version`.
 - Dual-API client: token-budget-aware 429 backoff, 429→403 hard stop,

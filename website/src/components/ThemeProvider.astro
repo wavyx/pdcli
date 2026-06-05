@@ -1,0 +1,65 @@
+---
+// Override of Starlight's ThemeProvider: identical contract, but first-time
+// visitors default to LIGHT (the "Clarity" design is light-forward) instead
+// of the OS preference. A stored user choice always wins.
+---
+
+{/* This is intentionally inlined to avoid FOUC. */}
+<script is:inline>
+  window.StarlightThemeProvider = (() => {
+    const storedTheme =
+      typeof localStorage !== 'undefined' && localStorage.getItem('starlight-theme');
+    const theme = storedTheme || 'light';
+    document.documentElement.dataset.theme = theme === 'dark' ? 'dark' : 'light';
+    return {
+      updatePickers(theme = storedTheme || 'auto') {
+        document.querySelectorAll('starlight-theme-select').forEach((picker) => {
+          const select = picker.querySelector('select');
+          if (select) select.value = theme;
+          /** @type {HTMLTemplateElement | null} */
+          const tmpl = document.querySelector(`#theme-icons`);
+          const newIcon = tmpl && tmpl.content.querySelector('.' + theme);
+          if (newIcon) {
+            const oldIcon = picker.querySelector('svg.label-icon');
+            if (oldIcon) {
+              oldIcon.replaceChildren(...newIcon.cloneNode(true).childNodes);
+            }
+          }
+        });
+      },
+    };
+  })();
+</script>
+
+{/* Inline icons (Starlight's Icon component isn't a public export). Only
+    consumed by `updatePickers` if a <starlight-theme-select> exists. */}
+<template id="theme-icons">
+  <svg
+    class="light label-icon"
+    aria-hidden="true"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    ><path
+      d="M12 18a6 6 0 100-12 6 6 0 000 12zm0-16a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm0 18a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM3 11a1 1 0 100 2h1a1 1 0 100-2H3zm16 0a1 1 0 100 2h1a1 1 0 100-2h-1z"
+    ></path></svg>
+  <svg
+    class="dark label-icon"
+    aria-hidden="true"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    ><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"></path></svg>
+  <svg
+    class="auto label-icon"
+    aria-hidden="true"
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    ><path
+      d="M4 5a2 2 0 012-2h12a2 2 0 012 2v9a2 2 0 01-2 2h-5v2h2a1 1 0 110 2H9a1 1 0 110-2h2v-2H6a2 2 0 01-2-2V5z"
+    ></path></svg>
+</template>

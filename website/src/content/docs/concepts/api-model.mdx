@@ -54,11 +54,13 @@ cost depends on the verb:
 | GET list | 20 |
 | POST / PUT / PATCH | 10 |
 | DELETE one | 6 |
+| DELETE list | 10 |
 | Search | 40 |
 
 There's a rolling **2-second burst window** plus a **daily budget** (scales with plan and
-seats, resets at midnight server time). pdcli reads the `x-ratelimit-remaining`,
-`x-ratelimit-reset`, and `Retry-After` headers to pace itself.
+seats, resets at midnight server time). On a `429`, pdcli reads `x-ratelimit-reset`
+(falling back to `Retry-After`, then a 2s default) to decide how long to wait before
+retrying.
 
 ### Backoff and the hard stop
 

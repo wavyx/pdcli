@@ -118,9 +118,24 @@ export default class BaseCommand extends Command {
     })
   }
 
-  /** Effective output format: explicit flag, else table in a TTY, json piped. */
+  /** The profile's `default_output` config value, when valid. */
+  storedDefaultOutput() {
+    const stored = loadConfig(this.flags.profile).default_output
+    return ['table', 'json', 'yaml', 'csv'].includes(stored)
+      ? stored
+      : undefined
+  }
+
+  /**
+   * Effective output format: explicit flag, else the profile's
+   * `default_output`, else table in a TTY and json when piped.
+   */
   resolveFormat() {
-    return this.flags.output ?? (process.stdout.isTTY ? 'table' : 'json')
+    return (
+      this.flags.output ??
+      this.storedDefaultOutput() ??
+      (process.stdout.isTTY ? 'table' : 'json')
+    )
   }
 
   /**

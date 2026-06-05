@@ -128,6 +128,26 @@ accepts the [global flags](/pdcli/reference/config/) \`--output\`, \`--jq\`,
   return out
 }
 
+/* ============================================================
+   Homepage stats JSON (website/src/data/cli-stats.json)
+   ============================================================ */
+export function renderStatsJson(manifest) {
+  const { commands, byTopic } = groupByTopic(manifest)
+  const withFormats = commands.find((c) => c.flags?.output?.options)
+  return (
+    JSON.stringify(
+      {
+        version: manifest.version,
+        commands: commands.length,
+        topics: Object.keys(byTopic).filter((t) => t !== '_root').length,
+        formats: withFormats ? withFormats.flags.output.options.length : 0,
+      },
+      null,
+      2,
+    ) + '\n'
+  )
+}
+
 /* CLI entry — guarded so imports stay pure */
 const invokedDirectly =
   process.argv[1] && import.meta.url === `file://${process.argv[1]}`
@@ -154,6 +174,15 @@ if (invokedDirectly) {
     ),
     renderWebsiteMdx(manifest),
   )
+  mkdirSync(new URL('../website/src/data/', import.meta.url), {
+    recursive: true,
+  })
+  writeFileSync(
+    new URL('../website/src/data/cli-stats.json', import.meta.url),
+    renderStatsJson(manifest),
+  )
   const count = groupByTopic(manifest).commands.length
-  console.log(`Wrote docs/commands.md + website reference — ${count} commands`)
+  console.log(
+    `Wrote docs/commands.md + website reference + cli-stats.json — ${count} commands`,
+  )
 }

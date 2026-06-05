@@ -2,58 +2,12 @@
 title: pdcli
 description: A fast, scriptable, open-source CLI for Pipedrive — built for terminals, CI pipelines, and AI agents.
 template: splash
-hero:
-  title: Pipedrive on the command line.
-  tagline: Deals, contacts, pipelines, and reports in your terminal — scriptable, host-locked, secure. Open source, MIT licensed.
-  actions:
-    - text: Quickstart
-      link: /pdcli/start/quickstart/
-      icon: right-arrow
-    - text: View on GitHub
-      link: https://github.com/wavyx/pdcli
-      icon: external
-      variant: minimal
+head:
+  # Avoid the redundant "pdcli | pdcli" <title> on the landing page.
+  - tag: title
+    content: pdcli — Pipedrive on the command line
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import Home from '../../components/Home.astro';
 
-```bash
-npm install -g @wavyx/pdcli
-pdcli auth login
-pdcli pipeline health
-```
-
-```text
-┌──────────────────────┬──────┬────────────┬──────────┬────────────┬──────────────┐
-│ Stage                │ Open │ Value      │ Weighted │ Stale >14d │ No next step │
-├──────────────────────┼──────┼────────────┼──────────┼────────────┼──────────────┤
-│ Qualified            │ 54   │ 4391545212 │ 87830904 │ 52         │ 54           │
-│ Proposal Made        │ 2    │ 220000     │ 110000   │ 2          │ 2            │
-│ Negotiations Started │ 2    │ 81909      │ 65527    │ 1          │ 2            │
-└──────────────────────┴──────┴────────────┴──────────┴────────────┴──────────────┘
-```
-
-<CardGrid stagger>
-  <Card title="Your whole CRM, scriptable" icon="laptop">
-    Create, read, update, and delete deals, contacts, organizations,
-    activities, products, leads, notes, and more — with `--output
-    table|json|yaml|csv`, `--jq` filtering, and deterministic exit codes.
-  </Card>
-  <Card title="Own your data" icon="seti:db">
-    One-command full-account backup with resume. Bulk CSV import. A
-    data-hygiene `audit` that finds duplicates, stale deals, and missing
-    fields — and can gate your CI.
-  </Card>
-  <Card title="Secure by default" icon="seti:lock">
-    Tokens live only in your OS keychain — never plaintext on disk. The raw
-    `api` escape hatch is host-locked to your own Pipedrive domain, so a
-    mistyped URL can't leak credentials.
-  </Card>
-  <Card title="Built for AI agents" icon="rocket">
-    JSON everywhere, sysexits codes to branch on, self-describing `--help`,
-    and machine-readable docs (`llms.txt`). Claude Code and friends operate
-    pdcli end to end.
-  </Card>
-</CardGrid>
-
-*pdcli is an independent open-source project, not affiliated with or endorsed by Pipedrive.*
+<Home />
