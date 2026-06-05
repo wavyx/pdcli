@@ -11,6 +11,15 @@ function sleepSync(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms)
 }
 
+/** Release the lock; the dir being gone already (stale-broken) is benign. */
+function releaseLock(lockDir) {
+  try {
+    fs.rmdirSync(lockDir)
+  } catch (err) {
+    if (err?.code !== 'ENOENT') throw err
+  }
+}
+
 /**
  * Advisory lock around alias mutations: a lock DIRECTORY next to the conf
  * file (mkdir is atomic on every platform we support). Protects concurrent
@@ -29,7 +38,7 @@ function withAliasLock(fn) {
         fn()
         return
       } finally {
-        fs.rmdirSync(lockDir)
+        releaseLock(lockDir)
       }
     } catch (err) {
       if (err?.code !== 'EEXIST') throw err

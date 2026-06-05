@@ -189,6 +189,75 @@ describe('aliases', () => {
       expect(fs.existsSync(lockDir())).toBe(false)
     })
 
+    it('retries immediately when the lock vanishes between mkdir and stat', () => {
+      fs.mkdirSync(lockDir())
+      // First stat throws ENOENT (lock vanished — another process released
+      // or stale-broke it); the loop must retry and complete the write.
+      const realStat = fs.statSync
+      let calls = 0
+      const spy = vi.spyOn(fs, 'statSync').mockImplementation((p, ...a) => {
+        if (String(p) === lockDir() && calls++ === 0) {
+          fs.rmdirSync(lockDir()) // simulate the concurrent release
+          const err = new Error('ENOENT')
+          err.code = 'ENOENT'
+          throw err
+        }
+        return realStat(p, ...a)
+      })
+      try {
+        setAlias('race-survivor', 'deal list')
+      } finally {
+        spy.mockRestore()
+      }
+      expect(getAlias('race-survivor')).toBe('deal list')
+      expect(fs.existsSync(lockDir())).toBe(false)
+    })
+
+    it('tolerates the lock being stale-broken mid-write (release ENOENT)', () => {
+      // If a concurrent process stale-breaks our lock while we hold it, the
+      // release must not turn a successful write into a spurious failure.
+      const spy = vi.spyOn(fs, 'rmdirSync').mockImplementation(() => {
+        const err = new Error('ENOENT')
+        err.code = 'ENOENT'
+        throw err
+      })
+      try {
+        expect(() => setAlias('broken-lock', 'deal list')).not.toThrow()
+      } finally {
+        spy.mockRestore()
+      }
+      expect(getAlias('broken-lock')).toBe('deal list')
+      fs.rmSync(lockDir(), { recursive: true, force: true })
+    })
+
+    it('propagates non-ENOENT release failures', () => {
+      const spy = vi.spyOn(fs, 'rmdirSync').mockImplementation(() => {
+        const err = new Error('EPERM')
+        err.code = 'EPERM'
+        throw err
+      })
+      try {
+        expect(() => setAlias('eperm-release', 'x')).toThrow(/EPERM/)
+      } finally {
+        spy.mockRestore()
+        fs.rmSync(lockDir(), { recursive: true, force: true })
+      }
+    })
+
+    it('propagates non-EEXIST acquisition failures (e.g. readonly dir)', () => {
+      const spy = vi.spyOn(fs, 'mkdirSync').mockImplementation(() => {
+        const err = new Error('EPERM')
+        err.code = 'EPERM'
+        throw err
+      })
+      try {
+        expect(() => setAlias('eperm-acquire', 'x')).toThrow(/EPERM/)
+      } finally {
+        spy.mockRestore()
+      }
+      expect(getAlias('eperm-acquire')).toBeUndefined()
+    })
+
     it('unsetAlias takes the same lock', () => {
       setAlias('to-remove', 'deal list')
       fs.mkdirSync(lockDir())
