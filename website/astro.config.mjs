@@ -2,8 +2,6 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import starlightLlmsTxt from 'starlight-llms-txt';
-import remarkGfm from 'remark-gfm';
-import { unified } from '@astrojs/markdown-remark';
 
 // pdcli — Astro + Starlight config for GitHub Pages (project site)
 // Live URL: https://wavyx.github.io/pdcli
@@ -11,9 +9,10 @@ export default defineConfig({
   site: 'https://wavyx.github.io',
   base: '/pdcli',
 
-  // GFM tables in .mdx; smartypants off so code examples keep literal
-  // `--flags` and straight quotes.
-  markdown: { processor: unified({ smartypants: false, remarkPlugins: [remarkGfm] }) },
+  // GFM tables in .md/.mdx (the MDX pipeline inherits these classic options,
+  // unlike a custom `processor`); smartypants off so code examples keep
+  // literal `--flags` and straight quotes.
+  markdown: { gfm: true, smartypants: false },
 
   integrations: [
     starlight({
