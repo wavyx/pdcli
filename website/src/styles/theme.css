@@ -31,6 +31,7 @@
   --pd-green: #33bd73;
   --pd-green-bright: #3fce80;
   --pd-mint: rgba(51, 189, 115, 0.14);
+  --pd-inline-code-bg: #15321f;
   --pd-surface: #101b15;
   --pd-border: #1d2c24;
   --pd-border-strong: #2a3b31;
@@ -68,6 +69,7 @@
   --pd-green: #1a7a4c;
   --pd-green-bright: #1fa75a;
   --pd-mint: #e7f6ec;
+  --pd-inline-code-bg: #e7f6ec;
   --pd-surface: #ffffff;
   --pd-border: #e7ebe9;
   --pd-border-strong: #d6ddd8;
@@ -93,10 +95,13 @@
   letter-spacing: -0.025em;
 }
 
-/* Inline code in prose: green on mint (from the design's `code` chips) */
-.sl-markdown-content code:not(:is(pre, a) code) {
+/* Inline code in prose: green on mint (from the design's `code` chips).
+   `.not-content` exclusion keeps it out of the homepage sections, which
+   style their own <code>. The dedicated --pd-inline-code-bg is solid in
+   dark mode so the chip stays visible on tinted surfaces (asides). */
+.sl-markdown-content code:not(:is(pre, a) code):not(:where(.not-content *)) {
   color: var(--pd-green);
-  background: var(--pd-mint);
+  background: var(--pd-inline-code-bg);
   border-radius: 6px;
   font-weight: 600;
   padding: 0.1em 0.4em;
@@ -115,9 +120,30 @@
 .sl-markdown-content table th {
   font-family: var(--sl-font-mono);
   font-size: var(--sl-text-xs);
+  font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--sl-color-gray-3);
+  color: var(--sl-color-gray-2);
+}
+
+/* Asides: pull the default blue/purple toward the brand palette —
+   note = indigo (accent), tip = green; caution/danger keep their
+   semantic orange/red. */
+.starlight-aside--note {
+  --sl-color-asides-border: var(--sl-color-accent);
+  --sl-color-asides-text-accent: var(--sl-color-accent-high);
+  background-color: var(--sl-color-accent-low);
+}
+:root[data-theme='light'] .starlight-aside--note {
+  --sl-color-asides-text-accent: var(--sl-color-accent);
+}
+.starlight-aside--tip {
+  --sl-color-asides-border: var(--pd-green);
+  --sl-color-asides-text-accent: var(--sl-color-green-high);
+  background-color: var(--sl-color-green-low);
+}
+:root[data-theme='light'] .starlight-aside--tip {
+  --sl-color-asides-text-accent: var(--sl-color-green);
 }
 
 /* Mobile table-of-contents bar inherits the soft background */
