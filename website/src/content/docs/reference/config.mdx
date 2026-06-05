@@ -84,5 +84,6 @@ Config is managed by [`conf`](https://www.npmjs.com/package/conf) under the proj
 | macOS | `~/Library/Preferences/pdcli-nodejs/config.json` |
 | Windows | `%APPDATA%\pdcli-nodejs\Config\config.json` |
 
-It holds only `activeProfile` and the non-secret per-profile keys above. Credentials are in
-the OS keychain, not this file.
+It holds only `activeProfile`, the non-secret per-profile keys above, and any command
+[aliases](/pdcli/guides/configuration/) under the global `aliases` key (shared across
+profiles). Credentials are in the OS keychain, not this file.

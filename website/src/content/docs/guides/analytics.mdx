@@ -3,9 +3,10 @@ title: Sales analytics
 description: Sales velocity, an approximate conversion funnel, and a per-stage pipeline health snapshot — computed locally from your deals.
 ---
 
-pdcli ships three read-only analytics commands. Each fetches deals (and stages/activities
-where needed) and computes the numbers locally, so they work against any account without
-extra setup. All accept the global `--output`/`--jq`/`--fields` flags.
+pdcli ships a handful of read-only analytics commands. Each fetches deals (and
+stages/activities or goals where needed) and computes the numbers locally, so they work
+against any account without extra setup. All accept the global `--output`/`--jq`/`--fields`
+flags.
 
 ## `metrics velocity`
 
@@ -70,6 +71,55 @@ pdcli funnel --pipeline 1 --period 180d
 
 When your account has more than one pipeline, `--pipeline <id>` is **required** — without it
 pdcli lists the pipeline IDs and exits 64. With a single pipeline it's inferred.
+
+### Exact transitions: `--exact`
+
+When the approximation isn't good enough, `--exact` mines the **real** stage transitions from
+each deal's changelog instead of inferring reach from the final stage. A deal counts as
+*entering* a stage only when it was actually observed there: every stage the deal moved into,
+plus its starting stage. A deal created directly in stage 3 — with no stage transitions —
+counts as entering stage 3 only, not stages 1 and 2.
+
+```bash
+pdcli funnel --pipeline 1 --exact
+```
+
+The accuracy costs one request per deal. Above 100 deals, pdcli warns on stderr about the
+request volume before it starts mining (the rate limiter then paces the calls); the table
+trades the approximate `Reached` / `Open` columns for an observed `Entered` count and `Won`.
+
+## `metrics coverage`
+
+Are you carrying enough pipeline to hit your number? `metrics coverage` weighs your **open**
+pipeline (probability-weighted, the same weighting `pipeline health` uses) against the revenue
+still needed to reach a quota, and reports the coverage ratio.
+
+The quota comes from your active revenue goal via the [Goals API](https://developers.pipedrive.com/docs/api/v1/Goals),
+measured over `--period` (default `90d`). `--target <amount>` overrides it with a manual
+number and skips the Goals API entirely — useful when no goal is configured.
+
+```bash
+pdcli metrics coverage --pipeline 1
+pdcli metrics coverage --target 500000
+```
+
+```text
+┌────────────────────┬──────────┐
+│ Metric             │ Value    │
+├────────────────────┼──────────┤
+│ Weighted pipeline  │ 1320000  │
+│ Quota              │ 500000   │
+│ Progress           │ 180000   │
+│ Remaining          │ 320000   │
+│ Coverage ratio     │ 4.1x     │
+│ Verdict            │ healthy  │
+└────────────────────┴──────────┘
+```
+
+The verdict applies the classic 3× rule of thumb against `weighted pipeline ÷ remaining gap`:
+**≥ 3× is `healthy`, 2–3× is `borderline`, below 2× is `low`** (and `covered` once progress
+already meets the quota). When there's no active revenue goal and you didn't pass `--target`,
+the command exits **64** with guidance to create a goal or supply a target.
 
 ## `pipeline health`
 

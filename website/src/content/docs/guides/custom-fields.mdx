@@ -61,6 +61,30 @@ pdcli deal get 42 --output json   # JSON: custom_fields.{hash}: 14
 
 v2 nests custom-field values under a `custom_fields` object on the record.
 
+### Resolve in JSON too: `--resolve-fields`
+
+When you want the readable names in machine output as well, opt in with `--resolve-fields`.
+It resolves hash keys to names and option IDs to labels in `json`, `yaml`, and `csv` output —
+matching what the table always shows:
+
+```bash
+pdcli deal get 1 --output json --resolve-fields
+```
+
+```text
+{
+  "id": 1,
+  "title": "Acme renewal",
+  "custom_fields": { "Deal Size": "Large", "Score": 4.5 }
+}
+```
+
+This is **opt-in and single-record only**: it applies to the `get` commands, where a stable
+shape is less important. The table view always resolves; lists are not covered — keep
+machine output raw there. If two custom fields share the same name, the second is
+disambiguated with a short key fragment (e.g. `Region (a1b2c3d4)`) so neither value is
+clobbered.
+
 ## Writing: `--field "Name=Value"`
 
 On every write command that accepts custom fields (`deal`, `person`, `org`, `product`,

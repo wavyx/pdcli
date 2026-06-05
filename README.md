@@ -78,9 +78,12 @@ pdcli person import people.csv                         # custom fields by name
 ```bash
 pdcli metrics velocity --period 90d      # the Sales Velocity Equation, in your terminal
 pdcli funnel --pipeline 1                # stage-to-stage conversion
+pdcli funnel --exact                     # mine real stage transitions per deal (one call each)
+pdcli metrics coverage --target 500000   # weighted pipeline vs quota — the 3x coverage rule
 pdcli pipeline health                    # per-stage value, weighted value, stale, no-next-step
 pdcli audit                              # 11 data-hygiene checks (duplicates, stale, gaps)
 pdcli audit --strict                     # exit 1 on must-severity findings — wire into CI
+pdcli person merge 123 --into 456        # fold a duplicate into the survivor (deletes 123)
 ```
 
 ## Files, webhooks, backup
@@ -97,6 +100,7 @@ pdcli backup --dir ./pipedrive-backup    # full account → JSON tree, --resume 
 ```bash
 pdcli api GET /api/v2/pipelines          # raw, host-locked to YOUR domain
 pdcli api POST /api/v2/deals --body '{"title":"Raw deal"}'
+pdcli alias set wd "deal list --status won"   # save a shortcut, then run: pdcli wd
 pdcli doctor                             # diagnose auth/keychain/connectivity
 ```
 
