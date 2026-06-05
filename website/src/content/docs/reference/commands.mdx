@@ -5,7 +5,7 @@ description: Every pdcli command, flag, and example — generated from the CLI m
 
 {/* AUTO-GENERATED from the oclif manifest by scripts/gen-commands.mjs — do not edit by hand. */}
 
-All 87 commands in `pdcli` v0.9.0. Every command also
+All 94 commands in `pdcli` v0.9.0. Every command also
 accepts the [global flags](/pdcli/reference/config/) `--output`, `--jq`,
 `--fields`, `--profile`, `--limit`, `--no-color`, `--verbose`,
 `--no-retry`, and `--timeout`. Run `pdcli <command> --help` for the live version.
@@ -209,6 +209,12 @@ pdcli activity list [flags]
 | `--type` &lt;value&gt; | Filter by activity type key |
 | `--done` | Only completed activities |
 | `--todo` | Only open (not done) activities |
+| `--filter` &lt;value&gt; | Filter by saved filter ID |
+| `--ids` &lt;value&gt; | Comma-separated IDs to fetch (max 100) |
+| `--sort-by` &lt;id\|update_time\|add_time\|due_date&gt; | Sort field |
+| `--sort-direction` &lt;asc\|desc&gt; | Sort direction |
+| `--updated-since` &lt;value&gt; | Only items updated at/after this RFC3339 time (no fractional seconds) |
+| `--updated-until` &lt;value&gt; | Only items updated before this RFC3339 time (no fractional seconds) |
 
 ```bash
 pdcli activity list
@@ -478,6 +484,24 @@ pdcli deal get 42
 pdcli deal get 42 --output json
 ```
 
+### `pdcli deal history`
+
+Field-change history for a deal, newest-first (the API’s native order)
+
+```text
+pdcli deal history <id> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--field` &lt;value&gt; | Show only changes to this field key (e.g. stage_id) |
+
+```bash
+pdcli deal history 42
+pdcli deal history 42 --field stage_id
+pdcli deal history 42 --limit 20 --output json
+```
+
 ### `pdcli deal list`
 
 List deals
@@ -494,11 +518,103 @@ pdcli deal list [flags]
 | `--owner` &lt;value&gt; | Filter by owner (user) ID |
 | `--person` &lt;value&gt; | Filter by person ID |
 | `--org` &lt;value&gt; | Filter by organization ID |
+| `--filter` &lt;value&gt; | Filter by saved filter ID |
+| `--ids` &lt;value&gt; | Comma-separated IDs to fetch (max 100) |
+| `--sort-by` &lt;id\|update_time\|add_time&gt; | Sort field |
+| `--sort-direction` &lt;asc\|desc&gt; | Sort direction |
+| `--updated-since` &lt;value&gt; | Only items updated at/after this RFC3339 time (no fractional seconds) |
+| `--updated-until` &lt;value&gt; | Only items updated before this RFC3339 time (no fractional seconds) |
 
 ```bash
 pdcli deal list
 pdcli deal list --status won --limit 50
 pdcli deal list --stage 3 --output json
+```
+
+### `pdcli deal product add`
+
+Attach a product to a deal
+
+```text
+pdcli deal product add <id> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--product` &lt;value&gt; | Product ID |
+| `--price` &lt;value&gt; | Item price (per unit) |
+| `--quantity` &lt;value&gt; | Quantity |
+| `--discount` &lt;value&gt; | Discount value |
+| `--discount-type` &lt;percentage\|amount&gt; | Discount type |
+| `--tax` &lt;value&gt; | Product tax percentage |
+| `--comments` &lt;value&gt; | Comments |
+
+```bash
+pdcli deal product add 42 --product 10 --price 90
+pdcli deal product add 42 --product 10 --price 90 --quantity 3
+pdcli deal product add 42 --product 10 --price 90 --discount 10 --discount-type percentage
+```
+
+### `pdcli deal product list`
+
+List products attached to a deal
+
+```text
+pdcli deal product list <id> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--sort-by` &lt;id\|add_time\|update_time\|order_nr&gt; | Field to sort by |
+| `--sort-direction` &lt;asc\|desc&gt; | Sort direction |
+
+```bash
+pdcli deal product list 42
+pdcli deal product list 42 --sort-by add_time --sort-direction desc
+pdcli deal product list 42 --output json
+```
+
+### `pdcli deal product remove`
+
+Remove a product attached to a deal
+
+```text
+pdcli deal product remove <id> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--attachment` &lt;value&gt; | Deal-product (attachment) ID |
+| `-y, --yes` | Skip the confirmation prompt |
+
+```bash
+pdcli deal product remove 42 --attachment 3
+pdcli deal product remove 42 --attachment 3 --yes
+```
+
+### `pdcli deal product update`
+
+Update a product attached to a deal (v2 PATCH — only provided fields change)
+
+```text
+pdcli deal product update <id> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--attachment` &lt;value&gt; | Deal-product (attachment) ID |
+| `--product` &lt;value&gt; | Product ID |
+| `--price` &lt;value&gt; | Item price (per unit) |
+| `--quantity` &lt;value&gt; | Quantity |
+| `--discount` &lt;value&gt; | Discount value |
+| `--discount-type` &lt;percentage\|amount&gt; | Discount type |
+| `--tax` &lt;value&gt; | Product tax percentage |
+| `--comments` &lt;value&gt; | Comments |
+
+```bash
+pdcli deal product update 42 --attachment 3 --quantity 5
+pdcli deal product update 42 --attachment 3 --price 120
+pdcli deal product update 42 --attachment 3 --discount 15 --discount-type amount
 ```
 
 ### `pdcli deal update`
@@ -1025,6 +1141,12 @@ pdcli org list [flags]
 | Flag | Description |
 | --- | --- |
 | `--owner` &lt;value&gt; | Filter by owner (user) ID |
+| `--filter` &lt;value&gt; | Filter by saved filter ID |
+| `--ids` &lt;value&gt; | Comma-separated IDs to fetch (max 100) |
+| `--sort-by` &lt;id\|update_time\|add_time&gt; | Sort field |
+| `--sort-direction` &lt;asc\|desc&gt; | Sort direction |
+| `--updated-since` &lt;value&gt; | Only items updated at/after this RFC3339 time (no fractional seconds) |
+| `--updated-until` &lt;value&gt; | Only items updated before this RFC3339 time (no fractional seconds) |
 
 ```bash
 pdcli org list
@@ -1156,6 +1278,12 @@ pdcli person list [flags]
 | --- | --- |
 | `--owner` &lt;value&gt; | Filter by owner (user) ID |
 | `--org` &lt;value&gt; | Filter by organization ID |
+| `--filter` &lt;value&gt; | Filter by saved filter ID |
+| `--ids` &lt;value&gt; | Comma-separated IDs to fetch (max 100) |
+| `--sort-by` &lt;id\|update_time\|add_time&gt; | Sort field |
+| `--sort-direction` &lt;asc\|desc&gt; | Sort direction |
+| `--updated-since` &lt;value&gt; | Only items updated at/after this RFC3339 time (no fractional seconds) |
+| `--updated-until` &lt;value&gt; | Only items updated before this RFC3339 time (no fractional seconds) |
 
 ```bash
 pdcli person list
@@ -1318,6 +1446,11 @@ pdcli product list [flags]
 | Flag | Description |
 | --- | --- |
 | `--owner` &lt;value&gt; | Filter by owner (user) ID |
+| `--filter` &lt;value&gt; | Filter by saved filter ID |
+| `--ids` &lt;value&gt; | Comma-separated IDs to fetch (max 100) |
+| `--sort-by` &lt;id\|name\|add_time\|update_time&gt; | Sort field |
+| `--sort-direction` &lt;asc\|desc&gt; | Sort direction |
+| `--updated-since` &lt;value&gt; | Only items updated at/after this RFC3339 time (no fractional seconds) |
 
 ```bash
 pdcli product list
@@ -1519,6 +1652,36 @@ pdcli stage list --pipeline 1 --output json
 
 ## pdcli user
 
+### `pdcli user find`
+
+Find users by name
+
+```text
+pdcli user find <term> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--by-email` | Match the term against email addresses only |
+
+```bash
+pdcli user find "jane"
+pdcli user find "jane@acme.com" --by-email --output json
+```
+
+### `pdcli user list`
+
+List all users
+
+```text
+pdcli user list [flags]
+```
+
+```bash
+pdcli user list
+pdcli user list --output json
+```
+
 ### `pdcli user me`
 
 Show the authenticated user
@@ -1545,7 +1708,7 @@ pdcli webhook create [flags]
 | --- | --- |
 | `--url` &lt;value&gt; | Webhook subscription URL |
 | `--event-action` &lt;create\|change\|delete\|*&gt; | Event action to subscribe to |
-| `--event-object` &lt;activity\|deal\|lead\|note\|organization\|person\|product\|user\|pipeline\|stage\|*&gt; | Event object to subscribe to |
+| `--event-object` &lt;activity\|board\|deal\|deal_installment\|deal_product\|lead\|note\|organization\|person\|phase\|pipeline\|product\|project\|stage\|task\|user\|*&gt; | Event object to subscribe to |
 | `--name` &lt;value&gt; | Webhook name |
 | `--version` &lt;value&gt; | Webhook payload version |
 | `--http-auth-user` &lt;value&gt; | HTTP basic auth username for the endpoint |
