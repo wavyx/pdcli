@@ -8,14 +8,16 @@ A flat reference for how `pdcli` is configured. For the workflow, see
 
 ## Precedence (highest wins)
 
-1. **Flags** — `--company`, `--api-token`, `--output`, `--profile`, …
+1. **Flags** — `--output`, `--profile`, `--timeout`, … (`--company` and `--api-token`
+   exist only on `pdcli auth login`.)
 2. **Environment variables** — `PDCLI_COMPANY_DOMAIN`, `PDCLI_API_TOKEN`, `PDCLI_PROFILE`, …
 3. **Profile config** — per-profile keys in the config file.
 4. **Global config** — shared defaults.
 5. **Built-in defaults.**
 
 The company domain and the token resolve **independently**, each down this chain. So a profile
-domain plus an env token, or an env domain plus a `--api-token` flag, both work.
+domain plus an env token (`PDCLI_API_TOKEN=… pdcli deal list`), or an env domain plus the
+keychain token, both work.
 
 ## Environment variables
 

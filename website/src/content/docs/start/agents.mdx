@@ -44,7 +44,7 @@ script can react to the failure class without parsing text:
 | ---- | ------- |
 | 0  | Success |
 | 1  | Generic error |
-| 64 | Usage error (bad flags/arguments) |
+| 64 | Invalid input data (e.g. a CSV missing its name column) — note: malformed flags/arguments exit 70 |
 | 65 | Bad input data (API 400 / 422) |
 | 69 | Service unavailable (API 5xx, or unreachable) |
 | 70 | Internal software error (unexpected) |

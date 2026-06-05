@@ -349,3 +349,44 @@ describe('--jq with array data', () => {
     expect(stdout).toContain('B')
   })
 })
+
+describe('resolveFormat with default_output', () => {
+  class FormatCmd extends BaseCommand {
+    static skipAuth = true
+    async run() {
+      this.log(`format:${this.resolveFormat()}`)
+    }
+  }
+
+  beforeEach(() => {
+    mockLoadConfig.mockReturnValue({ activeProfile: 'default' })
+  })
+
+  it('honors the profile default_output when no --output flag is given', async () => {
+    mockLoadConfig.mockReturnValue({
+      activeProfile: 'default',
+      default_output: 'yaml',
+    })
+    const stdout = await captureLogs(FormatCmd, [])
+    expect(stdout).toContain('format:yaml')
+  })
+
+  it('lets an explicit --output flag override default_output', async () => {
+    mockLoadConfig.mockReturnValue({
+      activeProfile: 'default',
+      default_output: 'yaml',
+    })
+    const stdout = await captureLogs(FormatCmd, ['--output', 'csv'])
+    expect(stdout).toContain('format:csv')
+  })
+
+  it('ignores an invalid stored default_output and falls back', async () => {
+    mockLoadConfig.mockReturnValue({
+      activeProfile: 'default',
+      default_output: 'bogus',
+    })
+    const stdout = await captureLogs(FormatCmd, [])
+    // vitest runs piped (non-TTY), so the fallback is json
+    expect(stdout).toContain('format:json')
+  })
+})
