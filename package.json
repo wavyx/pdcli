@@ -1,6 +1,6 @@
 {
   "name": "@wavyx/pdcli",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "publishConfig": {
     "access": "public"
   },
@@ -68,6 +68,9 @@
       "field": {
         "description": "Custom-field discovery and name/key resolution"
       },
+      "metrics": {
+        "description": "Sales metrics and KPIs"
+      },
       "user": {
         "description": "Users"
       },
@@ -76,6 +79,9 @@
       },
       "config": {
         "description": "Configuration"
+      },
+      "alias": {
+        "description": "Command shortcuts (alias set/list/unset)"
       }
     },
     "hooks": {
@@ -120,6 +126,7 @@
   "scripts": {
     "build": "oclif manifest",
     "docs:commands": "node scripts/gen-commands.mjs",
+    "docs:demo": "node scripts/gen-demo.mjs",
     "lint": "eslint . && prettier --check .",
     "lint:fix": "eslint --fix . && prettier --write .",
     "test": "vitest run",

@@ -43,7 +43,7 @@ pdcli audit
 | `missing-close-time` | should | A `won` deal with no `won_time`, or a `lost` deal with no `lost_time`. |
 | `duplicate-persons` | must | Two or more persons sharing the same email (trimmed, lowercased). |
 | `uncontactable-persons` | must | Person with neither a non-empty email nor phone. |
-| `duplicate-orgs` | should | Two or more orgs with the same normalized name (lowercased, common suffixes like Inc/Ltd/LLC/GmbH stripped, non-alphanumerics removed). |
+| `duplicate-orgs` | should | Two or more orgs with the same normalized name (lowercased, common suffixes like Inc/Ltd/LLC/GmbH stripped, non-alphanumerics removed), **plus** fuzzy near-matches that normalize differently but score Jaro-Winkler ≥ 0.92. |
 | `overdue-activities` | should | Open (not-done) activities past due, counted per owner. |
 | `currency-missing` | should | Open deal with a value > 0 but no currency. |
 
@@ -53,6 +53,31 @@ to learn from.
 
 The `Findings` count is the number of flagged items per check — except `overdue-activities`,
 where it's the total overdue activities summed across owners.
+
+`duplicate-orgs` reports two shapes of finding. Exact groups are tagged `kind: exact` with
+the shared normalized `name` and the `ids`. Fuzzy near-matches — pairs whose names normalize
+differently but still score [Jaro-Winkler](https://en.wikipedia.org/wiki/Jaro%E2%80%93Winkler_distance)
+≥ 0.92 — are tagged `kind: fuzzy`, carry both `names` and `ids`, and include the `score`:
+
+```text
+{"kind":"exact","name":"acme","ids":[12,48]}
+{"kind":"fuzzy","names":["acmecorp","acmecrop"],"ids":[12,93],"score":0.9667}
+```
+
+## Fix what the audit finds
+
+The duplicate checks pair naturally with the merge commands — close a duplicate finding by
+folding the loser into the survivor:
+
+```bash
+pdcli person merge 123 --into 456
+pdcli org merge 12 --into 48
+```
+
+**The positional `<id>` is the losing record and Pipedrive deletes it**; `--into` is the
+survivor whose data wins on conflict. Both commands confirm before deleting unless you pass
+`--yes`. So a `duplicate-persons` or `duplicate-orgs` finding becomes a one-liner: merge the
+duplicate `id` into the one you want to keep.
 
 ## Run a subset
 

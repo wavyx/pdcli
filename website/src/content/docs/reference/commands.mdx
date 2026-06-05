@@ -5,7 +5,7 @@ description: Every pdcli command, flag, and example — generated from the CLI m
 
 {/* AUTO-GENERATED from the oclif manifest by scripts/gen-commands.mjs — do not edit by hand. */}
 
-All 78 commands in `pdcli` v0.7.0. Every command also
+All 87 commands in `pdcli` v0.8.0. Every command also
 accepts the [global flags](/pdcli/reference/config/) `--output`, `--jq`,
 `--fields`, `--profile`, `--limit`, `--no-color`, `--verbose`,
 `--no-retry`, and `--timeout`. Run `pdcli <command> --help` for the live version.
@@ -93,6 +93,7 @@ pdcli funnel [flags]
 | --- | --- |
 | `--period` &lt;value&gt; | Trailing window for closed deals (Nd or Nm) |
 | `--pipeline` &lt;value&gt; | Pipeline ID (required when the account has several) |
+| `--exact` | Mine real stage transitions from each deal’s changelog instead of approximating from the final stage (one request per deal). --period scopes only closed (won/lost) deals; open deals are always included. |
 
 ```bash
 pdcli funnel
@@ -246,6 +247,45 @@ pdcli activity update 9 --done
 pdcli activity update 9 --field "Outcome=Positive"
 ```
 
+## pdcli alias
+
+### `pdcli alias list`
+
+List all configured aliases
+
+```text
+pdcli alias list [flags]
+```
+
+```bash
+pdcli alias list
+```
+
+### `pdcli alias set`
+
+Create or update an alias
+
+```text
+pdcli alias set <name> <command> [flags]
+```
+
+```bash
+pdcli alias set wd "deal list --status won"
+pdcli alias set open "deal list --status open --limit 50"
+```
+
+### `pdcli alias unset`
+
+Remove an alias
+
+```text
+pdcli alias unset <name> [flags]
+```
+
+```bash
+pdcli alias unset wd
+```
+
 ## pdcli auth
 
 ### `pdcli auth login`
@@ -334,6 +374,18 @@ pdcli config set <key> <value> [flags]
 ```bash
 pdcli config set company_domain acme
 pdcli config set default_output json
+```
+
+### `pdcli config unset`
+
+Remove a config key from the active profile
+
+```text
+pdcli config unset <key> [flags]
+```
+
+```bash
+pdcli config unset default_output
 ```
 
 ## pdcli deal
@@ -552,6 +604,27 @@ pdcli file list
 pdcli file list --limit 50 --output json
 ```
 
+### `pdcli file remote-link`
+
+Link an existing remote file (Google Drive) to an item
+
+```text
+pdcli file remote-link [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--deal` &lt;value&gt; | Link to a deal ID |
+| `--org` &lt;value&gt; | Link to an organization ID |
+| `--person` &lt;value&gt; | Link to a person ID |
+| `--remote-id` &lt;value&gt; | ID of the remote file (e.g. Google Drive file ID) |
+| `--remote-location` &lt;googledrive&gt; | Remote storage location |
+
+```bash
+pdcli file remote-link --deal 42 --remote-id 1AbC
+pdcli file remote-link --person 9 --remote-id 1AbC --output json
+```
+
 ### `pdcli file upload`
 
 Upload a file
@@ -680,6 +753,19 @@ pdcli lead get adf21080-0e10-11eb-879b-05d71fb426ec
 pdcli lead get adf21080-0e10-11eb-879b-05d71fb426ec --output json
 ```
 
+### `pdcli lead label list`
+
+List lead labels
+
+```text
+pdcli lead label list [flags]
+```
+
+```bash
+pdcli lead label list
+pdcli lead label list --output json
+```
+
 ### `pdcli lead list`
 
 List leads
@@ -724,6 +810,27 @@ pdcli lead update adf21080-0e10-11eb-879b-05d71fb426ec --value 7500 --currency U
 ```
 
 ## pdcli metrics
+
+### `pdcli metrics coverage`
+
+Pipeline coverage: probability-weighted open pipeline vs the revenue still needed to hit quota
+
+```text
+pdcli metrics coverage [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--pipeline` &lt;value&gt; | Pipeline ID (required when the account has several) |
+| `--period` &lt;value&gt; | Goal measurement window (Nd or Nm) |
+| `--target` &lt;value&gt; | Manual revenue quota override (skips the Goals API entirely) |
+
+```bash
+pdcli metrics coverage
+pdcli metrics coverage --pipeline 1
+pdcli metrics coverage --target 250000
+pdcli metrics coverage --period 1m --output json
+```
 
 ### `pdcli metrics velocity`
 
@@ -924,6 +1031,24 @@ pdcli org list
 pdcli org list --owner 3 --output json
 ```
 
+### `pdcli org merge`
+
+Merge one organization into another. WARNING: the positional &lt;id&gt; is the LOSING record — Pipedrive deletes it. --into is the surviving record whose data wins on conflict. All related data (deals, activities, notes, files) is transferred to the survivor.
+
+```text
+pdcli org merge <id> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--into` &lt;value&gt; | ID of the surviving organization to keep (the winner) |
+| `-y, --yes` | Skip the confirmation prompt |
+
+```bash
+pdcli org merge 123 --into 456
+pdcli org merge 123 --into 456 --yes
+```
+
 ### `pdcli org update`
 
 Update an organization (v2 PATCH — only provided fields change)
@@ -1035,6 +1160,24 @@ pdcli person list [flags]
 ```bash
 pdcli person list
 pdcli person list --org 7 --output json
+```
+
+### `pdcli person merge`
+
+Merge one person into another. WARNING: the positional &lt;id&gt; is the LOSING record — Pipedrive deletes it. --into is the surviving record whose data wins on conflict. All related data (deals, activities, notes, files) is transferred to the survivor.
+
+```text
+pdcli person merge <id> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--into` &lt;value&gt; | ID of the surviving person to keep (the winner) |
+| `-y, --yes` | Skip the confirmation prompt |
+
+```bash
+pdcli person merge 123 --into 456
+pdcli person merge 123 --into 456 --yes
 ```
 
 ### `pdcli person update`

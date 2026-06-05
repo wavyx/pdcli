@@ -3,6 +3,11 @@ const STALE_DAYS = 14
 const ANCIENT_FALLBACK_DAYS = 168 // ~2× the median B2B cycle
 const ANCIENT_CYCLE_MULTIPLIER = 2
 
+/** Jaro-Winkler score at/above which two org names are treated as near-duplicates. */
+export const FUZZY_ORG_THRESHOLD = 0.92
+/** Skip the O(n²) fuzzy pass above this org count to bound the comparison cost. */
+export const FUZZY_ORG_MAX = 2000
+
 function openDeals(data) {
   return data.deals.filter((d) => d.status === 'open')
 }
@@ -159,11 +164,48 @@ export const AUDIT_CHECKS = [
       for (const org of data.organizations) {
         const key = normalizeOrgName(org.name)
         if (!key) continue
-        byName.set(key, [...(byName.get(key) ?? []), org.id])
+        const group = byName.get(key) ?? { ids: [], original: org.name }
+        group.ids.push(org.id)
+        byName.set(key, group)
       }
-      return [...byName.entries()]
-        .filter(([, ids]) => ids.length > 1)
-        .map(([name, ids]) => ({ name, ids }))
+      const exact = [...byName.entries()]
+        .filter(([, group]) => group.ids.length > 1)
+        .map(([name, group]) => ({ kind: 'exact', name, ids: group.ids }))
+
+      // Normalized names that did NOT collide exactly are fuzzy candidates;
+      // exact-duplicate groups are already reported above, so skip them here.
+      const singles = [...byName.entries()].filter(
+        ([, group]) => group.ids.length === 1,
+      )
+
+      if (singles.length > FUZZY_ORG_MAX) {
+        return [
+          ...exact,
+          {
+            kind: 'note',
+            note: `Skipped fuzzy near-duplicate scan: ${singles.length} organizations exceed the ${FUZZY_ORG_MAX} cap.`,
+          },
+        ]
+      }
+
+      const fuzzy = []
+      for (let i = 0; i < singles.length; i++) {
+        for (let j = i + 1; j < singles.length; j++) {
+          const [nameA, groupA] = singles[i]
+          const [nameB, groupB] = singles[j]
+          const score = jaroWinkler(nameA, nameB)
+          if (score >= FUZZY_ORG_THRESHOLD) {
+            fuzzy.push({
+              kind: 'fuzzy',
+              // Report original spellings so the orgs are findable in Pipedrive.
+              names: [groupA.original, groupB.original],
+              ids: [groupA.ids[0], groupB.ids[0]].sort((a, b) => a - b),
+              score: Math.round(score * 10000) / 10000,
+            })
+          }
+        }
+      }
+      return [...exact, ...fuzzy]
     },
   },
   {
@@ -204,6 +246,62 @@ function normalizeOrgName(name) {
 }
 
 /**
+ * Jaro-Winkler string similarity in [0, 1] (1 = identical). Standard variant:
+ * Winkler prefix bonus with scale 0.1 over a max common prefix of 4.
+ * Pure and symmetric. Two empty strings score 1; one empty string scores 0.
+ * @param {string} a
+ * @param {string} b
+ * @returns {number}
+ */
+export function jaroWinkler(a, b) {
+  if (a === b) return 1
+  const lenA = a.length
+  const lenB = b.length
+  if (lenA === 0 || lenB === 0) return 0
+
+  const matchWindow = Math.max(0, Math.floor(Math.max(lenA, lenB) / 2) - 1)
+  const matchedA = new Array(lenA).fill(false)
+  const matchedB = new Array(lenB).fill(false)
+
+  let matches = 0
+  for (let i = 0; i < lenA; i++) {
+    const start = Math.max(0, i - matchWindow)
+    const end = Math.min(i + matchWindow + 1, lenB)
+    for (let j = start; j < end; j++) {
+      if (matchedB[j] || a[i] !== b[j]) continue
+      matchedA[i] = true
+      matchedB[j] = true
+      matches++
+      break
+    }
+  }
+  if (matches === 0) return 0
+
+  // Count transpositions: matched chars out of order between the two strings.
+  let transpositions = 0
+  let k = 0
+  for (let i = 0; i < lenA; i++) {
+    if (!matchedA[i]) continue
+    while (!matchedB[k]) k++
+    if (a[i] !== b[k]) transpositions++
+    k++
+  }
+  transpositions /= 2
+
+  const jaro =
+    (matches / lenA + matches / lenB + (matches - transpositions) / matches) / 3
+
+  // Winkler prefix bonus, capped at 4 shared leading characters.
+  let prefix = 0
+  const maxPrefix = Math.min(4, lenA, lenB)
+  for (let i = 0; i < maxPrefix; i++) {
+    if (a[i] !== b[i]) break
+    prefix++
+  }
+  return jaro + prefix * 0.1 * (1 - jaro)
+}
+
+/**
  * Run all (or a subset of) hygiene checks over pre-fetched account data.
  * @param {{ deals: object[], persons: object[], organizations: object[], activities: object[] }} data
  * @param {{ now: Date, only?: string[] }} options
@@ -214,13 +312,16 @@ export function runChecks(data, { now, only } = {}) {
     (check) => {
       const overdueTotal = check.name === 'overdue-activities'
       const items = check.run(data, { now })
+      // Informational rows (kind:'note') stay in items but are not findings,
+      // so they never contribute to the count consumers branch on.
+      const findings = items.filter((i) => i.kind !== 'note')
       return {
         name: check.name,
         severity: check.severity,
         title: check.title,
         count: overdueTotal
-          ? items.reduce((sum, i) => sum + i.overdue, 0)
-          : items.length,
+          ? findings.reduce((sum, i) => sum + i.overdue, 0)
+          : findings.length,
         items,
       }
     },

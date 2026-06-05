@@ -841,3 +841,127 @@ describe('binary + multipart in OAuth mode / edge bodies', () => {
     expect(result).toBeNull()
   })
 })
+
+describe('postForm (application/x-www-form-urlencoded)', () => {
+  beforeEach(() => nock.cleanAll())
+
+  it('POSTs a urlencoded body with the form content-type', async () => {
+    const client = createClient({
+      companyDomain: 'acme',
+      token: 'test-token',
+      retry: false,
+      timeout: 5000,
+    })
+    const scope = nock('https://acme.pipedrive.com')
+      .post('/api/v1/files/remoteLink', (body) => {
+        const params = new URLSearchParams(body)
+        return (
+          params.get('item_type') === 'deal' &&
+          params.get('item_id') === '42' &&
+          params.get('remote_id') === 'abc123' &&
+          params.get('remote_location') === 'googledrive'
+        )
+      })
+      .matchHeader('content-type', 'application/x-www-form-urlencoded')
+      .matchHeader('x-api-token', 'test-token')
+      .reply(200, { success: true, data: { id: 9 } })
+
+    const result = await client.postForm('/api/v1/files/remoteLink', {
+      item_type: 'deal',
+      item_id: 42,
+      remote_id: 'abc123',
+      remote_location: 'googledrive',
+    })
+
+    expect(result.data.id).toBe(9)
+    expect(scope.isDone()).toBe(true)
+  })
+
+  it('omits null/undefined fields from the body', async () => {
+    const client = createClient({
+      companyDomain: 'acme',
+      token: 'test-token',
+      retry: false,
+      timeout: 5000,
+    })
+    const scope = nock('https://acme.pipedrive.com')
+      .post('/api/v1/files/remoteLink', (body) => {
+        // nock parses urlencoded bodies into a plain object.
+        return (
+          body.item_type === 'deal' &&
+          !('remote_id' in body) &&
+          !('remote_location' in body)
+        )
+      })
+      .reply(200, { success: true, data: { id: 1 } })
+
+    await client.postForm('/api/v1/files/remoteLink', {
+      item_type: 'deal',
+      remote_id: null,
+      remote_location: undefined,
+    })
+    expect(scope.isDone()).toBe(true)
+  })
+
+  it('sends Bearer auth in oauth mode', async () => {
+    const client = createClient({
+      apiDomain: 'https://acme.pipedrive.com',
+      token: 'oauth-at',
+      authMode: 'oauth',
+      retry: false,
+      timeout: 5000,
+    })
+    const scope = nock('https://acme.pipedrive.com')
+      .post('/api/v1/files/remoteLink')
+      .matchHeader('authorization', 'Bearer oauth-at')
+      .reply(200, { success: true, data: { id: 2 } })
+
+    await client.postForm('/api/v1/files/remoteLink', { item_type: 'deal' })
+    expect(scope.isDone()).toBe(true)
+  })
+
+  it('throws ApiError on failure', async () => {
+    const client = createClient({
+      companyDomain: 'acme',
+      token: 'test-token',
+      retry: false,
+      timeout: 5000,
+    })
+    nock('https://acme.pipedrive.com')
+      .post('/api/v1/files/remoteLink')
+      .reply(400, { success: false, error: 'bad link' })
+
+    await expect(
+      client.postForm('/api/v1/files/remoteLink', { item_type: 'deal' }),
+    ).rejects.toMatchObject({ statusCode: 400 })
+  })
+
+  it('returns null for an empty response body', async () => {
+    const client = createClient({
+      companyDomain: 'acme',
+      token: 'test-token',
+      retry: false,
+      timeout: 5000,
+    })
+    nock('https://acme.pipedrive.com')
+      .post('/api/v1/files/remoteLink')
+      .reply(204, '')
+
+    const result = await client.postForm('/api/v1/files/remoteLink', {
+      item_type: 'deal',
+    })
+    expect(result).toBeNull()
+  })
+
+  it('refuses to send outside the locked host', async () => {
+    const client = createClient({
+      companyDomain: 'acme',
+      token: 'test-token',
+      retry: false,
+      timeout: 5000,
+    })
+    await expect(
+      client.postForm('https://evil.example.com/api/v1/files/remoteLink', {}),
+    ).rejects.toThrow(/Refusing to send request outside/)
+  })
+})

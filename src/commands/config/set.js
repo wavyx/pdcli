@@ -2,6 +2,12 @@ import { Args } from '@oclif/core'
 import chalk from 'chalk'
 import BaseCommand from '../../base-command.js'
 import { setProfileConfig } from '../../lib/config.js'
+import { CliError } from '../../lib/errors.js'
+
+/** Allowed values for keys pdcli itself consumes; others are free-form. */
+const VALIDATED_KEYS = {
+  default_output: ['table', 'json', 'yaml', 'csv'],
+}
 
 export default class ConfigSetCommand extends BaseCommand {
   static skipAuth = true
@@ -20,6 +26,14 @@ export default class ConfigSetCommand extends BaseCommand {
 
   async run() {
     const { args } = await this.parse(ConfigSetCommand)
+
+    const allowed = VALIDATED_KEYS[args.key]
+    if (allowed && !allowed.includes(args.value)) {
+      throw new CliError(
+        `Invalid value "${args.value}" for ${args.key} — expected one of: ${allowed.join(', ')}`,
+        { exitCode: 64 },
+      )
+    }
 
     setProfileConfig(this.activeProfile, args.key, args.value)
     this.log(

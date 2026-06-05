@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { runChecks, AUDIT_CHECKS } from '../../src/lib/audit.js'
+import {
+  runChecks,
+  AUDIT_CHECKS,
+  jaroWinkler,
+  FUZZY_ORG_THRESHOLD,
+  FUZZY_ORG_MAX,
+} from '../../src/lib/audit.js'
 
 const NOW = new Date('2026-06-04T12:00:00Z')
 const DAY = 86_400_000
@@ -272,6 +278,109 @@ describe('runChecks', () => {
     const check = byName(results, 'duplicate-orgs')
     expect(check.count).toBe(1)
     expect(check.items[0].ids).toEqual([1, 2])
+    expect(check.items[0].kind).toBe('exact')
+  })
+
+  it('flags fuzzy near-duplicate organizations above threshold', () => {
+    const results = runChecks(
+      dataset({
+        organizations: [
+          { id: 1, name: 'Globex' },
+          { id: 2, name: 'Globexx' },
+          { id: 3, name: 'Umbrella' },
+        ],
+      }),
+      { now: NOW },
+    )
+    const check = byName(results, 'duplicate-orgs')
+    expect(check.count).toBe(1)
+    const fuzzy = check.items[0]
+    expect(fuzzy.kind).toBe('fuzzy')
+    expect(fuzzy.ids).toEqual([1, 2])
+    expect(fuzzy.score).toBeGreaterThanOrEqual(FUZZY_ORG_THRESHOLD)
+    expect(fuzzy.score).toBeLessThan(1)
+  })
+
+  it('does not re-report an exact duplicate as a fuzzy pair', () => {
+    const results = runChecks(
+      dataset({
+        organizations: [
+          { id: 1, name: 'Acme Inc.' },
+          { id: 2, name: 'ACME inc' },
+        ],
+      }),
+      { now: NOW },
+    )
+    const check = byName(results, 'duplicate-orgs')
+    expect(check.count).toBe(1)
+    expect(check.items.filter((i) => i.kind === 'fuzzy')).toHaveLength(0)
+    expect(check.items[0].kind).toBe('exact')
+  })
+
+  it('excludes org pairs just below the fuzzy threshold', () => {
+    const results = runChecks(
+      dataset({
+        organizations: [
+          { id: 1, name: 'Acme' },
+          { id: 2, name: 'Acne' },
+        ],
+      }),
+      { now: NOW },
+    )
+    // jaroWinkler('acme','acne') is below 0.92
+    expect(jaroWinkler('acme', 'acne')).toBeLessThan(FUZZY_ORG_THRESHOLD)
+    expect(byName(results, 'duplicate-orgs').count).toBe(0)
+  })
+
+  it('skips the O(n^2) fuzzy pass with a note above the org cap', () => {
+    const organizations = Array.from({ length: FUZZY_ORG_MAX + 1 }, (_, i) => ({
+      id: i + 1,
+      name: `Org ${i}`,
+    }))
+    const results = runChecks(dataset({ organizations }), { now: NOW })
+    const check = byName(results, 'duplicate-orgs')
+    const note = check.items.find((i) => i.kind === 'note')
+    expect(note).toBeDefined()
+    expect(note.note).toMatch(/fuzzy/i)
+    expect(check.items.some((i) => i.kind === 'fuzzy')).toBe(false)
+  })
+
+  it('does not count the informational note as a finding (cap exceeded)', () => {
+    const organizations = Array.from({ length: FUZZY_ORG_MAX + 1 }, (_, i) => ({
+      id: i + 1,
+      name: `Org ${i}`,
+    }))
+    const results = runChecks(dataset({ organizations }), { now: NOW })
+    const check = byName(results, 'duplicate-orgs')
+    // No duplicates exist, only the skip note → count must be 0, note kept.
+    expect(check.count).toBe(0)
+    expect(check.items.some((i) => i.kind === 'note')).toBe(true)
+  })
+
+  it('reports fuzzy org pairs with their original names, not normalized', () => {
+    const results = runChecks(
+      dataset({
+        organizations: [
+          { id: 1, name: 'Acme' },
+          { id: 2, name: 'Acmee' },
+          { id: 3, name: 'Globex GmbH' },
+          { id: 4, name: 'Globexx GmbH' },
+        ],
+      }),
+      { now: NOW },
+    )
+    const check = byName(results, 'duplicate-orgs')
+    const allNames = check.items
+      .filter((i) => i.kind === 'fuzzy')
+      .flatMap((i) => i.names)
+    // Original spellings (casing + legal suffix) must survive into the report.
+    expect(allNames).toContain('Globex GmbH')
+    expect(allNames).toContain('Globexx GmbH')
+    expect(allNames).toContain('Acme')
+    expect(allNames).toContain('Acmee')
+    // Normalized forms must NOT appear.
+    expect(allNames).not.toContain('globex')
+    expect(allNames).not.toContain('acme')
   })
 
   it('groups overdue activities by owner', () => {
@@ -349,5 +458,39 @@ describe('audit input edge shapes', () => {
       { now: NOW },
     )
     expect(byName(results, 'duplicate-orgs').count).toBe(0)
+  })
+})
+
+describe('jaroWinkler', () => {
+  it('returns 1 for identical strings', () => {
+    expect(jaroWinkler('MARTHA', 'MARTHA')).toBe(1)
+  })
+
+  it('returns 1 for two empty strings', () => {
+    expect(jaroWinkler('', '')).toBe(1)
+  })
+
+  it('returns 0 when one string is empty', () => {
+    expect(jaroWinkler('MARTHA', '')).toBe(0)
+    expect(jaroWinkler('', 'MARTHA')).toBe(0)
+  })
+
+  it('scores the classic MARTHA/MARHTA pair ≈0.9611', () => {
+    expect(jaroWinkler('MARTHA', 'MARHTA')).toBeCloseTo(0.9611, 4)
+  })
+
+  it('scores the classic DWAYNE/DUANE pair ≈0.84', () => {
+    expect(jaroWinkler('DWAYNE', 'DUANE')).toBeCloseTo(0.84, 2)
+  })
+
+  it('returns 0 when no characters match', () => {
+    expect(jaroWinkler('abc', 'xyz')).toBe(0)
+  })
+
+  it('is symmetric', () => {
+    expect(jaroWinkler('DIXON', 'DICKSONX')).toBeCloseTo(
+      jaroWinkler('DICKSONX', 'DIXON'),
+      10,
+    )
   })
 })

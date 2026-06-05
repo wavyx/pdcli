@@ -189,6 +189,31 @@ describe('BaseCommand', () => {
       /Rate limited/,
     )
   })
+
+  it('defines a --resolve-fields global flag for non-table formats', () => {
+    const flag = BaseCommand.baseFlags['resolve-fields']
+    expect(flag).toBeDefined()
+    expect(flag.type).toBe('boolean')
+    expect(flag.helpGroup).toBe('GLOBAL')
+    expect(flag.default).toBe(false)
+    expect(flag.description).toMatch(/json/i)
+    expect(flag.description).toMatch(/yaml/i)
+    expect(flag.description).toMatch(/csv/i)
+    expect(flag.description).toMatch(/get/i)
+  })
+
+  it('parses --resolve-fields onto cmd.flags (default false)', async () => {
+    class FlagCmd extends BaseCommand {
+      static skipAuth = true
+      async run() {
+        this.log(`resolve:${this.flags['resolve-fields']}`)
+      }
+    }
+    const off = await captureLogs(FlagCmd, [])
+    expect(off).toContain('resolve:false')
+    const on = await captureLogs(FlagCmd, ['--resolve-fields'])
+    expect(on).toContain('resolve:true')
+  })
 })
 
 describe('BaseCommand OAuth mode', () => {
@@ -413,6 +438,19 @@ describe('resolveFormat with default_output', () => {
     const payload = JSON.parse(writes.join(''))
     expect(payload.error).toBe('AuthRequiredError')
     expect(payload.exitCode).toBe(77)
+  })
+
+  it('surfaces parse errors for unknown flags (flags not yet populated)', async () => {
+    class ParseCmd extends BaseCommand {
+      static skipAuth = true
+      async run() {}
+    }
+    // Before the fix this died with "Cannot read properties of undefined
+    // (reading 'profile')" because handleError consulted
+    // storedDefaultOutput() while this.flags was still undefined.
+    await expect(ParseCmd.run(['--no-such-flag'])).rejects.toThrow(
+      /Nonexistent flag/,
+    )
   })
 
   it('keeps human-form errors when no flag and no stored default', async () => {

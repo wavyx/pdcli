@@ -4,6 +4,10 @@
 [![codecov](https://codecov.io/gh/wavyx/pdcli/branch/main/graph/badge.svg)](https://codecov.io/gh/wavyx/pdcli)
 [![npm](https://img.shields.io/npm/v/%40wavyx%2Fpdcli)](https://www.npmjs.com/package/@wavyx/pdcli)
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/wavyx/pdcli/main/docs/demo.svg" alt="pdcli demo — running pipeline health and a winning deal update" width="720">
+</p>
+
 Command-line interface for [Pipedrive](https://www.pipedrive.com/) — fast, scriptable, built for terminals, CI pipelines, and AI agents.
 
 > Not affiliated with or endorsed by Pipedrive.
@@ -74,9 +78,12 @@ pdcli person import people.csv                         # custom fields by name
 ```bash
 pdcli metrics velocity --period 90d      # the Sales Velocity Equation, in your terminal
 pdcli funnel --pipeline 1                # stage-to-stage conversion
+pdcli funnel --exact                     # mine real stage transitions per deal (one call each)
+pdcli metrics coverage --target 500000   # weighted pipeline vs quota — the 3x coverage rule
 pdcli pipeline health                    # per-stage value, weighted value, stale, no-next-step
 pdcli audit                              # 11 data-hygiene checks (duplicates, stale, gaps)
 pdcli audit --strict                     # exit 1 on must-severity findings — wire into CI
+pdcli person merge 123 --into 456        # fold a duplicate into the survivor (deletes 123)
 ```
 
 ## Files, webhooks, backup
@@ -93,6 +100,7 @@ pdcli backup --dir ./pipedrive-backup    # full account → JSON tree, --resume 
 ```bash
 pdcli api GET /api/v2/pipelines          # raw, host-locked to YOUR domain
 pdcli api POST /api/v2/deals --body '{"title":"Raw deal"}'
+pdcli alias set wd "deal list --status won"   # save a shortcut, then run: pdcli wd
 pdcli doctor                             # diagnose auth/keychain/connectivity
 ```
 

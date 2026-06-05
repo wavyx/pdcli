@@ -122,6 +122,7 @@ export default defineConfig({
             { label: 'Commands', slug: 'reference/commands' },
             { label: 'Config & environment', slug: 'reference/config' },
             { label: 'Troubleshooting', slug: 'reference/troubleshooting' },
+            { label: 'Contributing', slug: 'contributing' },
             {
               label: 'Changelog (GitHub)',
               link: 'https://github.com/wavyx/pdcli/releases',

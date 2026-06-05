@@ -260,6 +260,35 @@ export function createClient({
     return text ? JSON.parse(text) : null
   }
 
+  /**
+   * POST application/x-www-form-urlencoded (v1 form endpoints, e.g.
+   * /api/v1/files/remoteLink — JSON is not accepted there).
+   * @param {string} path
+   * @param {Record<string, unknown>} fields Null/undefined values are omitted.
+   */
+  async function postForm(path, fields = {}) {
+    const url = lockedUrl(path)
+    const params = new URLSearchParams()
+    for (const [k, v] of Object.entries(fields)) {
+      if (v != null) params.set(k, String(v))
+    }
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        ...authHeaders(),
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+      signal: AbortSignal.timeout(timeout),
+    })
+    debug('POST (form) %s → %d', path, res.status)
+    const text = await res.text()
+    if (!res.ok) {
+      throw ApiError.fromResponse(res.status, text, path)
+    }
+    return text ? JSON.parse(text) : null
+  }
+
   return {
     get: (path, opts) => request('GET', path, opts),
     post: (path, opts) => request('POST', path, opts),
@@ -268,6 +297,7 @@ export function createClient({
     del: (path, opts) => request('DELETE', path, opts),
     download,
     postMultipart,
+    postForm,
     pageV1,
     pageV2,
   }

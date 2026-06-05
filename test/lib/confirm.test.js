@@ -26,4 +26,25 @@ describe('confirmAction', () => {
     const result = await confirmAction('Delete?', false)
     expect(result).toBe(false)
   })
+
+  it('passes a default of false to the prompt when requested', async () => {
+    mockConfirm.mockResolvedValue(false)
+    await confirmAction('Merge?', false, { default: false })
+    expect(mockConfirm).toHaveBeenCalledWith({
+      message: 'Merge?',
+      default: false,
+    })
+  })
+
+  it('treats a force-closed prompt (non-interactive stdin) as a "no"', async () => {
+    const err = new Error('User force closed the prompt with 13 null')
+    err.name = 'ExitPromptError'
+    mockConfirm.mockRejectedValueOnce(err)
+    await expect(confirmAction('sure?', false)).resolves.toBe(false)
+  })
+
+  it('rethrows non-prompt errors from inquirer', async () => {
+    mockConfirm.mockRejectedValueOnce(new TypeError('boom'))
+    await expect(confirmAction('sure?', false)).rejects.toThrow('boom')
+  })
 })

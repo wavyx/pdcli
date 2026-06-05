@@ -1,0 +1,57 @@
+---
+title: Contributing
+description: How to set up pdcli for development, the TDD workflow, and how changes get released.
+---
+
+`pdcli` is open source (MIT) and contributions are welcome. This is the short
+version — the canonical, always-current guide lives in
+[`CONTRIBUTING.md`](https://github.com/wavyx/pdcli/blob/main/CONTRIBUTING.md) in
+the repository.
+
+## Setup
+
+You need **Node.js 20+**. Clone, install, and run the CLI straight from source —
+no build, no global install:
+
+```bash
+git clone https://github.com/wavyx/pdcli.git
+cd pdcli
+npm install
+./bin/dev.js --help
+```
+
+`bin/dev.js` loads a local `.env`, so you can point at a sandbox with
+`PDCLI_COMPANY_DOMAIN` / `PDCLI_API_TOKEN` without touching your keychain.
+
+## How we work
+
+- **Test-driven, always.** Red → green → refactor: write the failing test first,
+  watch it fail for the right reason, then write the minimal code to pass. No
+  production code lands without a failing test.
+- **Coverage is enforced at 100%** (statements, branches, functions, lines) —
+  exercise the error paths, not just the happy path.
+- **Lint before every commit:** `npm run lint` runs the same checks as CI
+  (`eslint . && prettier --check .`); `npm run lint:fix` autofixes.
+- **[Conventional Commits](https://www.conventionalcommits.org/)**, scoped when
+  useful — `feat(deal): …`, `fix(client): …`, `docs: …`, `test: …`.
+- **Stage explicit paths** — never `git add -A`. Scratch/handoff docs, the
+  `design/` directory, and screenshots are git-ignored and must not be committed.
+
+```bash
+npm test                          # full suite
+npx vitest run test/deal/list.test.js   # a single file
+npm run test:coverage             # suite + coverage report
+```
+
+## Release flow
+
+Releases are tag-driven and automated (maintainers only): bump the version and
+update `CHANGELOG.md`, then push a `vX.Y.Z` tag. CI re-runs lint and coverage,
+publishes to npm via OIDC trusted publishing with provenance, packs native
+tarballs, and creates the GitHub Release from the changelog.
+
+## Security
+
+Don't put secrets — API tokens, OAuth credentials — in issues, PRs, or test
+fixtures. Report vulnerabilities privately to the maintainers rather than opening
+a public issue.
