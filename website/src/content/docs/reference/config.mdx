@@ -62,6 +62,7 @@ These keys are written and read by pdcli:
 | --- | ------ | ----------- |
 | `company_domain` | `auth login` | Bare company subdomain for the profile's API host. |
 | `auth_mode` | `auth login` | `token` or `oauth`. Selects how credentials are resolved. |
+| `default_output` | you | Default output format (`table`/`json`/`yaml`/`csv`) when no `--output` flag is given. Applies to errors too when set to `json`. |
 
 ```bash
 pdcli config set company_domain acme

@@ -16,7 +16,7 @@ All notable changes to `pdcli` are documented here. Format follows
   `llms-small.txt`.
 - Native tarballs (linux x64/arm64, macOS x64/arm64, Windows x64) attached
   to every GitHub Release for non-npm installs.
-- Shell completion docs (`pdcli autocomplete bash|zsh|fish`).
+- Shell completion docs (`pdcli autocomplete bash|zsh|powershell`).
 - `bin/dev.js` development runner (no manifest cache).
 
 ## [0.5.0] - 2026-06-04
@@ -100,7 +100,7 @@ All notable changes to `pdcli` are documented here. Format follows
   pagination and `--limit`.
 - Custom-field discovery and resolution: `field list/get` plus automatic
   name/label resolution in table output.
-- Global `search` (itemSearch).
+- Global `search` (itemSearch) and `user me` (v1 users endpoint).
 - Host-locked raw escape hatch: `pdcli api <METHOD> <path>` (v1 + v2).
 - `doctor` diagnostics and `version`.
 - Dual-API client: token-budget-aware 429 backoff, 429→403 hard stop,

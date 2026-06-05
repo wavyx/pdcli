@@ -404,7 +404,8 @@ main:has(.clr) h1#_top {
   font-weight: 700;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--fg-subtle);
+  /* --fg-muted, not subtle: 11.5px uppercase needs 4.5:1 in light mode */
+  color: var(--fg-muted);
 }
 .clr-strip__row {
   display: flex;

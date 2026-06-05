@@ -29,6 +29,23 @@ export default defineConfig({
       editLink: {
         baseUrl: 'https://github.com/wavyx/pdcli/edit/main/website/',
       },
+      // Social cards — twitter:card summary_large_image needs an image.
+      head: [
+        {
+          tag: 'meta',
+          attrs: {
+            property: 'og:image',
+            content: 'https://wavyx.github.io/pdcli/og.png',
+          },
+        },
+        {
+          tag: 'meta',
+          attrs: {
+            name: 'twitter:image',
+            content: 'https://wavyx.github.io/pdcli/og.png',
+          },
+        },
+      ],
       // "Clarity" design system (designer handoff) — tokens + homepage.
       customCss: ['./src/styles/theme.css', './src/styles/home.css'],
       components: {

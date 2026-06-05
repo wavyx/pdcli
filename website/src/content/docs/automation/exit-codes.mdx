@@ -30,9 +30,9 @@ back to `1`, and an unexpected throw inside the CLI exits `70`.
 In **table mode** the message goes to stderr in human form; `--verbose` adds the request
 path, status code, and `error_info` from Pipedrive's error envelope.
 
-In **JSON mode** (an explicit `--output json`) the error is written to **stderr** as a
-single JSON object — stdout stays clean so a successful-looking pipe can't swallow a
-failure:
+In **JSON mode** (an explicit `--output json`, or `default_output json` set in the
+profile) the error is written to **stderr** as a single JSON object — stdout stays
+clean so a successful-looking pipe can't swallow a failure:
 
 ```json
 {

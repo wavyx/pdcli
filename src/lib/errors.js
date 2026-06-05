@@ -87,7 +87,16 @@ export function handleError(err, cmd) {
   const exitCode = err.exitCode ?? 70
   const flags = cmd.flags ?? {}
 
-  if (flags.output === 'json') {
+  // JSON errors when the user asked for JSON — via the flag or the
+  // profile's default_output. (The piped-TTY fallback intentionally does
+  // NOT apply here; errors stay human unless JSON was requested.)
+  const format =
+    flags.output ??
+    (typeof cmd.storedDefaultOutput === 'function'
+      ? cmd.storedDefaultOutput()
+      : undefined)
+
+  if (format === 'json') {
     const payload = {
       error: err.constructor.name,
       message: err.message,

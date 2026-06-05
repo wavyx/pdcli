@@ -2,6 +2,10 @@
 title: pdcli
 description: A fast, scriptable, open-source CLI for Pipedrive — built for terminals, CI pipelines, and AI agents.
 template: splash
+head:
+  # Avoid the redundant "pdcli | pdcli" <title> on the landing page.
+  - tag: title
+    content: pdcli — Pipedrive on the command line
 ---
 
 import Home from '../../components/Home.astro';

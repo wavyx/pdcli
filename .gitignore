@@ -13,8 +13,9 @@ CLAUDE.md
 pdcli-spec.md
 pipedrive-api-notes.md
 
-# screenshots
+# screenshots (but not committed site assets)
 *.png
+!website/public/og.png
 
 # docs site
 website/node_modules/

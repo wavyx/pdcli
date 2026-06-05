@@ -56,7 +56,7 @@ const features: { t: string; b: string; d: string }[] = [
   },
   {
     t: 'Health reports',
-    b: 'pdcli pipeline health and pdcli audit --strict surface stale deals, missing fields and data drift — so you can keep your Pipedrive clean, neat and trustworthy.',
+    b: 'pdcli pipeline health and pdcli audit --strict surface stale deals, missing fields, and data drift — so you can keep your Pipedrive clean, accurate, and trustworthy.',
     d: '<path d="M3 12h4l2-6 4 12 2-6h6"/>',
   },
   {
@@ -116,7 +116,7 @@ const oneLiners: [string, string][] = [
 ];
 
 const check =
-  '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+  '<svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
 const checks = [
   'Free & open source',
   'macOS, Linux & Windows',
@@ -130,7 +130,7 @@ const showcaseTerm = `<span class="dim">$</span> <span class="g">pdcli</span> <s
   4774  Northwind expansion   <span class="m">€ 8,500</span>   Proposal
   4710  Globex pilot          <span class="m">€ 4,200</span>   Qualified
   4699  Initech seats         <span class="m">€ 2,750</span>   Contact
-<span class="dim">  4 open deals · €27,450 weighted</span>
+<span class="dim">  4 open deals · €27,450 open value</span>
 
 <span class="dim">$</span> <span class="g">pdcli</span> <span class="c">deal update</span> 4821 <span class="f">--status</span> won
 <span class="ok">✓</span> Acme renewal → <span class="badge">Won</span> · activity logged
@@ -149,7 +149,7 @@ const showcaseTerm = `<span class="dim">$</span> <span class="g">pdcli</span> <s
       />from your terminal.
     </h1>
     <p class="clr-hero__lead">
-      One install. Every object. <code>pdcli</code> turns deals, people, activities
+      One install. Every object. <code>pdcli</code> turns deals, people, activities,
       and reports into fast, pipeable commands — for your scripts, your CI, and your
       agents.
     </p>
@@ -182,6 +182,7 @@ const showcaseTerm = `<span class="dim">$</span> <span class="g">pdcli</span> <s
         chips.map(([label, icon]) => (
           <span class="clr-chip">
             <svg
+              aria-hidden="true"
               width="15"
               height="15"
               viewBox="0 0 24 24"
@@ -225,7 +226,7 @@ const showcaseTerm = `<span class="dim">$</span> <span class="g">pdcli</span> <s
               <p class="clr-qstep__note">{note}</p>
             </div>
             {i < 2 && (
-              <span class="clr-qstep__arrow">
+              <span class="clr-qstep__arrow" aria-hidden="true">
                 <svg
                   width="22"
                   height="22"
@@ -247,6 +248,7 @@ const showcaseTerm = `<span class="dim">$</span> <span class="g">pdcli</span> <s
     <a class="clr-quick__link" href={withBase('start/installation/')}
       >Read the full setup guide
       <svg
+        aria-hidden="true"
         width="15"
         height="15"
         viewBox="0 0 24 24"
@@ -261,7 +263,7 @@ const showcaseTerm = `<span class="dim">$</span> <span class="g">pdcli</span> <s
   {/* FEATURES */}
   <section class="clr-section">
     <div class="clr-section__head">
-      <span class="clr-eyebrow">WHY PDCLI</span>
+      <span class="clr-eyebrow">Why pdcli</span>
       <h2>A CLI that respects your workflow</h2>
       <p>
         Predictable, composable, and quiet by default — designed to slot into
@@ -274,6 +276,7 @@ const showcaseTerm = `<span class="dim">$</span> <span class="g">pdcli</span> <s
           <div class="clr-feat">
             <div class="clr-feat__ic">
               <svg
+                aria-hidden="true"
                 width="20"
                 height="20"
                 viewBox="0 0 24 24"
@@ -299,7 +302,7 @@ const showcaseTerm = `<span class="dim">$</span> <span class="g">pdcli</span> <s
       <span class="clr-eyebrow">IN PRACTICE</span>
       <h2>Close deals from the command line.</h2>
       <p class="clr-lead">
-        Track your pipeline, manage deals and log activities without leaving
+        Track your pipeline, manage deals, and log activities without leaving
         your shell — so you can spend less time clicking and more time selling.
         <code>pdcli</code> is a fast, scriptable companion for the Pipedrive API:
         {stats.commands} commands across {stats.topics} topics.
@@ -346,7 +349,7 @@ const showcaseTerm = `<span class="dim">$</span> <span class="g">pdcli</span> <s
       </ul>
     </div>
 
-    <div class="clr-showcase__demo">
+    <div class="clr-showcase__demo" aria-hidden="true">
       <div class="clr-term">
         <div class="clr-term__bar"><i></i><i></i><i></i><span>~/acme — pd</span></div>
         <pre class="clr-term__body" set:html={showcaseTerm} />
@@ -362,6 +365,7 @@ const showcaseTerm = `<span class="dim">$</span> <span class="g">pdcli</span> <s
           <div class="clr-stat">
             <span class="clr-stat__ic">
               <svg
+                aria-hidden="true"
                 width="24"
                 height="24"
                 viewBox="0 0 24 24"

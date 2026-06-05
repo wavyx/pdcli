@@ -40,7 +40,7 @@ const links = [
   <button
     class="pd-iconbtn pd-theme-toggle print:hidden"
     type="button"
-    aria-live="polite"
+    aria-label="Toggle color theme"
   >
     <span class="pd-theme-toggle__dark" aria-hidden="true">
       {/* sun — shown in dark mode, switches to light */}
@@ -88,9 +88,13 @@ const links = [
       const next =
         document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
       document.documentElement.dataset.theme = next;
-      localStorage.setItem('starlight-theme', next);
       toggle.setAttribute('aria-label', label());
-      // Keep any Starlight pickers (none by default, but harmless) in sync.
+      try {
+        localStorage.setItem('starlight-theme', next);
+      } catch {
+        /* storage blocked (private mode) — in-page toggle still works */
+      }
+      // Keep any Starlight pickers (mobile menu) in sync.
       (window as any).StarlightThemeProvider?.updatePickers?.(next);
     });
   }
