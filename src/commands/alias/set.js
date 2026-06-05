@@ -81,6 +81,16 @@ export default class AliasSetCommand extends BaseCommand {
       token = next.split(/\s+/).filter(Boolean)[0]
     }
 
+    // Aliases run with full credentials — flag ones that hide destructive
+    // operations so a shared config can't smuggle in a silent delete.
+    if (/\b(DELETE|delete|merge)\b/.test(args.command)) {
+      process.stderr.write(
+        `${chalk.yellow('Warning:')} this alias wraps a destructive command — ` +
+          `it will run without additional confirmation prompts beyond the ` +
+          `command's own.\n`,
+      )
+    }
+
     setAlias(name, args.command)
     this.log(chalk.green(`Alias set: ${chalk.cyan(name)} → ${args.command}`))
   }

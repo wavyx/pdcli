@@ -89,7 +89,8 @@ A name that would shadow a real pdcli command is refused (exit 64), so an alias 
 mask a built-in.
 
 Aliases execute with your full credentials and can wrap destructive commands (`api` DELETE,
-`merge`) — review aliases in shared configs before running them.
+`merge`) — review aliases in shared configs before running them. Alias writes are
+not safe under concurrent pdcli invocations sharing one config (last write wins).
 
 ## Precedence
 

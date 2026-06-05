@@ -98,8 +98,10 @@ that deal is skipped (not the whole run) and pdcli notes how many were skipped o
 ## `metrics coverage`
 
 Are you carrying enough pipeline to hit your number? `metrics coverage` weighs your **open**
-pipeline (probability-weighted, the same weighting `pipeline health` uses) against the revenue
-still needed to reach a quota, and reports the coverage ratio.
+pipeline against the revenue still needed to reach a quota and reports the coverage ratio.
+The classic 3× rule is defined on raw pipeline value, so that drives the verdict; a
+probability-weighted coverage figure (same weighting `pipeline health` uses) is shown
+alongside as the risk-adjusted view.
 
 The quota comes from your active revenue goal via the [Goals API](https://developers.pipedrive.com/docs/api/v1/Goals),
 measured over `--period` (default `90d`). `--target <amount>` overrides it with a manual
@@ -114,16 +116,18 @@ pdcli metrics coverage --target 500000
 ┌────────────────────┬──────────┐
 │ Metric             │ Value    │
 ├────────────────────┼──────────┤
+│ Open pipeline      │ 1480000  │
 │ Weighted pipeline  │ 1320000  │
 │ Quota              │ 500000   │
 │ Progress           │ 180000   │
 │ Remaining          │ 320000   │
-│ Coverage ratio     │ 4.1x     │
+│ Coverage ratio     │ 4.6x     │
+│ Weighted coverage  │ 4.1x     │
 │ Verdict            │ healthy  │
 └────────────────────┴──────────┘
 ```
 
-The verdict applies the classic 3× rule of thumb against `weighted pipeline ÷ remaining gap`:
+The verdict applies the classic 3× rule of thumb against `open pipeline ÷ remaining gap`:
 **≥ 3× is `healthy`, 2–3× is `borderline`, below 2× is `low`** (and `covered` once progress
 already meets the quota). When there's no active revenue goal and you didn't pass `--target`,
 the command exits **64** with guidance to create a goal or supply a target.

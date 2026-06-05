@@ -260,4 +260,25 @@ describe('command-not-found hook', () => {
       expect(exitCalls).not.toContain(64)
     })
   })
+
+  it('reports a depth overflow distinctly from a true cycle', async () => {
+    // Legal acyclic chain of 11 aliases: z1 -> z2 -> ... -> z12. No name
+    // repeats, so this is NOT a cycle — the message must say depth, not cycle.
+    const chain = {}
+    for (let i = 1; i <= 11; i++) chain[`z${i}`] = `z${i + 1}`
+    getAlias.mockImplementation((id) => chain[id])
+    const runCommand = vi.fn(async (id, argv) => {
+      await hook({ id, argv, config: { findCommand: () => null, runCommand } })
+    })
+    await expect(
+      hook({
+        id: 'z1',
+        argv: [],
+        config: { findCommand: () => null, runCommand },
+      }),
+    ).rejects.toMatchObject({ isExitSignal: true, code: 64 })
+    const text = stderrSpy.mock.calls.map((c) => String(c[0])).join('')
+    expect(text).toMatch(/expansion exceeded/i)
+    expect(text).not.toMatch(/cycle detected/i)
+  })
 })

@@ -1,7 +1,7 @@
 import { Args, Flags } from '@oclif/core'
 import BaseCommand from '../../base-command.js'
 import { confirmAction } from '../../lib/confirm.js'
-import { CliError } from '../../lib/errors.js'
+import { CliError, ApiError } from '../../lib/errors.js'
 import { outputRecord } from '../../lib/entity-view.js'
 
 export default class PersonMergeCommand extends BaseCommand {
@@ -75,7 +75,10 @@ export default class PersonMergeCommand extends BaseCommand {
     try {
       const body = await this.apiClient.get(`/api/v2/persons/${flags.into}`)
       record = body.data
-    } catch {
+    } catch (err) {
+      // Only API-level failures (eventual-consistency 404, transient 5xx)
+      // degrade gracefully — anything else is a real bug and must surface.
+      if (!(err instanceof ApiError)) throw err
       // The merge already succeeded and is irreversible; an eventual-consistency
       // 404 or transient 500 on the re-fetch must not look like a failure, or an
       // agent would retry the destructive op. Warn and emit the minimal id.

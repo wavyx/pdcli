@@ -126,17 +126,29 @@ export function computeExactFunnel(transitionsByDeal, stages, options = {}) {
   let won = 0
 
   for (const { dealId, stageId, rows } of transitionsByDeal) {
-    // The live changelog returns rows newest-first; don't assume an order.
-    // Sort stage rows by their 'time' ascending (YYYY-MM-DD HH:MM:SS sorts
-    // lexicographically) so the oldest transition is first.
-    const stageRows = rows
-      .filter((r) => r.field_key === 'stage_id')
-      .sort((a, b) => String(a.time ?? '').localeCompare(String(b.time ?? '')))
+    const stageRows = rows.filter((r) => r.field_key === 'stage_id')
     const entered = new Set()
 
-    // starting stage: oldest transition's source, else the deal's current stage
-    const startStage =
-      stageRows.length > 0 ? Number(stageRows[0].old_value) : stageId
+    // Starting stage: derived from the transition graph — the source stage
+    // that never appears as a destination. Order-independent, so it is
+    // immune to the changelog's newest-first ordering AND to two hops
+    // sharing the same one-second timestamp. Falls back to the oldest row's
+    // source (time sort) for degenerate cycles, else the current stage.
+    const destinations = new Set(stageRows.map((r) => String(r.new_value)))
+    const startSources = stageRows
+      .map((r) => String(r.old_value))
+      .filter((v) => !destinations.has(v))
+    let startStage
+    if (startSources.length > 0) {
+      startStage = Number(startSources[0])
+    } else if (stageRows.length > 0) {
+      const oldest = [...stageRows].sort((a, b) =>
+        String(a.time ?? '').localeCompare(String(b.time ?? '')),
+      )[0]
+      startStage = Number(oldest.old_value)
+    } else {
+      startStage = stageId
+    }
     entered.add(startStage)
     for (const r of stageRows) entered.add(Number(r.new_value))
 
@@ -149,7 +161,7 @@ export function computeExactFunnel(transitionsByDeal, stages, options = {}) {
     }
   }
 
-  return ordered.map((stage, index) => {
+  const resultRows = ordered.map((stage, index) => {
     const entered = enteredByStage.get(stage.id).size
     const prevEntered =
       index > 0 ? enteredByStage.get(ordered[index - 1].id).size : null
@@ -160,9 +172,12 @@ export function computeExactFunnel(transitionsByDeal, stages, options = {}) {
       entered,
       conversionFromPrev:
         index > 0 && prevEntered > 0 ? entered / prevEntered : null,
-      won,
     }
   })
+
+  // `won` is a single account-wide total — returned once, not repeated on
+  // every row, so JSON consumers don't misread it as a per-stage figure.
+  return { rows: resultRows, won }
 }
 
 const STALE_DAYS = 14
@@ -222,36 +237,45 @@ export function computeHealth(deals, stages, activities, { now }) {
   })
 }
 
-/** Rule-of-thumb pipeline-coverage thresholds (weighted open ÷ remaining gap). */
+/** Rule-of-thumb pipeline-coverage thresholds (raw open ÷ remaining gap). */
 const COVERAGE_HEALTHY = 3
 const COVERAGE_BORDERLINE = 2
 
 /**
- * Pipeline coverage ratio against a revenue quota: how many times the
- * probability-weighted open pipeline covers the revenue still needed to hit
- * the goal. remaining = max(target − progress, 0); coverage = weightedOpen ÷
- * remaining. Classic rule of thumb: >=3x healthy, 2–3x borderline, <2x low.
+ * Pipeline coverage against a revenue quota. The classic 3x rule of thumb is
+ * defined on RAW pipeline value — weighting it by win probability first would
+ * double-discount risk — so `coverage` = openValue ÷ remaining and drives the
+ * verdict; `weightedCoverage` = weightedOpen ÷ remaining is reported as the
+ * risk-adjusted secondary view. remaining = max(target − progress, 0).
  *
  * When progress already meets/exceeds the target the gap clamps to 0 — there
- * is nothing left to cover, so coverage is reported as `null` (not Infinity,
- * which is not JSON-serializable) with verdict `'covered'`.
- * @param {{ weightedOpen: number, goalTarget: number, progress?: number }} input
+ * is nothing left to cover, so the ratios are `null` (not Infinity, which is
+ * not JSON-serializable) with verdict `'covered'`.
+ * @param {{ openValue: number, weightedOpen: number, goalTarget: number,
+ *   progress?: number }} input
  */
-export function computeCoverage({ weightedOpen, goalTarget, progress = 0 }) {
+export function computeCoverage({
+  openValue,
+  weightedOpen,
+  goalTarget,
+  progress = 0,
+}) {
   const remaining = Math.max(goalTarget - progress, 0)
 
   if (remaining === 0) {
     return {
+      openValue,
       weightedOpen,
       goalTarget,
       progress,
       remaining,
       coverage: null,
+      weightedCoverage: null,
       verdict: 'covered',
     }
   }
 
-  const coverage = weightedOpen / remaining
+  const coverage = openValue / remaining
   const verdict =
     coverage >= COVERAGE_HEALTHY
       ? 'healthy'
@@ -259,5 +283,14 @@ export function computeCoverage({ weightedOpen, goalTarget, progress = 0 }) {
         ? 'borderline'
         : 'low'
 
-  return { weightedOpen, goalTarget, progress, remaining, coverage, verdict }
+  return {
+    openValue,
+    weightedOpen,
+    goalTarget,
+    progress,
+    remaining,
+    coverage,
+    weightedCoverage: weightedOpen / remaining,
+    verdict,
+  }
 }

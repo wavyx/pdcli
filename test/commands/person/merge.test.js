@@ -241,4 +241,35 @@ describe('person merge', () => {
     expect(JSON.parse(stdout).id).toBe(456)
     expect(warnings.join('')).toMatch(/could not load the survivor/i)
   })
+
+  it('rethrows non-API errors from the survivor re-fetch (no silent mask)', async () => {
+    mockApi()
+      .put('/api/v1/persons/123/merge', { merge_with_id: 456 })
+      .reply(200, { success: true, data: { id: 456 } })
+    // Simulate a programming/network-layer error (not an ApiError) on re-fetch
+    mockApi().get('/api/v2/persons/456').replyWithError('socket hangup')
+
+    await expect(
+      PersonMergeCommand.run(['123', '--into', '456', '--yes', '--no-retry']),
+    ).rejects.toThrow()
+  })
+
+  it('falls back to --into for the id when the merge response has no data', async () => {
+    mockApi()
+      .put('/api/v1/persons/123/merge', { merge_with_id: 456 })
+      .reply(200, { success: true })
+    mockApi()
+      .get('/api/v2/persons/456')
+      .reply(404, { success: false, error: 'not found' })
+
+    const stdout = await runCmd(PersonMergeCommand, [
+      '123',
+      '--into',
+      '456',
+      '--yes',
+      '--output',
+      'json',
+    ])
+    expect(JSON.parse(stdout)).toEqual({ id: 456 })
+  })
 })

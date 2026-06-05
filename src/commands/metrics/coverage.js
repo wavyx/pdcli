@@ -77,10 +77,12 @@ export default class MetricsCoverageCommand extends BaseCommand {
       ),
     ])
 
-    // Reuse computeHealth's probability weighting (deal prob > stage default >
-    // 100%) and sum the per-stage weighted value into one open-pipeline figure.
+    // computeHealth gives both the raw open value (classic coverage input)
+    // and the probability-weighted value (risk-adjusted secondary view).
     // Activities are irrelevant here, so pass an empty list.
-    const weightedOpen = computeHealth(open, stages, [], { now }).reduce(
+    const healthRows = computeHealth(open, stages, [], { now })
+    const openValue = healthRows.reduce((sum, row) => sum + row.openValue, 0)
+    const weightedOpen = healthRows.reduce(
       (sum, row) => sum + row.weightedValue,
       0,
     )
@@ -90,7 +92,12 @@ export default class MetricsCoverageCommand extends BaseCommand {
         ? { goalTarget: flags.target, progress: 0 }
         : await this.#fetchRevenueGoal(flags.period, now)
 
-    const coverage = computeCoverage({ weightedOpen, goalTarget, progress })
+    const coverage = computeCoverage({
+      openValue,
+      weightedOpen,
+      goalTarget,
+      progress,
+    })
 
     if (this.resolveFormat() === 'table') {
       await this.#renderTable(coverage)
@@ -183,12 +190,10 @@ export default class MetricsCoverageCommand extends BaseCommand {
     }
 
     // Coverage cannot sum targets/progress across mixed currencies.
+    // A goal without a currency_id is its own bucket — mixing it with a
+    // real currency is just as unsumable as mixing two real ones.
     const currencyIds = [
-      ...new Set(
-        goals
-          .map((g) => g.expected_outcome?.currency_id)
-          .filter((id) => id != null),
-      ),
+      ...new Set(goals.map((g) => g.expected_outcome?.currency_id ?? 'none')),
     ]
     if (currencyIds.length > 1) {
       throw new CliError(
@@ -224,13 +229,20 @@ export default class MetricsCoverageCommand extends BaseCommand {
     const ratio =
       coverage.coverage == null ? 'covered' : `${coverage.coverage.toFixed(1)}x`
 
+    const weightedRatio =
+      coverage.weightedCoverage == null
+        ? 'covered'
+        : `${coverage.weightedCoverage.toFixed(1)}x`
+
     await this.outputResults(
       [
+        { metric: 'Open pipeline', value: money(coverage.openValue) },
         { metric: 'Weighted pipeline', value: money(coverage.weightedOpen) },
         { metric: 'Quota', value: money(coverage.goalTarget) },
         { metric: 'Progress', value: money(coverage.progress) },
         { metric: 'Remaining', value: money(coverage.remaining) },
         { metric: 'Coverage ratio', value: ratio },
+        { metric: 'Weighted coverage', value: weightedRatio },
         { metric: 'Verdict', value: coverage.verdict },
       ],
       { metric: { header: 'Metric' }, value: { header: 'Value' } },

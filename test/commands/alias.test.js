@@ -203,4 +203,37 @@ describe('alias unset', () => {
     expect(stdout).toContain('not found')
     expect(stdout).toContain('missing')
   })
+
+  it('allows an alias whose chain reaches a pre-existing cycle not involving it', async () => {
+    // c1 -> c2 -> c1 is a pre-existing (bad) cycle; new alias 'fresh' -> c1
+    // does not ITSELF cycle back to 'fresh', so set succeeds — the walk
+    // breaks on the seen token instead of looping forever.
+    mockGetAliases.mockReturnValue({ c1: 'c2 x', c2: 'c1 y' })
+    const stdout = await runCmd(AliasSetCommand, ['fresh', 'c1 z'])
+    expect(mockSetAlias).toHaveBeenCalledWith('fresh', 'c1 z')
+    expect(stdout).toContain('fresh')
+  })
+
+  it('warns on stderr when an alias wraps a destructive command', async () => {
+    const writes = []
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((c) => {
+      writes.push(String(c))
+      return true
+    })
+    await runCmd(AliasSetCommand, ['nuke', 'api DELETE /api/v2/deals/1'])
+    spy.mockRestore()
+    expect(mockSetAlias).toHaveBeenCalled()
+    expect(writes.join('')).toMatch(/destructive/i)
+  })
+
+  it('does not warn for read-only alias payloads', async () => {
+    const writes = []
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((c) => {
+      writes.push(String(c))
+      return true
+    })
+    await runCmd(AliasSetCommand, ['safe', 'deal list --limit 1'])
+    spy.mockRestore()
+    expect(writes.join('')).not.toMatch(/destructive/i)
+  })
 })

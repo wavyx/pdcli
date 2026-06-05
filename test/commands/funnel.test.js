@@ -286,14 +286,16 @@ describe('funnel --exact (mined stage transitions)', () => {
       })
 
     const stdout = await runCmd(FunnelCommand, ['--exact', '--output', 'json'])
-    const rows = JSON.parse(stdout)
+    const { rows, won } = JSON.parse(stdout)
 
     expect(rows).toHaveLength(2)
     // stage 1 entered by both deals; stage 2 entered only by deal 10
     expect(rows[0]).toMatchObject({ stage: 'Qualified', entered: 2 })
     expect(rows[1]).toMatchObject({ stage: 'Demo', entered: 1 })
     expect(rows[1].conversionFromPrev).toBeCloseTo(0.5)
-    expect(rows[0].won).toBe(1)
+    // won is a single top-level total in machine output
+    expect(won).toBe(1)
+    expect(rows[0]).not.toHaveProperty('won')
   })
 
   it('follows the changelog cursor across multiple pages', async () => {
@@ -319,7 +321,7 @@ describe('funnel --exact (mined stage transitions)', () => {
       })
 
     const stdout = await runCmd(FunnelCommand, ['--exact', '--output', 'json'])
-    const rows = JSON.parse(stdout)
+    const { rows } = JSON.parse(stdout)
     // observed 1->2 (page1) and 2->1 (page2): deal entered both stages
     expect(rows[0].entered).toBe(1)
     expect(rows[1].entered).toBe(1)
@@ -505,7 +507,7 @@ describe('funnel --exact (mined stage transitions)', () => {
       spy.mockRestore()
     }
 
-    const rows = JSON.parse(stdout)
+    const { rows } = JSON.parse(stdout)
     // Survivor deal 40 (1 -> 2) entered both stages.
     expect(rows[0].entered).toBe(1)
     expect(rows[1].entered).toBe(1)
@@ -519,5 +521,17 @@ describe('funnel --exact (mined stage transitions)', () => {
       .split('\n')
       .filter((l) => /could not be fetched/.test(l))
     expect(warnings).toHaveLength(1)
+  })
+
+  it('rethrows non-API errors during mining instead of skipping them', async () => {
+    mockScope([{ id: 60, status: 'open', stage_id: 1 }])
+    mockApi()
+      .get('/api/v1/deals/60/changelog')
+      .query(true)
+      .replyWithError('socket hangup')
+
+    await expect(
+      FunnelCommand.run(['--exact', '--no-retry', '--output', 'json']),
+    ).rejects.toThrow()
   })
 })

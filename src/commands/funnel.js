@@ -90,7 +90,7 @@ export default class FunnelCommand extends BaseCommand {
         stages,
         pipelineId,
       )
-      await this.outputResults(exact, {
+      const columns = {
         stage: { header: 'Stage' },
         entered: { header: 'Entered (observed)' },
         conversionFromPrev: {
@@ -102,11 +102,14 @@ export default class FunnelCommand extends BaseCommand {
               ? ''
               : `${(row.conversionFromPrev * 100).toFixed(0)}%`,
         },
-      })
-      // `won` is a single total (identical on every row), so the per-row Won
-      // column just repeated it confusingly — report it once under the table.
+      }
+      // `won` is a single total: tables report it once under the rows;
+      // machine formats carry it as a top-level field next to the rows.
       if (this.resolveFormat() === 'table') {
-        this.log(`Won: ${exact[0]?.won ?? 0}`)
+        await this.outputResults(exact.rows, columns)
+        this.log(`Won: ${exact.won}`)
+      } else {
+        await this.outputResults(exact, columns)
       }
       return
     }

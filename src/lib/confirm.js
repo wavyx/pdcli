@@ -12,5 +12,12 @@ export async function confirmAction(message, skipConfirm, options) {
   if (options && Object.prototype.hasOwnProperty.call(options, 'default')) {
     promptOptions.default = options.default
   }
-  return confirm(promptOptions)
+  try {
+    return await confirm(promptOptions)
+  } catch (err) {
+    // Ctrl-C / closed stdin (CI, piping) force-closes the prompt — treat it
+    // as a "no" so callers abort cleanly instead of surfacing exit 70.
+    if (err?.name === 'ExitPromptError') return false
+    throw err
+  }
 }

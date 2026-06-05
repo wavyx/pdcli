@@ -113,12 +113,15 @@ describe('metrics coverage', () => {
     const c = JSON.parse(stdout)
 
     // only the revenue_forecast goal counts: target 60000, progress 25000
-    // remaining = 35000; coverage = 180000 / 35000 ≈ 5.14 → healthy
+    // remaining = 35000. Classic ratio uses RAW open value (230000);
+    // the weighted figure (180000) is the secondary risk-adjusted view.
+    expect(c.openValue).toBe(230000)
     expect(c.weightedOpen).toBe(180000)
     expect(c.goalTarget).toBe(60000)
     expect(c.progress).toBe(25000)
     expect(c.remaining).toBe(35000)
-    expect(c.coverage).toBeCloseTo(180000 / 35000)
+    expect(c.coverage).toBeCloseTo(230000 / 35000)
+    expect(c.weightedCoverage).toBeCloseTo(180000 / 35000)
     expect(c.verdict).toBe('healthy')
   })
 
@@ -177,10 +180,10 @@ describe('metrics coverage', () => {
     ])
     const c = JSON.parse(stdout)
 
-    // target 90000, progress 0, remaining 90000; coverage 180000/90000 = 2
+    // target 90000, progress 0, remaining 90000; raw 230000/90000 ≈ 2.56
     expect(c.goalTarget).toBe(90000)
     expect(c.progress).toBe(0)
-    expect(c.coverage).toBeCloseTo(2)
+    expect(c.coverage).toBeCloseTo(230000 / 90000)
     expect(c.verdict).toBe('borderline')
   })
 
@@ -551,5 +554,37 @@ describe('metrics coverage', () => {
     const c = JSON.parse(stdout)
     expect(c.weightedOpen).toBe(0)
     expect(c.goalTarget).toBe(50000)
+  })
+
+  it('refuses to sum a real-currency goal with a currency-less goal', async () => {
+    mockApi()
+      .get('/api/v1/goals/find')
+      .query(true)
+      .reply(200, {
+        success: true,
+        data: {
+          goals: [
+            {
+              id: 'g1',
+              type: { name: 'revenue_forecast' },
+              expected_outcome: {
+                target: 60000,
+                tracking_metric: 'sum',
+                currency_id: 1,
+              },
+            },
+            {
+              id: 'g2',
+              type: { name: 'revenue_forecast' },
+              expected_outcome: { target: 40000, tracking_metric: 'sum' },
+            },
+          ],
+        },
+      })
+    mockPipelineHealthFetch()
+
+    const err = await CoverageCommand.run(['--pipeline', '1']).catch((e) => e)
+    expect(err.exitCode ?? err.oclif?.exit).toBe(64)
+    expect(String(err.message)).toMatch(/multiple currencies/i)
   })
 })

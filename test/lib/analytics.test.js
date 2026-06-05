@@ -299,7 +299,7 @@ describe('computeExactFunnel', () => {
       },
     ]
 
-    const rows = computeExactFunnel(transitionsByDeal, STAGES)
+    const { rows } = computeExactFunnel(transitionsByDeal, STAGES)
 
     // Qualified (stage 1) is the TRUE starting stage and must be counted.
     expect(rows[0]).toMatchObject({ stage: 'Qualified', entered: 1 })
@@ -322,7 +322,7 @@ describe('computeExactFunnel', () => {
       { dealId: 3, stageId: 3, rows: [] },
     ]
 
-    const rows = computeExactFunnel(transitionsByDeal, STAGES)
+    const { rows } = computeExactFunnel(transitionsByDeal, STAGES)
 
     expect(rows).toHaveLength(3)
     // Qualified (stage 1): A + B entered (started there). C did NOT.
@@ -344,7 +344,7 @@ describe('computeExactFunnel', () => {
       { dealId: 3, stageId: 3, rows: [] },
     ]
 
-    const rows = computeExactFunnel(transitionsByDeal, STAGES)
+    const { rows, won } = computeExactFunnel(transitionsByDeal, STAGES)
 
     // first stage has no previous → null conversion
     expect(rows[0].conversionFromPrev).toBeNull()
@@ -352,16 +352,44 @@ describe('computeExactFunnel', () => {
     expect(rows[1].conversionFromPrev).toBeCloseTo(1)
     // Demo(2) -> Negotiation(2): 2/2 = 1
     expect(rows[2].conversionFromPrev).toBeCloseTo(1)
-    // won count = deals with a status row new_value === 'won'
-    expect(rows[0].won).toBe(1)
-    expect(rows[1].won).toBe(1)
-    expect(rows[2].won).toBe(1)
+    // won is a single top-level total, not repeated per row
+    expect(won).toBe(1)
+    expect(rows[0]).not.toHaveProperty('won')
+  })
+
+  it('derives the start stage from the transition graph, immune to same-second ordering', () => {
+    // Two hops within the SAME second: time alone cannot order them. The
+    // start stage is the old_value that never appears as a new_value.
+    const transitionsByDeal = [
+      {
+        dealId: 1,
+        stageId: 3,
+        rows: [
+          {
+            field_key: 'stage_id',
+            old_value: '2',
+            new_value: '3',
+            time: '2026-01-01 12:00:00',
+          },
+          {
+            field_key: 'stage_id',
+            old_value: '1',
+            new_value: '2',
+            time: '2026-01-01 12:00:00',
+          },
+        ],
+      },
+    ]
+    const { rows } = computeExactFunnel(transitionsByDeal, STAGES)
+    expect(rows[0].entered).toBe(1) // stage 1 — the true start
+    expect(rows[1].entered).toBe(1)
+    expect(rows[2].entered).toBe(1)
   })
 
   it('does NOT inflate later stages with skipped earlier stages (exact, not approximation)', () => {
     // deal jumped straight from stage 1 to stage 3, never entering stage 2
     const transitionsByDeal = [{ dealId: 1, stageId: 3, rows: [stage(1, 3)] }]
-    const rows = computeExactFunnel(transitionsByDeal, STAGES)
+    const { rows } = computeExactFunnel(transitionsByDeal, STAGES)
     expect(rows[0]).toMatchObject({ stage: 'Qualified', entered: 1 })
     expect(rows[1]).toMatchObject({ stage: 'Demo', entered: 0 })
     expect(rows[2]).toMatchObject({ stage: 'Negotiation', entered: 1 })
@@ -372,7 +400,7 @@ describe('computeExactFunnel', () => {
     const transitionsByDeal = [
       { dealId: 1, stageId: 2, rows: [stage(1, 2), stage(2, 1), stage(1, 2)] },
     ]
-    const rows = computeExactFunnel(transitionsByDeal, STAGES)
+    const { rows } = computeExactFunnel(transitionsByDeal, STAGES)
     expect(rows[0].entered).toBe(1)
     expect(rows[1].entered).toBe(1)
     expect(rows[2].entered).toBe(0)
@@ -381,7 +409,7 @@ describe('computeExactFunnel', () => {
   it('returns null conversion when nothing entered the previous stage', () => {
     // only deal enters stage 3 directly; stage 2 entered by nobody
     const transitionsByDeal = [{ dealId: 1, stageId: 3, rows: [] }]
-    const rows = computeExactFunnel(transitionsByDeal, STAGES)
+    const { rows } = computeExactFunnel(transitionsByDeal, STAGES)
     expect(rows[1].entered).toBe(0)
     // Negotiation conversion divides by Demo(0) → null
     expect(rows[2].conversionFromPrev).toBeNull()
@@ -396,7 +424,7 @@ describe('computeExactFunnel', () => {
     const transitionsByDeal = [
       { dealId: 1, stageId: 2, rows: [stage(1, 9), stage(9, 2)] },
     ]
-    const rows = computeExactFunnel(transitionsByDeal, stages, {
+    const { rows } = computeExactFunnel(transitionsByDeal, stages, {
       pipelineId: 1,
     })
     expect(rows.map((r) => r.stage)).toEqual([
@@ -422,17 +450,17 @@ describe('computeExactFunnel', () => {
         ],
       },
     ]
-    const rows = computeExactFunnel(transitionsByDeal, STAGES)
+    const { rows, won } = computeExactFunnel(transitionsByDeal, STAGES)
     expect(rows[0].entered).toBe(1)
     expect(rows[1].entered).toBe(1)
-    expect(rows[0].won).toBe(0)
+    expect(won).toBe(0)
   })
 
   it('works without an options argument and with no deals', () => {
-    const rows = computeExactFunnel([], STAGES)
+    const { rows, won } = computeExactFunnel([], STAGES)
     expect(rows).toHaveLength(3)
     expect(rows.every((r) => r.entered === 0)).toBe(true)
-    expect(rows[0].won).toBe(0)
+    expect(won).toBe(0)
     expect(rows[0].conversionFromPrev).toBeNull()
   })
 })
@@ -476,24 +504,30 @@ describe('null-value tolerance', () => {
 })
 
 describe('computeCoverage', () => {
-  it('divides weighted pipeline by the remaining-to-target gap', () => {
-    // remaining = 100000 - 40000 = 60000; coverage = 180000 / 60000 = 3
+  it('divides UNWEIGHTED open pipeline by the remaining gap (classic 3x rule)', () => {
+    // The classic coverage rule of thumb is defined on raw pipeline value —
+    // weighting it first would double-discount risk. remaining = 60000;
+    // coverage = 180000 / 60000 = 3; weighted shown separately.
     const c = computeCoverage({
-      weightedOpen: 180000,
+      openValue: 180000,
+      weightedOpen: 90000,
       goalTarget: 100000,
       progress: 40000,
     })
-    expect(c.weightedOpen).toBe(180000)
+    expect(c.openValue).toBe(180000)
+    expect(c.weightedOpen).toBe(90000)
     expect(c.goalTarget).toBe(100000)
     expect(c.progress).toBe(40000)
     expect(c.remaining).toBe(60000)
     expect(c.coverage).toBeCloseTo(3)
+    expect(c.weightedCoverage).toBeCloseTo(1.5)
     expect(c.verdict).toBe('healthy')
   })
 
   it('classifies a borderline ratio (>=2 and <3)', () => {
     // remaining = 60000; coverage = 150000 / 60000 = 2.5
     const c = computeCoverage({
+      openValue: 150000,
       weightedOpen: 150000,
       goalTarget: 100000,
       progress: 40000,
@@ -505,6 +539,7 @@ describe('computeCoverage', () => {
   it('classifies a low ratio (<2)', () => {
     // remaining = 60000; coverage = 60000 / 60000 = 1
     const c = computeCoverage({
+      openValue: 60000,
       weightedOpen: 60000,
       goalTarget: 100000,
       progress: 40000,
@@ -516,6 +551,7 @@ describe('computeCoverage', () => {
   it('reports "covered" with null coverage when progress meets the target', () => {
     // remaining clamps to 0 → no gap left to cover → coverage is moot
     const c = computeCoverage({
+      openValue: 50000,
       weightedOpen: 50000,
       goalTarget: 100000,
       progress: 100000,
@@ -527,6 +563,7 @@ describe('computeCoverage', () => {
 
   it('reports "covered" when progress exceeds the target (remaining clamps to 0)', () => {
     const c = computeCoverage({
+      openValue: 50000,
       weightedOpen: 50000,
       goalTarget: 100000,
       progress: 130000,
@@ -538,7 +575,11 @@ describe('computeCoverage', () => {
 
   it('defaults progress to 0 when omitted', () => {
     // remaining = 100000; coverage = 300000 / 100000 = 3
-    const c = computeCoverage({ weightedOpen: 300000, goalTarget: 100000 })
+    const c = computeCoverage({
+      openValue: 300000,
+      weightedOpen: 300000,
+      goalTarget: 100000,
+    })
     expect(c.progress).toBe(0)
     expect(c.remaining).toBe(100000)
     expect(c.coverage).toBeCloseTo(3)

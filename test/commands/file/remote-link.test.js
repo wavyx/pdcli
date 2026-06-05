@@ -154,4 +154,23 @@ describe('file remote-link', () => {
       nock.enableNetConnect()
     }
   })
+
+  it('percent-encodes special characters in remote_id (form contract)', async () => {
+    let received
+    mockApi()
+      .post('/api/v1/files/remoteLink', (body) => {
+        received = body
+        return true
+      })
+      .reply(200, { success: true, data: { id: 9 } })
+
+    await runCmd(FileRemoteLinkCommand, [
+      '--deal',
+      '42',
+      '--remote-id',
+      'a&b=c d+e%f',
+    ])
+    // nock decodes the urlencoded body — the round-trip must preserve the raw value
+    expect(received.remote_id).toBe('a&b=c d+e%f')
+  })
 })

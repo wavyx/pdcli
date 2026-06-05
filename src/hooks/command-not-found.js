@@ -18,13 +18,23 @@ export default async function commandNotFound(options) {
   const alias = getAlias(options.id)
 
   if (alias) {
-    // Cycle/runaway detection: a repeated alias name (self or mutual) or a
-    // chain deeper than MAX_ALIAS_DEPTH means we'd re-enter forever.
-    if (aliasChain.has(options.id) || aliasChain.size >= MAX_ALIAS_DEPTH) {
+    // Runaway detection. Two distinct failure modes, reported distinctly:
+    // a repeated alias name is a true cycle; a long acyclic chain trips the
+    // depth cap (legal but almost certainly a mistake — and the cap is what
+    // keeps a missed cycle from exhausting the heap).
+    if (aliasChain.has(options.id)) {
       const cycle = [...aliasChain, options.id].join(' -> ')
       aliasChain.clear()
       process.stderr.write(
         `${chalk.red('Error:')} alias cycle detected: ${chalk.yellow(cycle)}\n`,
+      )
+      process.exit(64)
+    }
+    if (aliasChain.size >= MAX_ALIAS_DEPTH) {
+      const chain = [...aliasChain, options.id].join(' -> ')
+      aliasChain.clear()
+      process.stderr.write(
+        `${chalk.red('Error:')} alias expansion exceeded ${MAX_ALIAS_DEPTH} hops: ${chalk.yellow(chain)}\n`,
       )
       process.exit(64)
     }
