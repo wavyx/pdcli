@@ -1113,3 +1113,42 @@ describe('unified transport: retry/refresh on non-JSON paths', () => {
     expect(res.buffer.byteLength).toBe(0)
   })
 })
+
+describe('daily budget exhaustion', () => {
+  beforeEach(() => nock.cleanAll())
+  const BASE2 = 'https://acme.pipedrive.com'
+
+  it('fails fast with a clear message when the daily budget is exhausted', async () => {
+    // Daily-budget 429s carry x-daily-requests-left: 0 and no reset window —
+    // blind backoff would stall until midnight. Fail immediately instead.
+    nock(BASE2)
+      .get('/api/v2/deals')
+      .reply(429, {}, { 'x-daily-requests-left': '0' })
+
+    const client = createClient({
+      companyDomain: 'acme',
+      token: 'test-token',
+      retry: true,
+      timeout: 5000,
+    })
+    await expect(client.get('/api/v2/deals')).rejects.toThrow(
+      /daily.*budget|daily.*limit/i,
+    )
+  })
+
+  it('still retries a normal burst 429 that has a reset window', async () => {
+    nock(BASE2)
+      .get('/api/v2/deals')
+      .reply(429, {}, { 'retry-after': '0', 'x-daily-requests-left': '4100' })
+    nock(BASE2).get('/api/v2/deals').reply(200, { success: true, data: [] })
+
+    const client = createClient({
+      companyDomain: 'acme',
+      token: 'test-token',
+      retry: true,
+      timeout: 5000,
+    })
+    const res = await client.get('/api/v2/deals')
+    expect(res.success).toBe(true)
+  })
+})

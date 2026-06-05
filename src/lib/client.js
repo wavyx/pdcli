@@ -177,6 +177,16 @@ export function createClient({
       debug('%s %s → %d', method, path, res.status)
 
       if (res.status === 429) {
+        // Daily-budget exhaustion (x-daily-requests-left: 0) has no useful
+        // reset window — backoff would stall until midnight server time.
+        // Fail fast with an actionable message instead.
+        if (res.headers.get('x-daily-requests-left') === '0') {
+          const err = new RateLimitError(0)
+          err.message =
+            'Daily API request budget exhausted (x-daily-requests-left: 0) — ' +
+            'resets at midnight in the company timezone'
+          throw err
+        }
         const wait = Number(
           res.headers.get('x-ratelimit-reset') ||
             res.headers.get('retry-after') ||
@@ -188,6 +198,10 @@ export function createClient({
         await sleep(wait * 1000)
         continue
       }
+
+      // Surface the remaining daily budget under --verbose (DEBUG=pd:*).
+      const dailyLeft = res.headers.get('x-daily-requests-left')
+      if (dailyLeft != null) debug('daily requests left: %s', dailyLeft)
 
       // OAuth access tokens expire (~1h) — refresh once and retry.
       if (res.status === 401 && onRefresh && attempts === 1) {
