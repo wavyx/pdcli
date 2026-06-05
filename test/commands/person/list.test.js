@@ -32,7 +32,7 @@ describe('person list', () => {
   it('lists persons with primary email/phone in table mode', async () => {
     mockApi()
       .get('/api/v2/persons')
-      .query({ limit: '100' })
+      .query({ limit: '500' })
       .reply(200, {
         success: true,
         data: [
@@ -56,7 +56,7 @@ describe('person list', () => {
   it('passes org filter as org_id query param', async () => {
     mockApi()
       .get('/api/v2/persons')
-      .query({ limit: '100', org_id: '7' })
+      .query({ limit: '500', org_id: '7' })
       .reply(200, { success: true, data: [{ id: 2, name: 'Org person' }] })
 
     const stdout = await runCmd(PersonListCommand, [
@@ -68,13 +68,62 @@ describe('person list', () => {
 
     expect(JSON.parse(stdout)[0].id).toBe(2)
   })
+
+  it('defaults the per-request page size to 500', async () => {
+    mockApi()
+      .get('/api/v2/persons')
+      .query({ limit: '500' })
+      .reply(200, { success: true, data: [{ id: 1, name: 'A' }] })
+
+    const stdout = await runCmd(PersonListCommand, ['--output', 'json'])
+
+    expect(JSON.parse(stdout)[0].id).toBe(1)
+  })
+
+  it('maps power-params to their query params', async () => {
+    mockApi()
+      .get('/api/v2/persons')
+      .query({
+        limit: '500',
+        ids: '1,2,3',
+        sort_by: 'update_time',
+        sort_direction: 'desc',
+        updated_since: '2025-01-01T10:20:00Z',
+        updated_until: '2025-02-01T10:20:00Z',
+      })
+      .reply(200, { success: true, data: [{ id: 1, name: 'A' }] })
+
+    const stdout = await runCmd(PersonListCommand, [
+      '--ids',
+      '1,2,3',
+      '--sort-by',
+      'update_time',
+      '--sort-direction',
+      'desc',
+      '--updated-since',
+      '2025-01-01T10:20:00Z',
+      '--updated-until',
+      '2025-02-01T10:20:00Z',
+      '--output',
+      'json',
+    ])
+
+    expect(JSON.parse(stdout)[0].id).toBe(1)
+  })
+
+  it('rejects more than 100 ids with exit code 64', async () => {
+    const ids = Array.from({ length: 101 }, (_, i) => i + 1).join(',')
+    await expect(
+      runCmd(PersonListCommand, ['--ids', ids, '--output', 'json']),
+    ).rejects.toMatchObject({ oclif: { exit: 64 } })
+  })
 })
 
 describe('person list edge cases', () => {
   it('renders blanks for persons without emails or phones', async () => {
     mockApi()
       .get('/api/v2/persons')
-      .query({ limit: '100' })
+      .query({ limit: '500' })
       .reply(200, {
         success: true,
         data: [{ id: 3, name: 'No Contact', emails: [], phones: null }],
@@ -88,7 +137,7 @@ describe('person list edge cases', () => {
   it('falls back to the first email when none is primary', async () => {
     mockApi()
       .get('/api/v2/persons')
-      .query({ limit: '100' })
+      .query({ limit: '500' })
       .reply(200, {
         success: true,
         data: [
@@ -110,7 +159,7 @@ describe('person list email entry without value', () => {
   it('renders an empty cell', async () => {
     mockApi()
       .get('/api/v2/persons')
-      .query({ limit: '100' })
+      .query({ limit: '500' })
       .reply(200, {
         success: true,
         data: [{ id: 5, name: 'Valueless', emails: [{ primary: true }] }],
@@ -119,5 +168,15 @@ describe('person list email entry without value', () => {
     const stdout = await runCmd(PersonListCommand, ['--output', 'table'])
 
     expect(stdout).toContain('Valueless')
+  })
+
+  it('refuses --ids together with --filter (the API silently drops ids)', async () => {
+    const err = await PersonListCommand.run([
+      '--ids',
+      '1,2',
+      '--filter',
+      '5',
+    ]).catch((e) => e)
+    expect(String(err.message)).toMatch(/cannot also be provided/)
   })
 })

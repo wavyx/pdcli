@@ -104,4 +104,27 @@ describe('webhook create', () => {
       ]),
     ).rejects.toThrow()
   })
+
+  it('accepts the v2 webhook object types added for projects and line items', async () => {
+    for (const obj of [
+      'project',
+      'task',
+      'board',
+      'phase',
+      'deal_product',
+      'deal_installment',
+    ]) {
+      mockApi()
+        .post('/api/v1/webhooks', (body) => body.event_object === obj)
+        .reply(200, { status: 'ok', success: true, data: { id: 1 } })
+      await runCmd(WebhookCreateCommand, [
+        '--url',
+        'https://example.com/hook',
+        '--event-action',
+        'create',
+        '--event-object',
+        obj,
+      ])
+    }
+  })
 })

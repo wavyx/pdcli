@@ -4,6 +4,45 @@ All notable changes to `pdcli` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/).
 
+## [0.10.0] - 2026-06-06
+
+### Added
+
+- `deal product list/add/update/remove` — line items on deals at last.
+  Cursor-paginated listing with sort options; `add` takes `--product`,
+  `--price`, and `--quantity` (default 1) plus discount/tax/comments;
+  amounts are validated client-side (exit 64 on garbage). No
+  `--duration` flag: product durations were retired by Pipedrive in
+  2024 in favor of billing frequencies.
+- `user list` and `user find <term>` (`--by-email` for exact lookups) —
+  every `--owner <id>` flag in the CLI is finally usable without
+  copying ids out of the web app.
+- List power-params on `deal`, `person`, `org`, `activity`, and
+  `product` lists: `--filter <saved-filter-id>`, `--ids` (max 100),
+  `--sort-by`/`--sort-direction`, `--updated-since`/`--updated-until`
+  where the endpoint supports them. `--ids` and `--filter` are mutually
+  exclusive — the API silently ignores ids when a filter is present.
+- `deal history <id>` — field-change audit trail, newest-first, with
+  `--field` filtering and `--resolve-fields` rendering custom-field
+  names and option labels.
+- `webhook create --event-object` accepts the six v2 object types added
+  for projects and line items (project, task, board, phase,
+  deal_product, deal_installment).
+- Daily-budget awareness: a 429 with `x-daily-ratelimit-token-remaining: 0`
+  fails fast with a clear message instead of backing off blindly;
+  `--verbose` logs the remaining daily token budget on every request.
+
+### Changed
+
+- List page size raised from 100 to 500 rows per request (the v2
+  maximum) — large pulls use 5x fewer requests and rate-limit tokens.
+
+### Fixed
+
+- `activity list --type` never worked against the live API (the v2
+  endpoint rejects a `type` query parameter); the flag now filters
+  client-side.
+
 ## [0.9.0] - 2026-06-05
 
 ### Changed

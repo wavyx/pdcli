@@ -33,19 +33,19 @@ pdcli audit
 
 ## The checks
 
-| Name | Sev | Detection rule |
-| ---- | --- | -------------- |
-| `stale-deals` | must | Open deal where `now − update_time > 14 days`. |
-| `no-next-activity` | must | Open deal with no not-done activity due today or later linked to it. |
-| `past-close-date` | must | Open deal whose `expected_close_date` is before today. |
-| `missing-fields` | must | Open deal missing any of: owner; both person and org; a value > 0; or currency when it has a value. |
-| `ancient-deals` | must | Open deal whose age (`now − add_time`) exceeds 2× the avg won cycle, or 168 days when no won deals exist. |
-| `missing-close-time` | should | A `won` deal with no `won_time`, or a `lost` deal with no `lost_time`. |
-| `duplicate-persons` | must | Two or more persons sharing the same email (trimmed, lowercased). |
-| `uncontactable-persons` | must | Person with neither a non-empty email nor phone. |
-| `duplicate-orgs` | should | Two or more orgs with the same normalized name (lowercased, common suffixes like Inc/Ltd/LLC/GmbH stripped, non-alphanumerics removed), **plus** fuzzy near-matches that normalize differently but score Jaro-Winkler ≥ 0.92. |
-| `overdue-activities` | should | Open (not-done) activities past due, counted per owner. |
-| `currency-missing` | should | Open deal with a value > 0 but no currency. |
+| Name                    | Sev    | Detection rule                                                                                                                                                                                                                |
+| ----------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stale-deals`           | must   | Open deal where `now − update_time > 14 days`.                                                                                                                                                                                |
+| `no-next-activity`      | must   | Open deal with no not-done activity due today or later linked to it.                                                                                                                                                          |
+| `past-close-date`       | must   | Open deal whose `expected_close_date` is before today.                                                                                                                                                                        |
+| `missing-fields`        | must   | Open deal missing any of: owner; both person and org; a value > 0; or currency when it has a value.                                                                                                                           |
+| `ancient-deals`         | must   | Open deal whose age (`now − add_time`) exceeds 2× the avg won cycle, or 168 days when no won deals exist.                                                                                                                     |
+| `missing-close-time`    | should | A `won` deal with no `won_time`, or a `lost` deal with no `lost_time`.                                                                                                                                                        |
+| `duplicate-persons`     | must   | Two or more persons sharing the same email (trimmed, lowercased).                                                                                                                                                             |
+| `uncontactable-persons` | must   | Person with neither a non-empty email nor phone.                                                                                                                                                                              |
+| `duplicate-orgs`        | should | Two or more orgs with the same normalized name (lowercased, common suffixes like Inc/Ltd/LLC/GmbH stripped, non-alphanumerics removed), **plus** fuzzy near-matches that normalize differently but score Jaro-Winkler ≥ 0.92. |
+| `overdue-activities`    | should | Open (not-done) activities past due, counted per owner.                                                                                                                                                                       |
+| `currency-missing`      | should | Open deal with a value > 0 but no currency.                                                                                                                                                                                   |
 
 The thresholds are constants in the audit: stale = 14 days, ancient = 2× the avg won cycle
 (`won_time − add_time` across won deals) with a 168-day fallback when there are no won deals
@@ -78,6 +78,23 @@ pdcli org merge 12 --into 48
 survivor whose data wins on conflict. Both commands confirm before deleting unless you pass
 `--yes`. So a `duplicate-persons` or `duplicate-orgs` finding becomes a one-liner: merge the
 duplicate `id` into the one you want to keep.
+
+When a deal finding needs investigating before you touch it — _why_ is this deal stale, or
+who changed its stage — `deal history <id>` prints its field-change audit trail (who changed
+what, when), newest-first. Narrow to one field with `--field`:
+
+```bash
+pdcli deal history 204                    # full change log for a flagged deal
+pdcli deal history 204 --field stage_id   # just the stage moves
+```
+
+Findings carry owner **user IDs**, not names. Resolve them with `user list` (the whole
+directory) or `user find <term>` (by name, or `--by-email` for an address):
+
+```bash
+pdcli user list --output json
+pdcli user find "jane" --output json
+```
 
 ## Run a subset
 

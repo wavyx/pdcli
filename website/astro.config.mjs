@@ -1,7 +1,7 @@
 // @ts-check
-import { defineConfig } from 'astro/config';
-import starlight from '@astrojs/starlight';
-import starlightLlmsTxt from 'starlight-llms-txt';
+import { defineConfig } from 'astro/config'
+import starlight from '@astrojs/starlight'
+import starlightLlmsTxt from 'starlight-llms-txt'
 
 // pdcli — Astro + Starlight config for GitHub Pages (project site)
 // Live URL: https://wavyx.github.io/pdcli
@@ -94,6 +94,10 @@ export default defineConfig({
             { label: 'Profiles & configuration', slug: 'guides/configuration' },
             { label: 'Custom fields', slug: 'guides/custom-fields' },
             { label: 'Bulk operations & CSV import', slug: 'guides/bulk' },
+            {
+              label: 'Deal products (line items)',
+              slug: 'guides/deal-products',
+            },
             { label: 'Full-account backup', slug: 'guides/backup' },
             { label: 'Sales analytics', slug: 'guides/analytics' },
             { label: 'Data-hygiene audit', slug: 'guides/audit' },
@@ -112,7 +116,10 @@ export default defineConfig({
         {
           label: 'Concepts',
           items: [
-            { label: 'How pdcli talks to Pipedrive', slug: 'concepts/api-model' },
+            {
+              label: 'How pdcli talks to Pipedrive',
+              slug: 'concepts/api-model',
+            },
             { label: 'Security model', slug: 'concepts/security' },
           ],
         },
@@ -132,4 +139,4 @@ export default defineConfig({
       ],
     }),
   ],
-});
+})

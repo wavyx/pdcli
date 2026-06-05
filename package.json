@@ -1,6 +1,6 @@
 {
   "name": "@wavyx/pdcli",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "publishConfig": {
     "access": "public"
   },
@@ -82,6 +82,9 @@
       },
       "alias": {
         "description": "Command shortcuts (alias set/list/unset)"
+      },
+      "deal:product": {
+        "description": "Manage products (line items) on a deal"
       }
     },
     "hooks": {

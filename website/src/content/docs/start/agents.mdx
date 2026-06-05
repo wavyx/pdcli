@@ -40,17 +40,17 @@ Refine without leaving the CLI using `--jq` (native jq), `--fields`, or
 pdcli uses [sysexits](https://man.freebsd.org/cgi/man.cgi?query=sysexits) codes so a
 script can react to the failure class without parsing text:
 
-| Code | Meaning |
-| ---- | ------- |
-| 0  | Success |
-| 1  | Generic error |
-| 64 | Invalid input data (e.g. a CSV missing its name column) — note: malformed flags/arguments exit 70 |
-| 65 | Bad input data (API 400 / 422) |
-| 69 | Service unavailable (API 5xx, or unreachable) |
-| 70 | Internal software error (unexpected) |
-| 75 | Rate limited (API 429) — retry later |
-| 77 | Not authenticated / forbidden (API 401 / 403) |
-| 78 | Configuration error (e.g. API 402, missing domain) |
+| Code | Meaning                                                                                           |
+| ---- | ------------------------------------------------------------------------------------------------- |
+| 0    | Success                                                                                           |
+| 1    | Generic error                                                                                     |
+| 64   | Invalid input data (e.g. a CSV missing its name column) — note: malformed flags/arguments exit 70 |
+| 65   | Bad input data (API 400 / 422)                                                                    |
+| 69   | Service unavailable (API 5xx, or unreachable)                                                     |
+| 70   | Internal software error (unexpected)                                                              |
+| 75   | Rate limited (API 429) — retry later                                                              |
+| 77   | Not authenticated / forbidden (API 401 / 403)                                                     |
+| 78   | Configuration error (e.g. API 402, missing domain)                                                |
 
 With `--output json`, errors also print a JSON object on **stderr**:
 
@@ -74,7 +74,9 @@ pdcli deal --help
 pdcli deal create --help
 ```
 
-The full reference is at [/pdcli/reference/commands/](/pdcli/reference/commands/).
+The full reference is at [/pdcli/reference/commands/](/pdcli/reference/commands/). Beyond
+CRUD, agents have `deal history <id>` for a deal's field-change audit trail, `deal product`
+for line items, and `--updated-since` on the list commands for incremental polling.
 
 ## The host-locked `api` escape hatch
 

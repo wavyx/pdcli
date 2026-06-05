@@ -177,6 +177,21 @@ export function createClient({
       debug('%s %s → %d', method, path, res.status)
 
       if (res.status === 429) {
+        // Daily-budget exhaustion has no useful reset window — backoff would
+        // stall until the daily reset. Fail fast with an actionable message.
+        // The live API reports the token budget as
+        // x-daily-ratelimit-token-remaining (verified on the sandbox);
+        // x-daily-requests-left is the older POST/PUT fair-use header.
+        const dailyRemaining =
+          res.headers.get('x-daily-ratelimit-token-remaining') ??
+          res.headers.get('x-daily-requests-left')
+        if (dailyRemaining === '0') {
+          const err = new RateLimitError(0)
+          err.message =
+            'Daily API token budget exhausted — resets at midnight server ' +
+            'time (UTC-based; may differ from your local timezone)'
+          throw err
+        }
         const wait = Number(
           res.headers.get('x-ratelimit-reset') ||
             res.headers.get('retry-after') ||
@@ -187,6 +202,16 @@ export function createClient({
         debug('rate limited, waiting %ds', wait)
         await sleep(wait * 1000)
         continue
+      }
+
+      // Surface the remaining daily budget under --verbose (DEBUG=pd:*).
+      const dailyLeft = res.headers.get('x-daily-ratelimit-token-remaining')
+      if (dailyLeft != null) {
+        debug(
+          'daily token budget: %s remaining of %s',
+          dailyLeft,
+          res.headers.get('x-daily-ratelimit-token-limit') ?? '?',
+        )
       }
 
       // OAuth access tokens expire (~1h) — refresh once and retry.

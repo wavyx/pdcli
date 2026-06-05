@@ -21,6 +21,30 @@ pdcli deal list --status open --jq '.[].id' | pdcli deal bulk-update --owner 42 
 `--ids` and `--filter` are mutually exclusive. With neither flag and no piped input you get
 exit 64 (`No targets — pass --ids, --filter, or pipe ids on stdin`).
 
+### Scoping the set with list power-params
+
+The cleanest way to choose what bulk work touches is to scope it with `deal list` (or
+`person list`, `org list`, `product list`) and pipe the result in. The list commands share a
+small set of selectors:
+
+- `--filter <id>` — a Pipedrive **saved filter** ID. Build and discover IDs with
+  [`filter list`](/pdcli/reference/commands/) (`pdcli filter list --type deals`), then reuse
+  the same ID for both listing and `deal bulk-update --filter`.
+- `--ids <a,b,c>` — fetch an explicit set (max 100).
+- `--sort-by` / `--sort-direction` — order the results; the available sort fields vary by
+  entity (e.g. deals sort on `id`, `update_time`, or `add_time`).
+- `--updated-since` / `--updated-until` — bound by last-modified time. Both take **RFC3339
+  with no fractional seconds** (`2026-06-01T00:00:00Z`). `product list` supports only
+  `--updated-since` — products have no `--updated-until`.
+
+Because a saved filter ID works identically in `deal list` and `deal bulk-update`, you can
+preview the exact set, then apply the change to it:
+
+```bash
+pdcli deal list --filter 9 --sort-by update_time --sort-direction asc   # see the set
+pdcli deal list --filter 9 --jq '.[].id' | pdcli deal bulk-update --stage 5   # act on it
+```
+
 ### What you can pipe on stdin
 
 When stdin is not a TTY, pdcli reads it and accepts three shapes:
@@ -28,7 +52,7 @@ When stdin is not a TTY, pdcli reads it and accepts three shapes:
 - **Newline-separated IDs** — one integer per line.
 - **A JSON array of IDs** — `[1, 2, 3]`.
 - **A JSON array of objects** with an `id` field — e.g. the output of `deal list --output
-  json`, so `pdcli deal list --status open | pdcli deal bulk-update --status won` works.
+json`, so `pdcli deal list --status open | pdcli deal bulk-update --status won` works.
 
 ### What you can change
 
@@ -82,10 +106,10 @@ Each header maps to a field. Recognized special columns build standard values di
 every other header is resolved through the entity's field definitions — by human name,
 `field_code`, or hash key — including custom fields and their option labels.
 
-| Entity | Special columns |
-| ------ | --------------- |
+| Entity | Special columns                                |
+| ------ | ---------------------------------------------- |
 | person | `name`, `email`, `phone`, `org_id`, `owner_id` |
-| org    | `name`, `owner_id` |
+| org    | `name`, `owner_id`                             |
 
 For persons, `email` and `phone` become the primary email/phone. Empty cells are skipped.
 
