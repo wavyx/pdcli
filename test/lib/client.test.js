@@ -965,3 +965,143 @@ describe('postForm (application/x-www-form-urlencoded)', () => {
     ).rejects.toThrow(/Refusing to send request outside/)
   })
 })
+describe('unified transport: retry/refresh on non-JSON paths', () => {
+  beforeEach(() => nock.cleanAll())
+
+  const BASE = 'https://acme.pipedrive.com'
+  const tokenClient = (retry = true) =>
+    createClient({
+      companyDomain: 'acme',
+      token: 'test-token',
+      retry,
+      timeout: 5000,
+    })
+
+  it('postForm retries a 429 honoring retry-after', async () => {
+    nock(BASE)
+      .post('/api/v1/files/remoteLink')
+      .reply(429, {}, { 'retry-after': '0' })
+    nock(BASE)
+      .post('/api/v1/files/remoteLink')
+      .reply(200, { success: true, data: { id: 1 } })
+
+    const res = await tokenClient().postForm('/api/v1/files/remoteLink', {
+      item_type: 'deal',
+    })
+    expect(res.data.id).toBe(1)
+  })
+
+  it('postForm surfaces 429 immediately with retry disabled', async () => {
+    nock(BASE)
+      .post('/api/v1/files/remoteLink')
+      .reply(429, {}, { 'retry-after': '0' })
+
+    await expect(
+      tokenClient(false).postForm('/api/v1/files/remoteLink', {}),
+    ).rejects.toMatchObject({ exitCode: 75 })
+  })
+
+  it('postMultipart retries a 429 honoring retry-after', async () => {
+    nock(BASE).post('/api/v1/files').reply(429, {}, { 'retry-after': '0' })
+    nock(BASE)
+      .post('/api/v1/files')
+      .reply(200, { success: true, data: { id: 5 } })
+
+    const res = await tokenClient().postMultipart('/api/v1/files', {
+      file: { name: 'a.txt', data: Buffer.from('hi') },
+    })
+    expect(res.data.id).toBe(5)
+  })
+
+  it('postMultipart surfaces 429 immediately with retry disabled', async () => {
+    nock(BASE).post('/api/v1/files').reply(429, {}, { 'retry-after': '0' })
+
+    await expect(
+      tokenClient(false).postMultipart('/api/v1/files', {
+        file: { name: 'a.txt', data: Buffer.from('hi') },
+      }),
+    ).rejects.toMatchObject({ exitCode: 75 })
+  })
+
+  it('download retries a 429 honoring retry-after', async () => {
+    nock(BASE)
+      .get('/api/v1/files/9/download')
+      .reply(429, {}, { 'retry-after': '0' })
+    nock(BASE).get('/api/v1/files/9/download').reply(200, 'binarydata', {
+      'content-type': 'application/pdf',
+    })
+
+    const res = await tokenClient().download('/api/v1/files/9/download')
+    expect(Buffer.from(res.buffer).toString()).toBe('binarydata')
+    expect(res.contentType).toBe('application/pdf')
+  })
+
+  it('download retries 5xx with backoff', async () => {
+    nock(BASE).get('/api/v1/files/9/download').reply(502, 'bad gateway')
+    nock(BASE).get('/api/v1/files/9/download').reply(200, 'ok', {
+      'content-type': 'text/plain',
+    })
+
+    const res = await tokenClient().download('/api/v1/files/9/download')
+    expect(Buffer.from(res.buffer).toString()).toBe('ok')
+  })
+
+  it('postForm refreshes the OAuth token once on 401 and retries', async () => {
+    const onRefresh = vi.fn().mockResolvedValue('fresh-token')
+    const client = createClient({
+      apiDomain: 'https://acme.pipedrive.com',
+      token: 'stale',
+      authMode: 'oauth',
+      onRefresh,
+      retry: true,
+      timeout: 5000,
+    })
+    nock(BASE)
+      .post('/api/v1/files/remoteLink')
+      .matchHeader('authorization', 'Bearer stale')
+      .reply(401, { success: false, error: 'unauthorized' })
+    nock(BASE)
+      .post('/api/v1/files/remoteLink')
+      .matchHeader('authorization', 'Bearer fresh-token')
+      .reply(200, { success: true, data: { id: 2 } })
+
+    const res = await client.postForm('/api/v1/files/remoteLink', {})
+    expect(res.data.id).toBe(2)
+    expect(onRefresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('download refreshes the OAuth token once on 401 and retries', async () => {
+    const onRefresh = vi.fn().mockResolvedValue('fresh-token')
+    const client = createClient({
+      apiDomain: 'https://acme.pipedrive.com',
+      token: 'stale',
+      authMode: 'oauth',
+      onRefresh,
+      retry: true,
+      timeout: 5000,
+    })
+    nock(BASE)
+      .get('/api/v1/files/9/download')
+      .matchHeader('authorization', 'Bearer stale')
+      .reply(401, 'no')
+    nock(BASE)
+      .get('/api/v1/files/9/download')
+      .matchHeader('authorization', 'Bearer fresh-token')
+      .reply(200, 'data', { 'content-type': 'text/plain' })
+
+    const res = await client.download('/api/v1/files/9/download')
+    expect(Buffer.from(res.buffer).toString()).toBe('data')
+    expect(onRefresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('postMultipart hard-stops on 403 after a 429 (escalation)', async () => {
+    nock(BASE).post('/api/v1/files').reply(429, {}, { 'retry-after': '0' })
+    nock(BASE).post('/api/v1/files').reply(403, { error: 'blocked' })
+
+    await expect(
+      tokenClient().postMultipart('/api/v1/files', {
+        file: { name: 'a.txt', data: Buffer.from('hi') },
+      }),
+    ).rejects.toThrow(/rate-limit escalation/)
+  })
+})

@@ -79,80 +79,11 @@ export function createClient({
       }
     }
 
-    const maxAttempts = retry ? 3 : 1
-    let attempts = 0
-    let sawRateLimit = false
-
-    while (attempts < maxAttempts) {
-      attempts++
-
-      const headers = {
-        'content-type': 'application/json',
-        'user-agent': userAgent,
-      }
-      if (authMode === 'oauth') {
-        headers.authorization = `Bearer ${token}`
-      } else {
-        headers['x-api-token'] = token
-      }
-
-      const res = await fetch(url, {
-        method,
-        headers,
-        body: body ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(timeout),
-      })
-
-      debug('%s %s → %d', method, path, res.status)
-
-      if (res.status === 429) {
-        const wait = Number(
-          res.headers.get('x-ratelimit-reset') ||
-            res.headers.get('retry-after') ||
-            DEFAULT_RETRY_AFTER_S,
-        )
-        if (!retry) throw new RateLimitError(wait)
-        sawRateLimit = true
-        debug('rate limited, waiting %ds', wait)
-        await sleep(wait * 1000)
-        continue
-      }
-
-      // OAuth access tokens expire (~1h) — refresh once and retry.
-      if (res.status === 401 && onRefresh && attempts === 1) {
-        debug('401, attempting OAuth token refresh')
-        token = await onRefresh()
-        continue
-      }
-
-      // Pipedrive escalates persistent rate-limit abuse from 429 to 403 —
-      // treat that as a hard stop, never retry into it.
-      if (res.status === 403 && sawRateLimit) {
-        const text = await res.text()
-        const err = ApiError.fromResponse(res.status, text, path)
-        err.message += ' (403 after 429: rate-limit escalation — stopping)'
-        throw err
-      }
-
-      if (res.status >= 500 && attempts < maxAttempts) {
-        const delay = Math.min(1000 * 2 ** attempts, 30_000) + jitter()
-        debug('server error %d, retrying in %dms', res.status, delay)
-        await sleep(delay)
-        continue
-      }
-
-      if (res.status === 204) return null
-
-      const text = await res.text()
-
-      if (!res.ok) {
-        throw ApiError.fromResponse(res.status, text, path)
-      }
-
-      return text ? JSON.parse(text) : null
-    }
-
-    throw new ServiceUnavailableError()
+    return transport(method, url, {
+      path,
+      makeBody: body ? () => JSON.stringify(body) : undefined,
+      extraHeaders: { 'content-type': 'application/json' },
+    })
   }
 
   /**
@@ -214,24 +145,102 @@ export function createClient({
   }
 
   /**
+   * Shared transport: EVERY HTTP path (JSON, form, multipart, binary) goes
+   * through the same 429 backoff (x-ratelimit-reset → Retry-After → default),
+   * 429→403 escalation hard stop, 5xx retry, OAuth refresh-once, and error
+   * mapping. `makeBody` is invoked per attempt — FormData and friends are
+   * rebuilt rather than reused across retries.
+   * @param {string} method
+   * @param {URL} url
+   * @param {{ path: string, makeBody?: () => any,
+   *   extraHeaders?: Record<string, string>, binary?: boolean }} options
+   */
+  async function transport(
+    method,
+    url,
+    { path, makeBody, extraHeaders = {}, binary = false },
+  ) {
+    const maxAttempts = retry ? 3 : 1
+    let attempts = 0
+    let sawRateLimit = false
+
+    while (attempts < maxAttempts) {
+      attempts++
+
+      const res = await fetch(url, {
+        method,
+        headers: { ...authHeaders(), ...extraHeaders },
+        body: makeBody ? makeBody() : undefined,
+        signal: AbortSignal.timeout(timeout),
+      })
+
+      debug('%s %s → %d', method, path, res.status)
+
+      if (res.status === 429) {
+        const wait = Number(
+          res.headers.get('x-ratelimit-reset') ||
+            res.headers.get('retry-after') ||
+            DEFAULT_RETRY_AFTER_S,
+        )
+        if (!retry) throw new RateLimitError(wait)
+        sawRateLimit = true
+        debug('rate limited, waiting %ds', wait)
+        await sleep(wait * 1000)
+        continue
+      }
+
+      // OAuth access tokens expire (~1h) — refresh once and retry.
+      if (res.status === 401 && onRefresh && attempts === 1) {
+        debug('401, attempting OAuth token refresh')
+        token = await onRefresh()
+        continue
+      }
+
+      // Pipedrive escalates persistent rate-limit abuse from 429 to 403 —
+      // treat that as a hard stop, never retry into it.
+      if (res.status === 403 && sawRateLimit) {
+        const text = await res.text()
+        const err = ApiError.fromResponse(res.status, text, path)
+        err.message += ' (403 after 429: rate-limit escalation — stopping)'
+        throw err
+      }
+
+      if (res.status >= 500 && attempts < maxAttempts) {
+        const delay = Math.min(1000 * 2 ** attempts, 30_000) + jitter()
+        debug('server error %d, retrying in %dms', res.status, delay)
+        await sleep(delay)
+        continue
+      }
+
+      if (res.status === 204) return null
+
+      if (binary) {
+        if (!res.ok) {
+          throw ApiError.fromResponse(res.status, await res.text(), path)
+        }
+        return {
+          buffer: await res.arrayBuffer(),
+          contentType: res.headers.get('content-type'),
+        }
+      }
+
+      const text = await res.text()
+      if (!res.ok) {
+        throw ApiError.fromResponse(res.status, text, path)
+      }
+      return text ? JSON.parse(text) : null
+    }
+
+    throw new ServiceUnavailableError()
+  }
+
+  /**
    * Download a binary resource (e.g. /api/v1/files/:id/download).
    * @param {string} path
    * @returns {Promise<{buffer: ArrayBuffer, contentType: string | null}>}
    */
   async function download(path) {
-    const url = lockedUrl(path)
-    const res = await fetch(url, {
-      headers: authHeaders(),
-      signal: AbortSignal.timeout(timeout),
-    })
-    debug('GET (binary) %s → %d', path, res.status)
-    if (!res.ok) {
-      throw ApiError.fromResponse(res.status, await res.text(), path)
-    }
-    return {
-      buffer: await res.arrayBuffer(),
-      contentType: res.headers.get('content-type'),
-    }
+    return transport('GET', lockedUrl(path), { path, binary: true })
   }
 
   /**
@@ -240,24 +249,16 @@ export function createClient({
    * @param {{ file: { name: string, data: Buffer | Uint8Array }, fields?: Record<string, unknown> }} options
    */
   async function postMultipart(path, { file, fields = {} }) {
-    const url = lockedUrl(path)
-    const form = new FormData()
-    form.set('file', new Blob([file.data]), file.name)
-    for (const [k, v] of Object.entries(fields)) {
-      if (v != null) form.set(k, String(v))
+    // fetch sets the multipart boundary itself — no content-type override.
+    const makeBody = () => {
+      const form = new FormData()
+      form.set('file', new Blob([file.data]), file.name)
+      for (const [k, v] of Object.entries(fields)) {
+        if (v != null) form.set(k, String(v))
+      }
+      return form
     }
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: authHeaders(), // fetch sets the multipart boundary itself
-      body: form,
-      signal: AbortSignal.timeout(timeout),
-    })
-    debug('POST (multipart) %s → %d', path, res.status)
-    const text = await res.text()
-    if (!res.ok) {
-      throw ApiError.fromResponse(res.status, text, path)
-    }
-    return text ? JSON.parse(text) : null
+    return transport('POST', lockedUrl(path), { path, makeBody })
   }
 
   /**
@@ -267,26 +268,15 @@ export function createClient({
    * @param {Record<string, unknown>} fields Null/undefined values are omitted.
    */
   async function postForm(path, fields = {}) {
-    const url = lockedUrl(path)
     const params = new URLSearchParams()
     for (const [k, v] of Object.entries(fields)) {
       if (v != null) params.set(k, String(v))
     }
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        ...authHeaders(),
-        'content-type': 'application/x-www-form-urlencoded',
-      },
-      body: params.toString(),
-      signal: AbortSignal.timeout(timeout),
+    return transport('POST', lockedUrl(path), {
+      path,
+      makeBody: () => params.toString(),
+      extraHeaders: { 'content-type': 'application/x-www-form-urlencoded' },
     })
-    debug('POST (form) %s → %d', path, res.status)
-    const text = await res.text()
-    if (!res.ok) {
-      throw ApiError.fromResponse(res.status, text, path)
-    }
-    return text ? JSON.parse(text) : null
   }
 
   return {
