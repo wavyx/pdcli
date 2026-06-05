@@ -8,7 +8,7 @@ const columns = {
     header: 'Active',
     get: (row) => (row.active_flag ? 'yes' : 'no'),
   },
-  is_admin: { header: 'Admin' },
+  is_admin: { header: 'Admin', get: (row) => (row.is_admin ? 'yes' : 'no') },
 }
 
 export default class UserListCommand extends BaseCommand {

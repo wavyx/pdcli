@@ -107,4 +107,16 @@ describe('deal product add', () => {
       DealProductAddCommand.run(['--product', '10', '--price', '90']),
     ).rejects.toThrow()
   })
+
+  it('rejects non-numeric --price with a clean input error (exit 64)', async () => {
+    const err = await DealProductAddCommand.run([
+      '1',
+      '--product',
+      '1',
+      '--price',
+      'abc',
+    ]).catch((e) => e)
+    expect(err.exitCode ?? err.oclif?.exit).toBe(64)
+    expect(String(err.message)).toMatch(/invalid number.*--price/i)
+  })
 })

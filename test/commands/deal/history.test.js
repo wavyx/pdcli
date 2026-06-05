@@ -15,6 +15,8 @@ const { default: DealHistoryCommand } =
   await import('../../../src/commands/deal/history.js')
 import { runCmd, mockApi } from '../../helpers.js'
 
+const { clearFieldsCache } = await import('../../../src/lib/fields.js')
+
 const ROWS = [
   {
     time: '2026-03-03T12:00:00Z',
@@ -42,6 +44,7 @@ const ROWS = [
 describe('deal history', () => {
   beforeEach(() => {
     nock.cleanAll()
+    clearFieldsCache()
     mockResolveCredentials.mockResolvedValue({
       mode: 'token',
       companyDomain: 'acme',
@@ -161,5 +164,125 @@ describe('deal history', () => {
 
   it('requires an integer id argument', async () => {
     await expect(DealHistoryCommand.run(['not-a-number'])).rejects.toThrow()
+  })
+
+  it('--resolve-fields renders custom-field names and option labels', async () => {
+    const HASH = 'd'.repeat(40)
+    mockApi()
+      .get('/api/v2/dealFields')
+      .query(true)
+      .reply(200, {
+        success: true,
+        data: [
+          {
+            id: 9,
+            field_code: HASH,
+            field_name: 'Tier',
+            field_type: 'enum',
+            options: [
+              { id: 7, label: 'Gold' },
+              { id: 8, label: 'Silver' },
+            ],
+            is_custom_field: true,
+          },
+        ],
+        additional_data: { next_cursor: null },
+      })
+    mockApi()
+      .get('/api/v1/deals/42/changelog')
+      .query(true)
+      .reply(200, {
+        success: true,
+        data: [
+          {
+            field_key: HASH,
+            old_value: '8',
+            new_value: '7',
+            time: '2026-06-01 10:00:00',
+            actor_user_id: 1,
+          },
+          {
+            field_key: 'title',
+            old_value: 'A',
+            new_value: 'B',
+            time: '2026-06-01 09:00:00',
+            actor_user_id: 1,
+          },
+        ],
+        additional_data: { next_cursor: null },
+      })
+
+    const stdout = await runCmd(DealHistoryCommand, [
+      '42',
+      '--resolve-fields',
+      '--output',
+      'json',
+    ])
+    const rows = JSON.parse(stdout)
+    expect(rows[0].field_key).toBe('Tier')
+    expect(rows[0].old_value).toBe('Silver')
+    expect(rows[0].new_value).toBe('Gold')
+    expect(rows[1].field_key).toBe('title') // non-custom keys pass through
+  })
+
+  it('passes non-option custom values through under --resolve-fields', async () => {
+    const HASH = 'e'.repeat(40)
+    mockApi()
+      .get('/api/v2/dealFields')
+      .query(true)
+      .reply(200, {
+        success: true,
+        data: [
+          {
+            id: 10,
+            field_code: HASH,
+            field_name: 'Notes',
+            field_type: 'varchar',
+            is_custom_field: true,
+          },
+        ],
+        additional_data: { next_cursor: null },
+      })
+    mockApi()
+      .get('/api/v1/deals/42/changelog')
+      .query(true)
+      .reply(200, {
+        success: true,
+        data: [
+          {
+            field_key: HASH,
+            old_value: 'draft',
+            new_value: 'final',
+            time: '2026-06-01 10:00:00',
+            actor_user_id: 1,
+          },
+        ],
+        additional_data: { next_cursor: null },
+      })
+
+    const stdout = await runCmd(DealHistoryCommand, [
+      '42',
+      '--resolve-fields',
+      '--output',
+      'json',
+    ])
+    const rows = JSON.parse(stdout)
+    expect(rows[0].field_key).toBe('Notes')
+    expect(rows[0].old_value).toBe('draft')
+    expect(rows[0].new_value).toBe('final')
+  })
+
+  it('passes --limit to the API fetch when no field filter is set', async () => {
+    const scope = mockApi()
+      .get('/api/v1/deals/42/changelog')
+      .query((q) => q.limit === '5')
+      .reply(200, {
+        success: true,
+        data: [],
+        additional_data: { next_cursor: null },
+      })
+
+    await runCmd(DealHistoryCommand, ['42', '--limit', '5', '--output', 'json'])
+    expect(scope.isDone()).toBe(true)
   })
 })

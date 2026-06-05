@@ -82,6 +82,9 @@
       },
       "alias": {
         "description": "Command shortcuts (alias set/list/unset)"
+      },
+      "deal:product": {
+        "description": "Manage products (line items) on a deal"
       }
     },
     "hooks": {

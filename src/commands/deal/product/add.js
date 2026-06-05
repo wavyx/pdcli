@@ -1,7 +1,20 @@
 import { Args, Flags } from '@oclif/core'
 import BaseCommand from '../../../base-command.js'
+import { CliError } from '../../../lib/errors.js'
 import { buildWriteBody } from '../../../lib/input.js'
 import { outputRecord } from '../../../lib/entity-view.js'
+
+/** Coerce a numeric flag, failing with a clean input error on garbage. */
+function num(name, value) {
+  if (value === undefined) return undefined
+  const n = Number(value)
+  if (!Number.isFinite(n)) {
+    throw new CliError(`Invalid number for --${name}: "${value}"`, {
+      exitCode: 64,
+    })
+  }
+  return n
+}
 
 export default class DealProductAddCommand extends BaseCommand {
   static description = 'Attach a product to a deal'
@@ -39,12 +52,11 @@ export default class DealProductAddCommand extends BaseCommand {
     const body = buildWriteBody({
       typed: {
         product_id: flags.product,
-        item_price: Number(flags.price),
-        quantity: Number(flags.quantity),
-        discount:
-          flags.discount !== undefined ? Number(flags.discount) : undefined,
+        item_price: num('price', flags.price),
+        quantity: num('quantity', flags.quantity),
+        discount: num('discount', flags.discount),
         discount_type: flags['discount-type'],
-        tax: flags.tax !== undefined ? Number(flags.tax) : undefined,
+        tax: num('tax', flags.tax),
         comments: flags.comments,
       },
     })

@@ -177,14 +177,19 @@ export function createClient({
       debug('%s %s → %d', method, path, res.status)
 
       if (res.status === 429) {
-        // Daily-budget exhaustion (x-daily-requests-left: 0) has no useful
-        // reset window — backoff would stall until midnight server time.
-        // Fail fast with an actionable message instead.
-        if (res.headers.get('x-daily-requests-left') === '0') {
+        // Daily-budget exhaustion has no useful reset window — backoff would
+        // stall until the daily reset. Fail fast with an actionable message.
+        // The live API reports the token budget as
+        // x-daily-ratelimit-token-remaining (verified on the sandbox);
+        // x-daily-requests-left is the older POST/PUT fair-use header.
+        const dailyRemaining =
+          res.headers.get('x-daily-ratelimit-token-remaining') ??
+          res.headers.get('x-daily-requests-left')
+        if (dailyRemaining === '0') {
           const err = new RateLimitError(0)
           err.message =
-            'Daily API request budget exhausted (x-daily-requests-left: 0) — ' +
-            'resets at midnight in the company timezone'
+            'Daily API token budget exhausted — resets at midnight server ' +
+            'time (UTC-based; may differ from your local timezone)'
           throw err
         }
         const wait = Number(
@@ -200,8 +205,14 @@ export function createClient({
       }
 
       // Surface the remaining daily budget under --verbose (DEBUG=pd:*).
-      const dailyLeft = res.headers.get('x-daily-requests-left')
-      if (dailyLeft != null) debug('daily requests left: %s', dailyLeft)
+      const dailyLeft = res.headers.get('x-daily-ratelimit-token-remaining')
+      if (dailyLeft != null) {
+        debug(
+          'daily token budget: %s remaining of %s',
+          dailyLeft,
+          res.headers.get('x-daily-ratelimit-token-limit') ?? '?',
+        )
+      }
 
       // OAuth access tokens expire (~1h) — refresh once and retry.
       if (res.status === 401 && onRefresh && attempts === 1) {

@@ -113,7 +113,7 @@ full set. (`product list` supports `--updated-since` only — products have no
 `--updated-until`.)
 
 If the **daily** request budget runs out, pdcli fails fast: a `429` carrying
-`x-daily-requests-left: 0` is not retried (backoff would stall until midnight company time),
+`x-daily-ratelimit-token-remaining: 0` is not retried (backoff would stall until the daily reset at midnight server time),
 so the command exits `75` immediately with a clear `Daily API request budget exhausted`
 message. Add `--verbose` to log the remaining daily budget after each request, so a job can
 warn before it hits the wall.

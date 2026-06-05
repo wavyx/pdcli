@@ -64,7 +64,6 @@ describe('org list', () => {
       .get('/api/v2/organizations')
       .query({
         limit: '500',
-        filter_id: '5',
         ids: '1,2,3',
         sort_by: 'update_time',
         sort_direction: 'desc',
@@ -74,8 +73,6 @@ describe('org list', () => {
       .reply(200, { success: true, data: [{ id: 1, name: 'A' }] })
 
     const stdout = await runCmd(OrgListCommand, [
-      '--filter',
-      '5',
       '--ids',
       '1,2,3',
       '--sort-by',
@@ -98,5 +95,15 @@ describe('org list', () => {
     await expect(
       runCmd(OrgListCommand, ['--ids', ids, '--output', 'json']),
     ).rejects.toMatchObject({ oclif: { exit: 64 } })
+  })
+
+  it('refuses --ids together with --filter (the API silently drops ids)', async () => {
+    const err = await OrgListCommand.run([
+      '--ids',
+      '1,2',
+      '--filter',
+      '5',
+    ]).catch((e) => e)
+    expect(String(err.message)).toMatch(/cannot also be provided/)
   })
 })

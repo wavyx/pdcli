@@ -28,7 +28,9 @@ export default class ActivityListCommand extends BaseCommand {
     deal: Flags.integer({ description: 'Filter by deal ID' }),
     person: Flags.integer({ description: 'Filter by person ID' }),
     org: Flags.integer({ description: 'Filter by organization ID' }),
-    type: Flags.string({ description: 'Filter by activity type key' }),
+    type: Flags.string({
+      description: 'Filter by activity type key (applied client-side)',
+    }),
     done: Flags.boolean({
       description: 'Only completed activities',
       exclusive: ['todo'],
@@ -40,6 +42,9 @@ export default class ActivityListCommand extends BaseCommand {
     filter: Flags.integer({ description: 'Filter by saved filter ID' }),
     ids: Flags.string({
       description: 'Comma-separated IDs to fetch (max 100)',
+      // The API silently drops `ids` when filter_id is present — refuse
+      // the combination instead (matches deal bulk-update).
+      exclusive: ['filter'],
     }),
     'sort-by': Flags.string({
       description: 'Sort field',
@@ -63,7 +68,11 @@ export default class ActivityListCommand extends BaseCommand {
     const { flags } = await this.parse(ActivityListCommand)
     const limit = flags.limit ?? 500
 
-    if (flags.ids && flags.ids.split(',').length > 100) {
+    const idList = flags.ids
+      ?.split(',')
+      .map((v) => v.trim())
+      .filter(Boolean)
+    if (idList && idList.length > 100) {
       throw new CliError('--ids accepts at most 100 IDs', { exitCode: 64 })
     }
 
@@ -72,10 +81,9 @@ export default class ActivityListCommand extends BaseCommand {
       deal_id: flags.deal,
       person_id: flags.person,
       org_id: flags.org,
-      type: flags.type,
       done: flags.done ? true : flags.todo ? false : undefined,
       filter_id: flags.filter,
-      ids: flags.ids,
+      ids: idList?.join(','),
       sort_by: flags['sort-by'],
       sort_direction: flags['sort-direction'],
       updated_since: flags['updated-since'],
@@ -83,10 +91,13 @@ export default class ActivityListCommand extends BaseCommand {
       limit: Math.min(limit, 500),
     }
 
-    const items = await collectPages(
+    let items = await collectPages(
       this.apiClient.pageV2('/api/v2/activities', query),
       limit,
     )
+    // The v2 activities endpoint has no `type` query param (it rejects
+    // unknown params with a 400) — filter client-side instead.
+    if (flags.type) items = items.filter((a) => a.type === flags.type)
     await this.outputResults(items, columns, { entity: 'activity' })
   }
 }

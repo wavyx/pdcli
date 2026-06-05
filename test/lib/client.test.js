@@ -1118,12 +1118,17 @@ describe('daily budget exhaustion', () => {
   beforeEach(() => nock.cleanAll())
   const BASE2 = 'https://acme.pipedrive.com'
 
-  it('fails fast with a clear message when the daily budget is exhausted', async () => {
-    // Daily-budget 429s carry x-daily-requests-left: 0 and no reset window —
-    // blind backoff would stall until midnight. Fail immediately instead.
+  it('fails fast when the daily token budget is exhausted (live header name)', async () => {
+    // The live API reports the budget as x-daily-ratelimit-token-remaining
+    // (verified against the sandbox); a retry-after is present but useless —
+    // backoff would stall until midnight. Fail immediately instead.
     nock(BASE2)
       .get('/api/v2/deals')
-      .reply(429, {}, { 'x-daily-requests-left': '0' })
+      .reply(
+        429,
+        {},
+        { 'x-daily-ratelimit-token-remaining': '0', 'retry-after': '3' },
+      )
 
     const client = createClient({
       companyDomain: 'acme',
@@ -1136,10 +1141,51 @@ describe('daily budget exhaustion', () => {
     )
   })
 
+  it('fails fast on the legacy x-daily-requests-left header too', async () => {
+    nock(BASE2)
+      .get('/api/v2/deals')
+      .reply(429, {}, { 'x-daily-requests-left': '0' })
+
+    const legacy = createClient({
+      companyDomain: 'acme',
+      token: 'test-token',
+      retry: true,
+      timeout: 5000,
+    })
+    await expect(legacy.get('/api/v2/deals')).rejects.toThrow(
+      /daily.*budget|daily.*limit/i,
+    )
+  })
+
+  it('reads the remaining daily budget from successful responses', async () => {
+    nock(BASE2)
+      .get('/api/v2/deals')
+      .reply(
+        200,
+        { success: true, data: [] },
+        { 'x-daily-ratelimit-token-remaining': '127320' },
+      )
+
+    const client = createClient({
+      companyDomain: 'acme',
+      token: 'test-token',
+      retry: false,
+      timeout: 5000,
+    })
+    // The header is surfaced via debug logging — the assertion here is that
+    // the success path with the header present completes normally.
+    const res = await client.get('/api/v2/deals')
+    expect(res.success).toBe(true)
+  })
+
   it('still retries a normal burst 429 that has a reset window', async () => {
     nock(BASE2)
       .get('/api/v2/deals')
-      .reply(429, {}, { 'retry-after': '0', 'x-daily-requests-left': '4100' })
+      .reply(
+        429,
+        {},
+        { 'retry-after': '0', 'x-daily-ratelimit-token-remaining': '4100' },
+      )
     nock(BASE2).get('/api/v2/deals').reply(200, { success: true, data: [] })
 
     const client = createClient({

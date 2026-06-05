@@ -206,7 +206,7 @@ pdcli activity list [flags]
 | `--deal` &lt;value&gt; | Filter by deal ID |
 | `--person` &lt;value&gt; | Filter by person ID |
 | `--org` &lt;value&gt; | Filter by organization ID |
-| `--type` &lt;value&gt; | Filter by activity type key |
+| `--type` &lt;value&gt; | Filter by activity type key (applied client-side) |
 | `--done` | Only completed activities |
 | `--todo` | Only open (not done) activities |
 | `--filter` &lt;value&gt; | Filter by saved filter ID |
@@ -499,7 +499,7 @@ pdcli deal history <id> [flags]
 ```bash
 pdcli deal history 42
 pdcli deal history 42 --field stage_id
-pdcli deal history 42 --limit 20 --output json
+pdcli deal history 42 --limit 20 --resolve-fields
 ```
 
 ### `pdcli deal list`

@@ -85,7 +85,6 @@ describe('person list', () => {
       .get('/api/v2/persons')
       .query({
         limit: '500',
-        filter_id: '5',
         ids: '1,2,3',
         sort_by: 'update_time',
         sort_direction: 'desc',
@@ -95,8 +94,6 @@ describe('person list', () => {
       .reply(200, { success: true, data: [{ id: 1, name: 'A' }] })
 
     const stdout = await runCmd(PersonListCommand, [
-      '--filter',
-      '5',
       '--ids',
       '1,2,3',
       '--sort-by',
@@ -171,5 +168,15 @@ describe('person list email entry without value', () => {
     const stdout = await runCmd(PersonListCommand, ['--output', 'table'])
 
     expect(stdout).toContain('Valueless')
+  })
+
+  it('refuses --ids together with --filter (the API silently drops ids)', async () => {
+    const err = await PersonListCommand.run([
+      '--ids',
+      '1,2',
+      '--filter',
+      '5',
+    ]).catch((e) => e)
+    expect(String(err.message)).toMatch(/cannot also be provided/)
   })
 })

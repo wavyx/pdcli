@@ -4,6 +4,18 @@ import { buildWriteBody } from '../../../lib/input.js'
 import { outputRecord } from '../../../lib/entity-view.js'
 import { CliError } from '../../../lib/errors.js'
 
+/** Coerce a numeric flag, failing with a clean input error on garbage. */
+function num(name, value) {
+  if (value === undefined) return undefined
+  const n = Number(value)
+  if (!Number.isFinite(n)) {
+    throw new CliError(`Invalid number for --${name}: "${value}"`, {
+      exitCode: 64,
+    })
+  }
+  return n
+}
+
 export default class DealProductUpdateCommand extends BaseCommand {
   static description =
     'Update a product attached to a deal (v2 PATCH — only provided fields change)'
@@ -42,13 +54,11 @@ export default class DealProductUpdateCommand extends BaseCommand {
     const body = buildWriteBody({
       typed: {
         product_id: flags.product,
-        item_price: flags.price !== undefined ? Number(flags.price) : undefined,
-        quantity:
-          flags.quantity !== undefined ? Number(flags.quantity) : undefined,
-        discount:
-          flags.discount !== undefined ? Number(flags.discount) : undefined,
+        item_price: num('price', flags.price),
+        quantity: num('quantity', flags.quantity),
+        discount: num('discount', flags.discount),
         discount_type: flags['discount-type'],
-        tax: flags.tax !== undefined ? Number(flags.tax) : undefined,
+        tax: num('tax', flags.tax),
         comments: flags.comments,
       },
     })

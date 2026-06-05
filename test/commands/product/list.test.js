@@ -64,7 +64,6 @@ describe('product list', () => {
       .get('/api/v2/products')
       .query({
         limit: '500',
-        filter_id: '5',
         ids: '1,2,3',
         sort_by: 'name',
         sort_direction: 'desc',
@@ -73,8 +72,6 @@ describe('product list', () => {
       .reply(200, { success: true, data: [{ id: 1, name: 'A' }] })
 
     const stdout = await runCmd(ProductListCommand, [
-      '--filter',
-      '5',
       '--ids',
       '1,2,3',
       '--sort-by',
@@ -130,5 +127,15 @@ describe('product list', () => {
 
     expect(stdout).toContain('9.99 EUR')
     expect(stdout).toContain('Bare')
+  })
+
+  it('refuses --ids together with --filter (the API silently drops ids)', async () => {
+    const err = await ProductListCommand.run([
+      '--ids',
+      '1,2',
+      '--filter',
+      '5',
+    ]).catch((e) => e)
+    expect(String(err.message)).toMatch(/cannot also be provided/)
   })
 })

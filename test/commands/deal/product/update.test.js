@@ -119,4 +119,15 @@ describe('deal product update', () => {
       DealProductUpdateCommand.run(['--attachment', '3', '--quantity', '5']),
     ).rejects.toThrow()
   })
+
+  it('rejects non-numeric --quantity with a clean input error (exit 64)', async () => {
+    const err = await DealProductUpdateCommand.run([
+      '1',
+      '--attachment',
+      '3',
+      '--quantity',
+      'xyz',
+    ]).catch((e) => e)
+    expect(err.exitCode ?? err.oclif?.exit).toBe(64)
+  })
 })
