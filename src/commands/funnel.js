@@ -3,12 +3,8 @@ import BaseCommand from '../base-command.js'
 import { collectPages } from '../lib/pagination.js'
 import { parsePeriod, formatApiDatetime } from '../lib/period.js'
 import { computeFunnel, computeExactFunnel } from '../lib/analytics.js'
-import { CliError, ApiError } from '../lib/errors.js'
-
-/** Token cost of one GET /deals/{id}/changelog request (rate-limit budget). */
-const CHANGELOG_COST = 20
-/** Above this deal count, mining gets expensive — warn before proceeding. */
-const MINE_WARN_THRESHOLD = 100
+import { mineMany } from '../lib/changelog.js'
+import { CliError } from '../lib/errors.js'
 
 export default class FunnelCommand extends BaseCommand {
   static description =
@@ -134,54 +130,16 @@ export default class FunnelCommand extends BaseCommand {
   }
 
   /**
-   * Mine real stage transitions from each deal's v1 changelog. The changelog
-   * uses a flat v2-style cursor (additional_data.next_cursor on a v1 path), so
-   * the v2 pager works directly. Warns on stderr before mining a large set —
-   * each request costs 20 tokens — then lets the client's rate limiter pace it.
+   * Mine real stage transitions from each deal's v1 changelog (one request per
+   * deal, paced by the rate limiter), then compute the exact funnel. Mining,
+   * the large-set warning, and the skip-on-ApiError behavior live in the
+   * shared changelog lib so this command and `deal history` stay in step.
    * @param {object[]} deals deals to mine (current stage_id needed per deal)
    * @param {object[]} stages
    * @param {number} pipelineId
    */
   async mineExactFunnel(deals, stages, pipelineId) {
-    if (deals.length > MINE_WARN_THRESHOLD) {
-      process.stderr.write(
-        `Mining stage history for ${deals.length} deals ` +
-          `(~${deals.length} requests, ${CHANGELOG_COST} tokens each); ` +
-          `rate limiting may slow this down.\n`,
-      )
-    }
-
-    const transitionsByDeal = []
-    let skipped = 0
-    for (const deal of deals) {
-      try {
-        const rows = await collectPages(
-          this.apiClient.pageV2(`/api/v1/deals/${deal.id}/changelog`, {
-            limit: 500,
-          }),
-        )
-        transitionsByDeal.push({
-          dealId: deal.id,
-          stageId: deal.stage_id,
-          rows,
-        })
-      } catch (err) {
-        // One bad changelog request must not abort the whole mine: skip the
-        // deal, count it, and warn once after mining completes.
-        if (err instanceof ApiError) {
-          skipped++
-          continue
-        }
-        throw err
-      }
-    }
-
-    if (skipped > 0) {
-      process.stderr.write(
-        `skipped ${skipped} deal(s) whose changelog could not be fetched\n`,
-      )
-    }
-
+    const transitionsByDeal = await mineMany(this.apiClient, deals)
     return computeExactFunnel(transitionsByDeal, stages, { pipelineId })
   }
 }
