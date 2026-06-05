@@ -4,6 +4,34 @@ All notable changes to `pdcli` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/).
 
+## [0.9.0] - 2026-06-05
+
+### Changed
+
+- **BREAKING:** `--jq` now receives single records as the bare object
+  instead of a one-element array. `pdcli deal get 1 --jq '.id'` works
+  directly; scripts using the old `--jq '.[0].id'` form must drop the
+  `.[0]`. List output is unchanged (still an array).
+- `--resolve-fields` now also applies to the core list commands (`deal`,
+  `person`, `org`, `activity`, `product`) in json/yaml/csv output — one
+  field-definitions fetch covers the whole list. (Supersedes the 0.8.0
+  note that scoped the flag to single-record gets.)
+
+### Fixed
+
+- File uploads, downloads, and form posts now go through the same
+  transport pipeline as every other request: 429 backoff honoring
+  `x-ratelimit-reset`/`Retry-After`, `--no-retry`, the 429-to-403
+  escalation hard stop, 5xx retry, and automatic OAuth token refresh.
+  Note: this also means transient 5xx during an upload is retried —
+  pass `--no-retry` if duplicate-creation on retry is a concern.
+- Alias mutations take an advisory lock, so concurrent pdcli processes
+  no longer overwrite each other's alias changes (last-write-wins data
+  loss). Contention exits 75; an unwritable config directory reports a
+  clear configuration error (exit 78).
+- A failing command can no longer pass its own happy-path test suite —
+  the test harness surfaces command errors instead of swallowing them.
+
 ## [0.8.0] - 2026-06-05
 
 ### Added
