@@ -1,0 +1,318 @@
+---
+// Clarity footer (design/dir-clarity.jsx). The splash homepage gets the full
+// three-column footer; docs pages keep Starlight's pager/edit-link footer and
+// append a slim brand bar.
+import Default from '@astrojs/starlight/components/Footer.astro';
+import stats from '../data/cli-stats.json';
+
+const base = import.meta.env.BASE_URL;
+const withBase = (path: string) => `${base}/${path}`.replace(/\/{2,}/g, '/');
+
+const isSplash = Astro.locals.starlightRoute?.entry?.data?.template === 'splash';
+
+const cols = [
+  {
+    title: 'Documentation',
+    links: [
+      ['Getting started', withBase('start/quickstart/')],
+      ['Authentication', withBase('guides/authentication/')],
+      ['Configuration', withBase('guides/configuration/')],
+      ['Output & formatting', withBase('automation/output/')],
+      ['Scripting & CI', withBase('automation/ci/')],
+    ],
+  },
+  {
+    title: 'Commands',
+    links: [
+      ['deal', withBase('reference/commands/#pdcli-deal')],
+      ['person & org', withBase('reference/commands/#pdcli-person')],
+      ['activity', withBase('reference/commands/#pdcli-activity')],
+      ['pipeline', withBase('reference/commands/#pdcli-pipeline')],
+      ['api', withBase('reference/commands/#top-level-commands')],
+    ],
+  },
+  {
+    title: 'Resources',
+    links: [
+      ['Command reference', withBase('reference/commands/')],
+      ['Cookbook', withBase('automation/cookbook/')],
+      ['Changelog', 'https://github.com/wavyx/pdcli/releases'],
+      ['Pipedrive API docs', 'https://developers.pipedrive.com/docs/api/v1'],
+    ],
+  },
+];
+---
+
+{
+  isSplash ? (
+    <footer class="pd-foot">
+      <div class="pd-foot__top">
+        <div class="pd-foot__brand">
+          <a class="pd-foot__mark" href={withBase('/')}>
+            <span class="pd-foot__chip" aria-hidden="true">
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#fff"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M4 17l5-5-5-5" />
+                <path d="M12 19h8" />
+              </svg>
+            </span>
+            <span class="pd-foot__txt">
+              <b>pd</b>cli
+            </span>
+          </a>
+          <p>
+            A fast, scriptable companion for the Pipedrive API. {stats.commands}{' '}
+            commands across {stats.topics} topics — for your scripts, your CI,
+            and your agents.
+          </p>
+          <div class="pd-foot__install">
+            <span class="pd-foot__p">$</span>npm install -g @wavyx/pdcli
+          </div>
+          <div class="pd-foot__social">
+            <a href="https://github.com/wavyx/pdcli" title="GitHub">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2a10 10 0 00-3.16 19.49c.5.09.68-.22.68-.48l-.01-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.89 1.53 2.34 1.09 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.6 9.6 0 015 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.4.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.69-4.57 4.94.36.31.68.92.68 1.85l-.01 2.74c0 .27.18.58.69.48A10 10 0 0012 2z" />
+              </svg>
+            </a>
+            <a href="https://www.npmjs.com/package/@wavyx/pdcli" title="npm">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M2 4h20v14h-9v2H7v-2H2zm2 2v10h3V8h3v8h3V6zm12 0v8h-2v2h2a2 2 0 002-2V6z" />
+              </svg>
+            </a>
+            <a
+              href="https://github.com/wavyx/pdcli/releases.atom"
+              title="Changelog feed"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="5" cy="19" r="1.6" />
+                <path d="M4 11a9 9 0 019 9M4 5a15 15 0 0115 15" />
+              </svg>
+            </a>
+          </div>
+        </div>
+        <div class="pd-foot__cols">
+          {cols.map((col) => (
+            <div class="pd-foot__col">
+              <h4>{col.title}</h4>
+              {col.links.map(([label, href]) => (
+                <a href={href}>{label}</a>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+      <div class="pd-foot__bar">
+        <span class="pd-foot__c">
+          Open source · not affiliated with Pipedrive · © 2026
+        </span>
+        <div class="pd-foot__legal">
+          <a href="https://github.com/wavyx/pdcli/blob/main/LICENSE">
+            MIT License
+          </a>
+          <a href="https://github.com/wavyx/pdcli/releases">v{stats.version}</a>
+        </div>
+      </div>
+    </footer>
+  ) : (
+    <>
+      <Default>
+        <slot />
+      </Default>
+      <div class="pd-foot__bar pd-foot__bar--docs">
+        <span class="pd-foot__c">
+          pdcli v{stats.version} · MIT · not affiliated with Pipedrive
+        </span>
+        <div class="pd-foot__legal">
+          <a href="https://github.com/wavyx/pdcli">GitHub</a>
+          <a href="https://www.npmjs.com/package/@wavyx/pdcli">npm</a>
+        </div>
+      </div>
+    </>
+  )
+}
+
+<style>
+  .pd-foot {
+    border-top: 1px solid var(--pd-border);
+    background: var(--sl-color-bg-nav);
+    margin-top: 2rem;
+  }
+  .pd-foot__top {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 56px 32px 40px;
+    display: grid;
+    grid-template-columns: 1.5fr 2fr;
+    gap: 48px;
+  }
+  .pd-foot__brand {
+    max-width: 340px;
+  }
+  .pd-foot__mark {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 14px;
+    text-decoration: none;
+  }
+  .pd-foot__chip {
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    display: grid;
+    place-items: center;
+    flex: none;
+    background: linear-gradient(145deg, var(--pd-green-bright), var(--pd-green));
+    box-shadow: 0 5px 14px -5px rgba(26, 122, 76, 0.6);
+  }
+  .pd-foot__txt {
+    font-weight: 800;
+    font-size: 16px;
+    letter-spacing: -0.02em;
+    color: var(--sl-color-white);
+    font-family: var(--sl-font-mono);
+  }
+  .pd-foot__txt b {
+    color: var(--pd-green);
+  }
+  .pd-foot__brand p {
+    font-size: 14px;
+    color: var(--sl-color-gray-3);
+    line-height: 1.6;
+    margin: 0 0 18px;
+  }
+  .pd-foot__install {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    font-family: var(--sl-font-mono);
+    font-size: 13px;
+    color: var(--pd-code-fg);
+    background: var(--pd-code-bg);
+    border: 1px solid var(--pd-code-bd);
+    border-radius: 9px;
+    padding: 9px 14px;
+    margin-bottom: 20px;
+  }
+  .pd-foot__p {
+    color: #3fce80;
+    font-weight: 700;
+  }
+  .pd-foot__social {
+    display: flex;
+    gap: 10px;
+  }
+  .pd-foot__social a {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    color: var(--sl-color-gray-3);
+    background: var(--pd-surface);
+    border: 1px solid var(--pd-border);
+    transition: 0.15s;
+  }
+  .pd-foot__social a:hover {
+    color: var(--pd-green);
+    border-color: var(--pd-green);
+    transform: translateY(-2px);
+  }
+  .pd-foot__cols {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 28px;
+  }
+  .pd-foot__col {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+  }
+  .pd-foot__col h4 {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--sl-color-white);
+    margin: 0 0 4px;
+  }
+  .pd-foot__col a {
+    color: var(--sl-color-gray-3);
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+  }
+  .pd-foot__col a:hover {
+    color: var(--pd-green);
+  }
+  .pd-foot__bar {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    border-top: 1px solid var(--pd-border);
+  }
+  .pd-foot__bar--docs {
+    max-width: none;
+    margin-top: 3rem;
+    padding: 16px 0 0;
+    border-top: 1px solid var(--sl-color-hairline);
+  }
+  .pd-foot__c {
+    font-size: 13px;
+    color: var(--sl-color-gray-4);
+  }
+  .pd-foot__legal {
+    display: flex;
+    gap: 20px;
+  }
+  .pd-foot__legal a {
+    font-size: 13px;
+    color: var(--sl-color-gray-4);
+    font-weight: 500;
+    text-decoration: none;
+  }
+  .pd-foot__legal a:hover {
+    color: var(--pd-green);
+  }
+
+  @media (max-width: 60rem) {
+    .pd-foot__top {
+      grid-template-columns: 1fr;
+      gap: 36px;
+      padding: 40px 24px 32px;
+    }
+    .pd-foot__cols {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .pd-foot__bar {
+      padding: 18px 24px;
+    }
+  }
+  @media (max-width: 30rem) {
+    .pd-foot__cols {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

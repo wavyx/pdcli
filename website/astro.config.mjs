@@ -30,6 +30,34 @@ export default defineConfig({
       editLink: {
         baseUrl: 'https://github.com/wavyx/pdcli/edit/main/website/',
       },
+      // "Clarity" design system (designer handoff) — tokens + homepage.
+      customCss: ['./src/styles/theme.css', './src/styles/home.css'],
+      components: {
+        Header: './src/components/Header.astro',
+        Footer: './src/components/Footer.astro',
+        // Light-first default (stored user choice always wins).
+        ThemeProvider: './src/components/ThemeProvider.astro',
+      },
+      // Code blocks stay terminal-dark in BOTH themes (design signature).
+      expressiveCode: {
+        themes: ['github-dark'],
+        useStarlightDarkModeSwitch: false,
+        useStarlightUiThemeColors: false,
+        styleOverrides: {
+          borderRadius: '14px',
+          borderColor: '#1b2b22',
+          codeBackground: '#0c1611',
+          codeFontFamily:
+            "'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace",
+          frames: {
+            terminalBackground: '#0c1611',
+            terminalTitlebarBackground: '#0c1611',
+            editorBackground: '#0c1611',
+            editorTabBarBackground: '#0c1611',
+            shadowColor: 'transparent',
+          },
+        },
+      },
       plugins: [
         // /llms.txt, /llms-full.txt, /llms-small.txt for AI agents
         starlightLlmsTxt(),
