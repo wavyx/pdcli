@@ -15,6 +15,10 @@ export function mockApi(domain = COMPANY_DOMAIN) {
 /**
  * Run an oclif command class and capture its console.log output.
  * Oclif Command.log ultimately calls console.log via @oclif/core ux.stdout.
+ *
+ * Errors are RETHROWN (with the captured stdout attached as `err.stdout`):
+ * a happy-path test must fail loudly when the command actually errored.
+ * Failure-path tests should call `CmdClass.run()` directly and assert.
  */
 export async function runCmd(CmdClass, argv = []) {
   const lines = []
@@ -23,10 +27,12 @@ export async function runCmd(CmdClass, argv = []) {
   })
   try {
     await CmdClass.run(argv)
-  } catch {
-    // swallow oclif exit/error throws
+  } catch (err) {
+    if (err) err.stdout = lines.join('\n')
+    throw err
+  } finally {
+    spy.mockRestore()
   }
-  spy.mockRestore()
   return lines.join('\n')
 }
 
