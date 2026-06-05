@@ -1,0 +1,88 @@
+---
+title: Deal products (line items)
+description: Attach products to a deal as line items — add, list, update, and remove — with server-computed line sums.
+---
+
+A deal's **line items** are the products attached to it, each with its own price, quantity,
+and discount. pdcli manages them under `deal product`, a v2 command group that maps onto
+`/api/v2/deals/{id}/products`. The deal's product catalog entry lives in `product`; the
+line item that ties a product to a deal is the _attachment_ you operate on here.
+
+## List the line items
+
+```bash
+pdcli deal product list 42
+```
+
+```text
+┌────┬─────────┬────────────┬────────────┬─────┬──────────┬──────┐
+│ ID │ Product │ Name       │ Item price │ Qty │ Discount │ Sum  │
+├────┼─────────┼────────────┼────────────┼─────┼──────────┼──────┤
+│ 3  │ 10      │ Consulting │ 150        │ 4   │ 0        │ 600  │
+│ 7  │ 12      │ Onboarding │ 90         │ 1   │ 10       │ 80   │
+└────┴─────────┴────────────┴────────────┴─────┴──────────┴──────┘
+```
+
+The `ID` column is the **attachment ID** — the handle you pass to `--attachment` when
+updating or removing a line, distinct from the catalog `Product` ID. Sort with `--sort-by`
+(`id`, `add_time`, `update_time`, or `order_nr`) and `--sort-direction` (`asc`/`desc`):
+
+```bash
+pdcli deal product list 42 --sort-by add_time --sort-direction desc
+```
+
+## Add a line item
+
+`--product` (catalog ID) and `--price` (per-unit item price) are required; `--quantity`
+defaults to `1`. Discounts, tax, and a comment are optional:
+
+```bash
+pdcli deal product add 42 --product 10 --price 90
+pdcli deal product add 42 --product 10 --price 90 --quantity 3
+pdcli deal product add 42 --product 10 --price 90 --discount 10 --discount-type percentage
+```
+
+`--discount-type` is `percentage` or `amount`. You don't compute the line total yourself —
+Pipedrive derives **`sum`** server-side from `item_price × quantity` less the discount, and
+returns it on the created record. That's why the `Sum` column above (e.g. `150 × 4 = 600`)
+isn't something pdcli adds up locally.
+
+## Update a line item
+
+`update` is a v2 `PATCH` — only the fields you pass change; everything else is left alone.
+Identify the line with `--attachment` (the `ID` from `deal product list`):
+
+```bash
+pdcli deal product update 42 --attachment 3 --quantity 5
+pdcli deal product update 42 --attachment 3 --price 120
+pdcli deal product update 42 --attachment 3 --discount 15 --discount-type amount
+```
+
+Pass at least one field flag, or it's exit 64 (`Nothing to update`). Any of `--product`,
+`--price`, `--quantity`, `--discount`, `--discount-type`, `--tax`, and `--comments` may be
+combined; the server recomputes `sum` from the new values.
+
+:::note
+There is **no per-line duration or billing-cycle flag**. Pipedrive replaced the old
+`duration`/`duration_unit` line-item fields with a product-level `billing_frequency` in 2024,
+so recurring terms are configured on the product (`product`), not on each deal attachment.
+:::
+
+## Remove a line item
+
+```bash
+pdcli deal product remove 42 --attachment 3
+pdcli deal product remove 42 --attachment 3 --yes
+```
+
+Like every destructive command, it confirms first; `-y`/`--yes` skips the prompt for scripts.
+
+## Worked example
+
+Find a product in the catalog, attach it to a deal, and confirm the line:
+
+```bash
+pdcli product list --jq '.[] | {id, name}'        # find the catalog product ID
+pdcli deal product add 42 --product 10 --price 150 --quantity 4
+pdcli deal product list 42                         # the new line, with its server-computed Sum
+```

@@ -98,6 +98,26 @@ jobs:
 
 `backup` paces itself against the token budget, so it's safe to run alongside other jobs.
 
+## Incremental pulls
+
+For a cheap scheduled sync, pull only what changed since the last run rather than the whole
+account. The list commands take `--updated-since` (RFC3339, no fractional seconds), and
+`--limit 500` keeps each page at the maximum so you make the fewest calls:
+
+```bash
+pdcli deal list --updated-since 2026-06-01T00:00:00Z --limit 500 --output json
+```
+
+Pass the previous run's timestamp on each schedule tick and you sync deltas instead of the
+full set. (`product list` supports `--updated-since` only — products have no
+`--updated-until`.)
+
+If the **daily** request budget runs out, pdcli fails fast: a `429` carrying
+`x-daily-requests-left: 0` is not retried (backoff would stall until midnight company time),
+so the command exits `75` immediately with a clear `Daily API request budget exhausted`
+message. Add `--verbose` to log the remaining daily budget after each request, so a job can
+warn before it hits the wall.
+
 ## Bulk import in a pipeline
 
 Validate CSV rows first with `--dry-run`, then import with `--yes` to skip the confirmation

@@ -42,6 +42,8 @@ pdcli note list --deal 42
 pdcli pipeline list && pdcli stage list --pipeline 1
 pdcli search "acme"
 pdcli field list deal           # custom fields with their hash keys
+pdcli user list                 # resolve owner IDs to names
+pdcli deal history 42           # field-change audit trail: who changed what, when
 ```
 
 Output everywhere: `--output table|json|yaml|csv`, `--jq '<expr>'`, `--fields id,name`.
@@ -61,6 +63,13 @@ Custom fields by **human name** — labels and option IDs resolve automatically:
 ```bash
 pdcli deal create --title "Sized" --field "Deal Size=Large" --field "Score=4.5"
 pdcli deal update 42 --body '{"probability":75}'   # raw JSON escape hatch
+```
+
+## Line items
+
+```bash
+pdcli deal product add 42 --product 10 --price 150 --quantity 4   # attach a product to a deal
+pdcli deal product list 42                                        # lines, with server-computed sums
 ```
 
 ## Bulk
