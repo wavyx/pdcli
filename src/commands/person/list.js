@@ -44,6 +44,6 @@ export default class PersonListCommand extends BaseCommand {
       this.apiClient.pageV2('/api/v2/persons', query),
       limit,
     )
-    await this.outputResults(items, columns)
+    await this.outputResults(items, columns, { entity: 'person' })
   }
 }

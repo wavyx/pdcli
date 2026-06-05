@@ -155,4 +155,69 @@ describe('deal list value without currency', () => {
     expect(stdout).toContain('500')
     expect(stdout).not.toContain('500 EUR')
   })
+
+  it('--resolve-fields resolves custom fields across the list (one defs fetch)', async () => {
+    const HASH = 'c'.repeat(40)
+    let fieldsFetches = 0
+    mockApi()
+      .get('/api/v2/dealFields')
+      .query(true)
+      .reply(200, () => {
+        fieldsFetches++
+        return {
+          success: true,
+          data: [
+            {
+              id: 9,
+              field_code: HASH,
+              field_name: 'Tier',
+              field_type: 'enum',
+              options: [{ id: 7, label: 'Gold' }],
+              is_custom_field: true,
+            },
+          ],
+          additional_data: { next_cursor: null },
+        }
+      })
+      .persist()
+    mockApi()
+      .get('/api/v2/deals')
+      .query(true)
+      .reply(200, {
+        success: true,
+        data: [
+          { id: 1, title: 'A', custom_fields: { [HASH]: 7 } },
+          { id: 2, title: 'B', custom_fields: { [HASH]: 7 } },
+          { id: 3, title: 'C' },
+        ],
+        additional_data: { next_cursor: null },
+      })
+
+    const stdout = await runCmd(DealListCommand, [
+      '--resolve-fields',
+      '--output',
+      'json',
+    ])
+    const rows = JSON.parse(stdout)
+    expect(rows[0].custom_fields).toEqual({ Tier: 'Gold' })
+    expect(rows[1].custom_fields).toEqual({ Tier: 'Gold' })
+    expect(rows[2].custom_fields).toBeUndefined()
+    expect(fieldsFetches).toBe(1)
+  })
+
+  it('list output without the flag keeps raw hash keys', async () => {
+    const HASH = 'c'.repeat(40)
+    mockApi()
+      .get('/api/v2/deals')
+      .query(true)
+      .reply(200, {
+        success: true,
+        data: [{ id: 1, title: 'A', custom_fields: { [HASH]: 7 } }],
+        additional_data: { next_cursor: null },
+      })
+
+    const stdout = await runCmd(DealListCommand, ['--output', 'json'])
+    const rows = JSON.parse(stdout)
+    expect(rows[0].custom_fields).toEqual({ [HASH]: 7 })
+  })
 })

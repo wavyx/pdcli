@@ -316,12 +316,12 @@ describe('BaseCommand output formats and filters', () => {
     expect(stdout).toContain('1,Csv User,c@a.com')
   })
 
-  it('--jq filters the JSON output', async () => {
+  it('--jq filters single records UNWRAPPED (no .[0] needed)', async () => {
     nock(API_BASE)
       .get('/api/v2/users/me')
       .reply(200, { success: true, data: { id: 1, name: 'Jq User' } })
 
-    const stdout = await captureLogs(ApiCmd, ['--jq', '.[0].name'])
+    const stdout = await captureLogs(ApiCmd, ['--jq', '.name'])
     expect(stdout).toContain('Jq User')
     expect(stdout).not.toContain('"id"')
   })

@@ -35,6 +35,6 @@ export default class OrgListCommand extends BaseCommand {
       this.apiClient.pageV2('/api/v2/organizations', query),
       limit,
     )
-    await this.outputResults(items, columns)
+    await this.outputResults(items, columns, { entity: 'org' })
   }
 }

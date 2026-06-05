@@ -57,6 +57,6 @@ export default class DealListCommand extends BaseCommand {
       this.apiClient.pageV2('/api/v2/deals', query),
       limit,
     )
-    await this.outputResults(items, columns)
+    await this.outputResults(items, columns, { entity: 'deal' })
   }
 }

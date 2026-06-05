@@ -40,6 +40,6 @@ export default class ProductListCommand extends BaseCommand {
       this.apiClient.pageV2('/api/v2/products', query),
       limit,
     )
-    await this.outputResults(items, columns)
+    await this.outputResults(items, columns, { entity: 'product' })
   }
 }
