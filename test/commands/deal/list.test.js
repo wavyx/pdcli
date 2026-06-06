@@ -173,6 +173,56 @@ describe('deal list', () => {
   })
 })
 
+describe('deal list --archived', () => {
+  beforeEach(() => {
+    nock.cleanAll()
+    clearFieldsCache()
+    mockResolveCredentials.mockResolvedValue({
+      companyDomain: 'acme',
+      token: 'tok',
+      source: 'profile',
+    })
+  })
+
+  afterEach(() => {
+    nock.cleanAll()
+  })
+
+  it('routes to /api/v2/deals/archived with the same filters', async () => {
+    mockApi()
+      .get('/api/v2/deals/archived')
+      .query({ limit: '500', status: 'won', stage_id: '3' })
+      .reply(200, { success: true, data: [{ id: 9, title: 'Archived won' }] })
+
+    const stdout = await runCmd(DealListCommand, [
+      '--archived',
+      '--status',
+      'won',
+      '--stage',
+      '3',
+      '--output',
+      'json',
+    ])
+
+    expect(JSON.parse(stdout)[0].id).toBe(9)
+  })
+
+  it('does not hit the active /api/v2/deals endpoint when archived', async () => {
+    mockApi()
+      .get('/api/v2/deals/archived')
+      .query({ limit: '500' })
+      .reply(200, { success: true, data: [{ id: 1, title: 'Old' }] })
+
+    const stdout = await runCmd(DealListCommand, [
+      '--archived',
+      '--output',
+      'json',
+    ])
+
+    expect(JSON.parse(stdout)[0].title).toBe('Old')
+  })
+})
+
 describe('deal list edge cases', () => {
   it('renders an empty value cell when the deal has no value', async () => {
     mockApi()

@@ -4,6 +4,40 @@ All notable changes to `pdcli` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/).
 
+## [0.11.0] - 2026-06-06
+
+### Added
+
+- Custom-field lifecycle: `field create/update/delete` plus
+  `field option add/remove` for enum/set fields (v2 Fields write API).
+  Deleting a field or option confirms with a default of No — record
+  data stored in it is lost. `field list/get` now also cover `lead`
+  and `note` fields.
+- Relations: `deal participant list/add/remove` (the buying
+  committee), `deal/person/org follower list/add/remove`, and
+  `org relationship list/add/remove` (parent/related hierarchies).
+- `task list/get/create/update/delete` — v2-native project tasks
+  (requires the Projects add-on; accounts without it get a clean
+  configuration error).
+- Conversions: `lead convert <id>` and `deal convert <id>` (async jobs
+  with `--wait` polling and `--timeout-secs`). Converting a deal
+  deletes the source deal on success and confirms with a default of
+  No.
+- `deal summary` — server-side per-currency totals, weighted values,
+  and counts in a single call (`--status/--pipeline/--stage/--filter`).
+- Scoped search: a single `--item-types` value routes `search` to the
+  per-entity v2 endpoints; the deal scope adds
+  `--status/--person/--org` filters.
+- `deal list --archived` and `project list --archived`.
+- `activity type list` (the `key_string` column feeds
+  `activity --type`), `file update/delete`, `filter delete`, and
+  `note comment list/add/update/delete`.
+
+### Changed
+
+- Every destructive command added in this release confirms with a
+  default of No — pressing Enter aborts.
+
 ## [0.10.0] - 2026-06-06
 
 ### Added

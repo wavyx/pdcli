@@ -5,7 +5,7 @@ description: Full command reference for the pdcli command-line interface.
 
 <!-- AUTO-GENERATED from the oclif manifest by scripts/gen-commands.mjs — do not edit by hand. -->
 
-Reference for `pdcli` v0.10.0 (94 commands). Every command also accepts the global flags `--output table|json`, `--profile`, `--no-color`, `--verbose`, `--no-retry`, `--timeout`, and `--limit`.
+Reference for `pdcli` v0.11.0 (130 commands). Every command also accepts the global flags `--output table|json`, `--profile`, `--no-color`, `--verbose`, `--no-retry`, `--timeout`, and `--limit`.
 
 ## Top-level
 
@@ -109,12 +109,16 @@ pdcli search <term> [flags]
 
 - `--item-types <value>` — Comma-separated item types (deal,person,organization,product,lead,file,mail_attachment,project)
 - `--exact` — Exact match (allows 1-character terms)
+- `--status <open|won|lost>` — Filter by deal status (only with --item-types deal)
+- `--person <value>` — Filter by person ID (only with --item-types deal)
+- `--org <value>` — Filter by organization ID (only with --item-types deal)
 
 Examples:
 
 ```bash
 pdcli search "acme"
 pdcli search "acme" --item-types deal,person --output json
+pdcli search "acme" --item-types deal --status open
 ```
 
 ### `pdcli version`
@@ -223,6 +227,21 @@ Examples:
 pdcli activity list
 pdcli activity list --todo --deal 42
 pdcli activity list --type call --output json
+```
+
+### `pdcli activity type list`
+
+List activity types. The Key (key_string) is what `activity --type` takes.
+
+```
+pdcli activity type list [flags]
+```
+
+Examples:
+
+```bash
+pdcli activity type list
+pdcli activity type list --output json
 ```
 
 ### `pdcli activity update`
@@ -445,6 +464,26 @@ pdcli deal list --status open --jq '.[].id' | pdcli deal bulk-update --owner 42
 pdcli deal bulk-update --filter 9 --stage 5 --dry-run
 ```
 
+### `pdcli deal convert`
+
+Convert a deal to a lead. The conversion runs as an async job; use --wait to poll until it finishes. WARNING: on success the source deal is deleted.
+
+```
+pdcli deal convert <id> [flags]
+```
+
+- `--wait` — Poll the conversion status until it finishes
+- `--timeout-secs <value>` — Max seconds to poll when --wait is set
+- `-y, --yes` — Skip the confirmation prompt
+
+Examples:
+
+```bash
+pdcli deal convert 42
+pdcli deal convert 42 --yes
+pdcli deal convert 42 --wait
+```
+
 ### `pdcli deal create`
 
 Create a deal
@@ -492,6 +531,56 @@ pdcli deal delete 42
 pdcli deal delete 42 --yes
 ```
 
+### `pdcli deal follower add`
+
+Add a follower (user) to a deal
+
+```
+pdcli deal follower add <id> [flags]
+```
+
+- `--user <value>` _(required)_ — User ID
+
+Examples:
+
+```bash
+pdcli deal follower add 42 --user 5
+pdcli deal follower add 42 --user 5 --output json
+```
+
+### `pdcli deal follower list`
+
+List followers of a deal
+
+```
+pdcli deal follower list <id> [flags]
+```
+
+Examples:
+
+```bash
+pdcli deal follower list 42
+pdcli deal follower list 42 --output json
+```
+
+### `pdcli deal follower remove`
+
+Remove a follower from a deal
+
+```
+pdcli deal follower remove <id> [flags]
+```
+
+- `--user <value>` _(required)_ — User ID
+- `-y, --yes` — Skip the confirmation prompt
+
+Examples:
+
+```bash
+pdcli deal follower remove 42 --user 5
+pdcli deal follower remove 42 --user 5 --yes
+```
+
 ### `pdcli deal get`
 
 Get a deal by ID
@@ -533,6 +622,7 @@ List deals
 pdcli deal list [flags]
 ```
 
+- `--archived` — List archived deals instead of active ones
 - `--status <open|won|lost|deleted>` — Filter by status
 - `--stage <value>` — Filter by stage ID
 - `--pipeline <value>` — Filter by pipeline ID
@@ -552,6 +642,56 @@ Examples:
 pdcli deal list
 pdcli deal list --status won --limit 50
 pdcli deal list --stage 3 --output json
+```
+
+### `pdcli deal participant add`
+
+Add a participant (person) to a deal
+
+```
+pdcli deal participant add <id> [flags]
+```
+
+- `--person <value>` _(required)_ — Person ID
+
+Examples:
+
+```bash
+pdcli deal participant add 42 --person 10
+pdcli deal participant add 42 --person 10 --output json
+```
+
+### `pdcli deal participant list`
+
+List participants of a deal
+
+```
+pdcli deal participant list <id> [flags]
+```
+
+Examples:
+
+```bash
+pdcli deal participant list 42
+pdcli deal participant list 42 --output json
+```
+
+### `pdcli deal participant remove`
+
+Remove a participant from a deal
+
+```
+pdcli deal participant remove <id> [flags]
+```
+
+- `--participant <value>` _(required)_ — Deal-participant ID
+- `-y, --yes` — Skip the confirmation prompt
+
+Examples:
+
+```bash
+pdcli deal participant remove 42 --participant 3
+pdcli deal participant remove 42 --participant 3 --yes
 ```
 
 ### `pdcli deal product add`
@@ -640,6 +780,27 @@ pdcli deal product update 42 --attachment 3 --price 120
 pdcli deal product update 42 --attachment 3 --discount 15 --discount-type amount
 ```
 
+### `pdcli deal summary`
+
+Summary of open/won/lost deals, totalled per currency
+
+```
+pdcli deal summary [flags]
+```
+
+- `--status <open|won|lost>` — Filter by status
+- `--pipeline <value>` — Filter by pipeline ID
+- `--stage <value>` — Filter by stage ID
+- `--filter <value>` — Filter by saved filter ID
+
+Examples:
+
+```bash
+pdcli deal summary
+pdcli deal summary --status open --pipeline 1
+pdcli deal summary --output json
+```
+
 ### `pdcli deal update`
 
 Update a deal (v2 PATCH — only provided fields change)
@@ -672,6 +833,42 @@ pdcli deal update 42 --field "Deal Size=Large"
 
 ## pdcli field
 
+### `pdcli field create`
+
+Create a custom field on an entity
+
+```
+pdcli field create <entity> [flags]
+```
+
+- `--name <value>` _(required)_ — Field name (label)
+- `--type <value>` _(required)_ — Field type (e.g. varchar, double, monetary, enum, set)
+- `--options <value>` — Comma-separated option labels (required for enum/set)
+
+Examples:
+
+```bash
+pdcli field create deal --name "Budget" --type double
+pdcli field create person --name "Tier" --type enum --options "Gold,Silver,Bronze"
+```
+
+### `pdcli field delete`
+
+Delete a custom field (data stored on records is lost)
+
+```
+pdcli field delete <entity> <field> [flags]
+```
+
+- `-y, --yes` — Skip the confirmation prompt
+
+Examples:
+
+```bash
+pdcli field delete deal dcf558aac1ae4e8c4f849ba5e668430d8df9be12
+pdcli field delete deal dcf558aac1ae4e8c4f849ba5e668430d8df9be12 --yes
+```
+
 ### `pdcli field get`
 
 Show one field by human name or hashed key
@@ -702,7 +899,73 @@ pdcli field list deal
 pdcli field list person --output json
 ```
 
+### `pdcli field option add`
+
+Add an option to an enum/set custom field
+
+```
+pdcli field option add <entity> <field> [flags]
+```
+
+- `--label <value>` _(required)_ — Label for the new option
+
+Examples:
+
+```bash
+pdcli field option add deal dcf558aac1ae4e8c4f849ba5e668430d8df9be12 --label "Critical"
+```
+
+### `pdcli field option remove`
+
+Remove an option from an enum/set custom field (records lose the value)
+
+```
+pdcli field option remove <entity> <field> [flags]
+```
+
+- `--option <value>` _(required)_ — Option ID to remove (see field get)
+- `-y, --yes` — Skip the confirmation prompt
+
+Examples:
+
+```bash
+pdcli field option remove deal dcf558aac1ae4e8c4f849ba5e668430d8df9be12 --option 4
+```
+
+### `pdcli field update`
+
+Update a custom field (field_code and field_type cannot change)
+
+```
+pdcli field update <entity> <field> [flags]
+```
+
+- `--name <value>` _(required)_ — New field name (label)
+
+Examples:
+
+```bash
+pdcli field update deal dcf558aac1ae4e8c4f849ba5e668430d8df9be12 --name "New name"
+```
+
 ## pdcli file
+
+### `pdcli file delete`
+
+Delete a file
+
+```
+pdcli file delete <id> [flags]
+```
+
+- `-y, --yes` — Skip the confirmation prompt
+
+Examples:
+
+```bash
+pdcli file delete 5
+pdcli file delete 5 --yes
+```
 
 ### `pdcli file download`
 
@@ -772,6 +1035,24 @@ pdcli file remote-link --deal 42 --remote-id 1AbC
 pdcli file remote-link --person 9 --remote-id 1AbC --output json
 ```
 
+### `pdcli file update`
+
+Update a file name and/or description
+
+```
+pdcli file update <id> [flags]
+```
+
+- `--name <value>` — The visible name of the file
+- `--description <value>` — The description of the file
+
+Examples:
+
+```bash
+pdcli file update 5 --name report.pdf
+pdcli file update 5 --description "Signed contract"
+```
+
 ### `pdcli file upload`
 
 Upload a file
@@ -792,6 +1073,23 @@ pdcli file upload ./report.pdf --deal 42
 ```
 
 ## pdcli filter
+
+### `pdcli filter delete`
+
+Delete a filter
+
+```
+pdcli filter delete <id> [flags]
+```
+
+- `-y, --yes` — Skip the confirmation prompt
+
+Examples:
+
+```bash
+pdcli filter delete 5
+pdcli filter delete 5 --yes
+```
 
 ### `pdcli filter get`
 
@@ -846,6 +1144,27 @@ pdcli goal list --assignee 7 --type deals_won --output json
 ```
 
 ## pdcli lead
+
+### `pdcli lead convert`
+
+Convert a lead to a deal. The conversion runs as an async job; use --wait to poll until it finishes. On success the lead is deleted.
+
+```
+pdcli lead convert <id> [flags]
+```
+
+- `--stage <value>` — Stage ID for the new deal (a pipeline is inferred from it)
+- `--pipeline <value>` — Pipeline ID for the new deal (ignored when --stage is set)
+- `--wait` — Poll the conversion status until it finishes
+- `--timeout-secs <value>` — Max seconds to poll when --wait is set
+
+Examples:
+
+```bash
+pdcli lead convert adf21080-0e10-11eb-879b-05d71fb426ec
+pdcli lead convert adf21080-0e10-11eb-879b-05d71fb426ec --stage 7
+pdcli lead convert adf21080-0e10-11eb-879b-05d71fb426ec --wait
+```
 
 ### `pdcli lead create`
 
@@ -1006,6 +1325,73 @@ pdcli metrics velocity --period 30d --pipeline 1
 
 ## pdcli note
 
+### `pdcli note comment add`
+
+Add a comment to a note
+
+```
+pdcli note comment add <noteId> [flags]
+```
+
+- `--content <value>` _(required)_ — Comment content
+
+Examples:
+
+```bash
+pdcli note comment add 5 --content "Nice work"
+pdcli note comment add 5 --content "Reviewed" --output json
+```
+
+### `pdcli note comment delete`
+
+Delete a comment from a note
+
+```
+pdcli note comment delete <noteId> [flags]
+```
+
+- `--comment <value>` _(required)_ — Comment ID (UUID)
+- `-y, --yes` — Skip the confirmation prompt
+
+Examples:
+
+```bash
+pdcli note comment delete 5 --comment <uuid>
+pdcli note comment delete 5 --comment <uuid> --yes
+```
+
+### `pdcli note comment list`
+
+List comments on a note
+
+```
+pdcli note comment list <noteId> [flags]
+```
+
+Examples:
+
+```bash
+pdcli note comment list 5
+pdcli note comment list 5 --output json
+```
+
+### `pdcli note comment update`
+
+Update a comment on a note
+
+```
+pdcli note comment update <noteId> [flags]
+```
+
+- `--comment <value>` _(required)_ — Comment ID (UUID)
+- `--content <value>` _(required)_ — New comment content
+
+Examples:
+
+```bash
+pdcli note comment update 5 --comment <uuid> --content "Edited"
+```
+
 ### `pdcli note create`
 
 Create a note
@@ -1138,6 +1524,56 @@ pdcli org delete 7
 pdcli org delete 7 --yes
 ```
 
+### `pdcli org follower add`
+
+Add a follower (user) to an organization
+
+```
+pdcli org follower add <id> [flags]
+```
+
+- `--user <value>` _(required)_ — User ID
+
+Examples:
+
+```bash
+pdcli org follower add 42 --user 5
+pdcli org follower add 42 --user 5 --output json
+```
+
+### `pdcli org follower list`
+
+List followers of an organization
+
+```
+pdcli org follower list <id> [flags]
+```
+
+Examples:
+
+```bash
+pdcli org follower list 42
+pdcli org follower list 42 --output json
+```
+
+### `pdcli org follower remove`
+
+Remove a follower from an organization
+
+```
+pdcli org follower remove <id> [flags]
+```
+
+- `--user <value>` _(required)_ — User ID
+- `-y, --yes` — Skip the confirmation prompt
+
+Examples:
+
+```bash
+pdcli org follower remove 42 --user 5
+pdcli org follower remove 42 --user 5 --yes
+```
+
 ### `pdcli org get`
 
 Get an organization by ID
@@ -1212,6 +1648,59 @@ pdcli org merge 123 --into 456
 pdcli org merge 123 --into 456 --yes
 ```
 
+### `pdcli org relationship add`
+
+Create an organization relationship. For a parent relationship the --owner organization is the parent and --linked is the daughter.
+
+```
+pdcli org relationship add [flags]
+```
+
+- `--type <parent|related>` _(required)_ — Relationship type
+- `--owner <value>` _(required)_ — Owner organization ID (the parent for type parent)
+- `--linked <value>` _(required)_ — Linked organization ID (the daughter for type parent)
+
+Examples:
+
+```bash
+pdcli org relationship add --type parent --owner 1481 --linked 1480
+pdcli org relationship add --type related --owner 1 --linked 2
+```
+
+### `pdcli org relationship list`
+
+List relationships for an organization
+
+```
+pdcli org relationship list [flags]
+```
+
+- `--org <value>` _(required)_ — Organization ID to list relationships for
+
+Examples:
+
+```bash
+pdcli org relationship list --org 1481
+pdcli org relationship list --org 1481 --output json
+```
+
+### `pdcli org relationship remove`
+
+Delete an organization relationship
+
+```
+pdcli org relationship remove <id> [flags]
+```
+
+- `-y, --yes` — Skip the confirmation prompt
+
+Examples:
+
+```bash
+pdcli org relationship remove 7
+pdcli org relationship remove 7 --yes
+```
+
 ### `pdcli org update`
 
 Update an organization (v2 PATCH — only provided fields change)
@@ -1274,6 +1763,56 @@ Examples:
 ```bash
 pdcli person delete 42
 pdcli person delete 42 --yes
+```
+
+### `pdcli person follower add`
+
+Add a follower (user) to a person
+
+```
+pdcli person follower add <id> [flags]
+```
+
+- `--user <value>` _(required)_ — User ID
+
+Examples:
+
+```bash
+pdcli person follower add 42 --user 5
+pdcli person follower add 42 --user 5 --output json
+```
+
+### `pdcli person follower list`
+
+List followers of a person
+
+```
+pdcli person follower list <id> [flags]
+```
+
+Examples:
+
+```bash
+pdcli person follower list 42
+pdcli person follower list 42 --output json
+```
+
+### `pdcli person follower remove`
+
+Remove a follower from a person
+
+```
+pdcli person follower remove <id> [flags]
+```
+
+- `--user <value>` _(required)_ — User ID
+- `-y, --yes` — Skip the confirmation prompt
+
+Examples:
+
+```bash
+pdcli person follower remove 42 --user 5
+pdcli person follower remove 42 --user 5 --yes
 ```
 
 ### `pdcli person get`
@@ -1644,6 +2183,8 @@ List projects
 pdcli project list [flags]
 ```
 
+- `--archived` — List archived projects instead of active ones
+
 Examples:
 
 ```bash
@@ -1709,6 +2250,112 @@ Examples:
 ```bash
 pdcli stage list
 pdcli stage list --pipeline 1 --output json
+```
+
+## pdcli task
+
+### `pdcli task create`
+
+Create a task
+
+```
+pdcli task create [flags]
+```
+
+- `--title <value>` _(required)_ — Task title
+- `--project <value>` _(required)_ — Project ID
+- `--description <value>` — Task description
+- `--assignee <value>` — Assignee (user) ID
+- `--due-date <value>` — Due date (YYYY-MM-DD)
+- `--parent <value>` — Parent task ID
+- `--body <value>` — Raw JSON body to merge (flags win)
+
+Examples:
+
+```bash
+pdcli task create --title "Write spec" --project 3
+pdcli task create --title "Subtask" --project 3 --parent 5 --assignee 7
+pdcli task create --title "Raw" --project 3 --body '{"priority":5}'
+```
+
+### `pdcli task delete`
+
+Delete a task
+
+```
+pdcli task delete <id> [flags]
+```
+
+- `-y, --yes` — Skip the confirmation prompt
+
+Examples:
+
+```bash
+pdcli task delete 7
+pdcli task delete 7 --yes
+```
+
+### `pdcli task get`
+
+Get a task by ID
+
+```
+pdcli task get <id> [flags]
+```
+
+Examples:
+
+```bash
+pdcli task get 9
+pdcli task get 9 --output json
+```
+
+### `pdcli task list`
+
+List tasks
+
+```
+pdcli task list [flags]
+```
+
+- `--project <value>` — Filter by project ID
+- `--assignee <value>` — Filter by assignee (user) ID
+- `--parent <value>` — Filter by parent task ID
+- `--done` — Only completed tasks
+- `--todo` — Only open (not done) tasks
+
+Examples:
+
+```bash
+pdcli task list
+pdcli task list --project 3 --todo
+pdcli task list --assignee 7 --output json
+```
+
+### `pdcli task update`
+
+Update a task (v2 PATCH — only provided fields change)
+
+```
+pdcli task update <id> [flags]
+```
+
+- `--title <value>` — Task title
+- `--project <value>` — Project ID
+- `--description <value>` — Task description
+- `--assignee <value>` — Assignee (user) ID
+- `--due-date <value>` — Due date (YYYY-MM-DD)
+- `--parent <value>` — Parent task ID
+- `--done` — Mark the task as done
+- `--undone` — Mark the task as not done
+- `--body <value>` — Raw JSON body to merge (flags win)
+
+Examples:
+
+```bash
+pdcli task update 7 --title "Renamed"
+pdcli task update 7 --done
+pdcli task update 7 --assignee 9
 ```
 
 ## pdcli user

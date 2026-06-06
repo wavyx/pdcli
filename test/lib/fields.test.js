@@ -27,6 +27,9 @@ function fakeClient(defs = FIELD_DEFS) {
     pageV2: vi.fn(async function* () {
       yield* defs
     }),
+    pageV1: vi.fn(async function* () {
+      yield* defs
+    }),
   }
 }
 
@@ -40,6 +43,11 @@ describe('entityToFieldsPath', () => {
     )
     expect(entityToFieldsPath('product')).toBe('/api/v2/productFields')
     expect(entityToFieldsPath('activity')).toBe('/api/v2/activityFields')
+  })
+
+  it('maps lead and note to v1 fields endpoints', () => {
+    expect(entityToFieldsPath('lead')).toBe('/api/v1/leadFields')
+    expect(entityToFieldsPath('note')).toBe('/api/v1/noteFields')
   })
 
   it('throws on an unknown entity', () => {
@@ -77,6 +85,58 @@ describe('getFields', () => {
     await getFields(client, 'person')
 
     expect(client.pageV2).toHaveBeenCalledTimes(2)
+  })
+
+  it('fetches lead/note fields through the v1 offset pager', async () => {
+    const client = fakeClient()
+
+    await getFields(client, 'lead')
+
+    expect(client.pageV1).toHaveBeenCalledWith('/api/v1/leadFields')
+    expect(client.pageV2).not.toHaveBeenCalled()
+  })
+
+  it('normalizes v1 key/name field shape to the v2 field_code/field_name shape', async () => {
+    const v1Defs = [
+      {
+        id: 1,
+        key: 'title',
+        name: 'Title',
+        field_type: 'varchar',
+        options: null,
+      },
+      {
+        id: 2,
+        key: HASH,
+        name: 'Status',
+        field_type: 'enum',
+        options: [{ id: 7, label: 'Open' }],
+      },
+    ]
+    const client = {
+      pageV1: vi.fn(async function* () {
+        yield* v1Defs
+      }),
+    }
+
+    const defs = await getFields(client, 'note')
+
+    expect(defs).toEqual([
+      {
+        id: 1,
+        field_code: 'title',
+        field_name: 'Title',
+        field_type: 'varchar',
+        options: null,
+      },
+      {
+        id: 2,
+        field_code: HASH,
+        field_name: 'Status',
+        field_type: 'enum',
+        options: [{ id: 7, label: 'Open' }],
+      },
+    ])
   })
 })
 

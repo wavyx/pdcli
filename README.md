@@ -55,6 +55,7 @@ pdcli deal create --title "Acme renewal" --value 5000 --currency EUR --stage 3
 pdcli deal update 42 --status won
 pdcli activity create --subject "Follow up" --type call --due-date 2026-06-10 --deal 42
 pdcli product create --name "Consulting" --price 150 --currency EUR
+pdcli lead convert <id> --wait  # promote a lead to a deal; --wait polls the async job
 pdcli deal delete 42            # asks first; --yes to skip
 ```
 
@@ -63,13 +64,17 @@ Custom fields by **human name** — labels and option IDs resolve automatically:
 ```bash
 pdcli deal create --title "Sized" --field "Deal Size=Large" --field "Score=4.5"
 pdcli deal update 42 --body '{"probability":75}'   # raw JSON escape hatch
+pdcli field create deal --name "Budget" --type double   # manage the field schema itself
 ```
 
-## Line items
+## Line items & relations
 
 ```bash
 pdcli deal product add 42 --product 10 --price 150 --quantity 4   # attach a product to a deal
 pdcli deal product list 42                                        # lines, with server-computed sums
+pdcli deal participant add 42 --person 10                         # add to the buying committee
+pdcli deal follower add 42 --user 5                               # follow a deal/person/org
+pdcli org relationship add --type parent --owner 1481 --linked 1480  # org hierarchy
 ```
 
 ## Bulk
@@ -85,6 +90,7 @@ pdcli person import people.csv                         # custom fields by name
 ## Analytics & housekeeping
 
 ```bash
+pdcli deal summary --status open         # server-side per-currency totals, weighted, count
 pdcli metrics velocity --period 90d      # the Sales Velocity Equation, in your terminal
 pdcli funnel --pipeline 1                # stage-to-stage conversion
 pdcli funnel --exact                     # mine real stage transitions per deal (one call each)

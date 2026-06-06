@@ -98,6 +98,10 @@ export default defineConfig({
               label: 'Deal products (line items)',
               slug: 'guides/deal-products',
             },
+            {
+              label: 'Relations: participants, followers, org hierarchy',
+              slug: 'guides/relations',
+            },
             { label: 'Full-account backup', slug: 'guides/backup' },
             { label: 'Sales analytics', slug: 'guides/analytics' },
             { label: 'Data-hygiene audit', slug: 'guides/audit' },

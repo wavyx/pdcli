@@ -87,6 +87,50 @@ describe('field get', () => {
   })
 })
 
+describe('field get on a v1 entity', () => {
+  beforeEach(() => {
+    nock.cleanAll()
+    clearFieldsCache()
+    mockResolveCredentials.mockResolvedValue({
+      companyDomain: 'acme',
+      token: 'tok',
+      source: 'profile',
+    })
+  })
+
+  afterEach(() => {
+    nock.cleanAll()
+  })
+
+  it('finds a lead field by name through the v1 pager', async () => {
+    mockApi()
+      .get('/api/v1/leadFields')
+      .reply(200, {
+        success: true,
+        data: [
+          { id: 1, key: 'title', name: 'Title', field_type: 'varchar' },
+          {
+            id: 2,
+            key: HASH,
+            name: 'Lead Source',
+            field_type: 'enum',
+            options: [{ id: 20, label: 'Web' }],
+          },
+        ],
+        additional_data: { pagination: { more_items_in_collection: false } },
+      })
+
+    const stdout = await runCmd(FieldGetCommand, [
+      'lead',
+      'lead source',
+      '--output',
+      'json',
+    ])
+
+    expect(JSON.parse(stdout).field_code).toBe(HASH)
+  })
+})
+
 describe('field get without options', () => {
   it('renders an empty options cell for non-enum fields', async () => {
     mockApi().get('/api/v2/dealFields').reply(200, FIELDS_REPLY)

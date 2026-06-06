@@ -67,6 +67,54 @@ describe('field list', () => {
     expect(stdout).toContain('Small, Large')
   })
 
+  it('lists lead fields through the v1 offset pager', async () => {
+    mockApi()
+      .get('/api/v1/leadFields')
+      .reply(200, {
+        success: true,
+        data: [
+          {
+            id: 1,
+            key: 'title',
+            name: 'Title',
+            field_type: 'varchar',
+          },
+          {
+            id: 2,
+            key: HASH,
+            name: 'Lead Source',
+            field_type: 'enum',
+            options: [
+              { id: 20, label: 'Web' },
+              { id: 21, label: 'Referral' },
+            ],
+          },
+        ],
+        additional_data: { pagination: { more_items_in_collection: false } },
+      })
+
+    const stdout = await runCmd(FieldListCommand, ['lead', '--output', 'table'])
+
+    expect(stdout).toContain('Title')
+    expect(stdout).toContain('Lead Source')
+    expect(stdout).toContain(HASH)
+    expect(stdout).toContain('Web, Referral')
+  })
+
+  it('lists note fields through the v1 offset pager', async () => {
+    mockApi()
+      .get('/api/v1/noteFields')
+      .reply(200, {
+        success: true,
+        data: [{ id: 1, key: 'content', name: 'Content', field_type: 'text' }],
+        additional_data: { pagination: { more_items_in_collection: false } },
+      })
+
+    const stdout = await runCmd(FieldListCommand, ['note', '--output', 'json'])
+
+    expect(JSON.parse(stdout)[0].field_name).toBe('Content')
+  })
+
   it('maps the org alias to organizationFields', async () => {
     mockApi()
       .get('/api/v2/organizationFields')

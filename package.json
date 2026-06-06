@@ -1,6 +1,6 @@
 {
   "name": "@wavyx/pdcli",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "publishConfig": {
     "access": "public"
   },
@@ -65,8 +65,14 @@
       "activity": {
         "description": "Activities (calls, meetings, tasks)"
       },
+      "activity:type": {
+        "description": "Activity types (key_string is what activity --type takes)"
+      },
+      "task": {
+        "description": "Tasks (project action items)"
+      },
       "field": {
-        "description": "Custom-field discovery and name/key resolution"
+        "description": "Custom-field management: discovery, name/key resolution, create/update/delete"
       },
       "metrics": {
         "description": "Sales metrics and KPIs"
@@ -85,6 +91,27 @@
       },
       "deal:product": {
         "description": "Manage products (line items) on a deal"
+      },
+      "deal:participant": {
+        "description": "Manage extra people on a deal (buying committee)"
+      },
+      "deal:follower": {
+        "description": "Manage deal followers"
+      },
+      "person:follower": {
+        "description": "Manage person followers"
+      },
+      "org:follower": {
+        "description": "Manage organization followers"
+      },
+      "org:relationship": {
+        "description": "Manage parent/related links between organizations"
+      },
+      "field:option": {
+        "description": "Manage enum/set field options"
+      },
+      "note:comment": {
+        "description": "Manage comments on a note"
       }
     },
     "hooks": {

@@ -15,7 +15,8 @@ names — the CLI resolves names to keys and labels to option IDs on every call.
 
 `field list <entity>` shows every field for an entity, custom fields included, with their
 hash keys, types, and option labels. Entities: `deal`, `person`, `org`, `product`,
-`activity`.
+`activity`, `lead`, and `note`. (`field get` reads the same set; a lead inherits its deal
+fields, and `note` exposes the note schema.)
 
 ```bash
 pdcli field list deal
@@ -47,6 +48,75 @@ pdcli field get deal dcf558aac1ae4e8c4f849ba5e668430d8df9be12
 │ dcf558aac1ae4e8c4f849ba5e668430d8df9be12  │ Deal Size │ enum │ 12=Small,13=Medium,14=Large │
 └──────────────────────────────────────────┴───────────┴──────┴──────────────────────────┘
 ```
+
+## Managing fields
+
+Beyond discovery, pdcli manages the field schema itself — create a field, rename it, add or
+drop dropdown options, or delete it. These run on the v2 fields endpoints and cover the
+writable core entities: `deal`, `person`, `org`, and `product`. (`activity`, `lead`, and
+`note` fields are read-only — they show up in `field list`/`field get` but can't be created
+or altered here.)
+
+Every schema change **invalidates pdcli's in-process field cache automatically**, so the
+name⇄key and label⇄ID resolution on subsequent writes in the same run picks up the new
+shape without a manual refresh.
+
+### Create a field
+
+`--name` and `--type` are required. For an `enum` or `set` (multi-select) field, pass the
+dropdown labels with `--options` — it's required for those types and ignored for the rest:
+
+```bash
+pdcli field create deal --name "Budget" --type double
+pdcli field create person --name "Tier" --type enum --options "Gold,Silver,Bronze"
+```
+
+The created field is returned with its freshly minted hash `Key`, so you can pipe it
+straight into a write:
+
+```text
+┌──────────────────────────────────────────┬────────┬──────┬─────────────────────────┐
+│ Key                                       │ Name   │ Type │ Options                 │
+├──────────────────────────────────────────┼────────┼──────┼─────────────────────────┤
+│ a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2  │ Tier   │ enum │ 1=Gold,2=Silver,3=Bronze │
+└──────────────────────────────────────────┴────────┴──────┴─────────────────────────┘
+```
+
+### Rename a field
+
+`field update <entity> <key>` renames a field via `--name`. The field is addressed by its
+hash key (the `field_code` from `field list`); the `field_code` and `field_type` themselves
+can't be changed:
+
+```bash
+pdcli field update deal dcf558aac1ae4e8c4f849ba5e668430d8df9be12 --name "Deal Value"
+```
+
+### Manage dropdown options
+
+For `enum`/`set` fields, add and remove options without touching the rest of the schema:
+
+```bash
+pdcli field option add deal dcf558aac1ae4e8c4f849ba5e668430d8df9be12 --label "Critical"
+pdcli field option remove deal dcf558aac1ae4e8c4f849ba5e668430d8df9be12 --option 4
+```
+
+`add` takes the new label; `remove` takes the numeric **option ID** (run `field get` to see
+each option's ID next to its label). Removing an option is destructive — records that held
+that value lose it — so it confirms first; `-y`/`--yes` skips the prompt for scripts.
+
+### Delete a field
+
+```bash
+pdcli field delete deal dcf558aac1ae4e8c4f849ba5e668430d8df9be12
+pdcli field delete deal dcf558aac1ae4e8c4f849ba5e668430d8df9be12 --yes
+```
+
+:::caution
+Deleting a field **discards the data every record stored in it** — there's no undo. The
+command confirms first and the prompt **defaults to No**; pass `-y`/`--yes` only when you're
+sure (e.g. in a script).
+:::
 
 ## Reading: names in tables, raw keys in JSON
 

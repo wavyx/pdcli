@@ -20,7 +20,7 @@ The four levers are measured over a trailing window (`--period`, default `90d`, 
 `Nd` or `Nm`), scoped optionally to a `--pipeline` and/or `--owner`:
 
 - **Open opportunities** — count of currently open deals.
-- **Win rate** — won / (won + lost) among deals *decided* in the window, keyed on
+- **Win rate** — won / (won + lost) among deals _decided_ in the window, keyed on
   `won_time`/`lost_time`.
 - **Avg won value** — mean value of deals won in the window.
 - **Avg cycle days** — mean of `won_time − add_time` for those won deals.
@@ -44,11 +44,35 @@ pdcli metrics velocity --period 30d --pipeline 1
 If a lever can't be computed (no decided deals, no won deals, or a zero cycle), it shows
 `n/a` and velocity is `n/a` rather than a misleading zero.
 
+## `deal summary`
+
+A one-call rollup of deal value, computed **server-side**: Pipedrive returns per-currency
+totals, a probability-weighted total, and a deal count, so there's no list to page through.
+It's the cheapest way to ask "what's my pipeline worth right now?"
+
+```bash
+pdcli deal summary
+pdcli deal summary --status open --pipeline 1
+```
+
+```text
+┌──────────┬─────────┬──────────┬───────┐
+│ Currency │ Total   │ Weighted │ Count │
+├──────────┼─────────┼──────────┼───────┤
+│ EUR      │ €148000 │ €132000  │ 24    │
+│ USD      │ $52000  │ $41600   │ 9     │
+└──────────┴─────────┴──────────┴───────┘
+```
+
+Narrow the set with `--status` (`open`/`won`/`lost`), `--pipeline`, `--stage`, or a saved
+`--filter`. Totals come pre-formatted per currency from the API; `--output json` returns the
+raw summary object (per-currency totals, grand totals, and counts) for scripting.
+
 ## `funnel`
 
 Stage-to-stage conversion. **This is an approximation, stated honestly:** Pipedrive doesn't
 hand back per-deal stage history in a single cheap call, so the funnel infers stage reach
-from each closed deal's *final* stage — a deal counts as having reached every stage up to
+from each closed deal's _final_ stage — a deal counts as having reached every stage up to
 and including the one it ended in, and won deals count for every stage. Accurate per-stage
 flow would need per-deal history mining; this stays one list call per status.
 
@@ -76,7 +100,7 @@ pdcli lists the pipeline IDs and exits 64. With a single pipeline it's inferred.
 
 When the approximation isn't good enough, `--exact` mines the **real** stage transitions from
 each deal's changelog instead of inferring reach from the final stage. A deal counts as
-*entering* a stage only when it was actually observed there: every stage the deal moved into,
+_entering_ a stage only when it was actually observed there: every stage the deal moved into,
 plus its starting stage. A deal created directly in stage 3 — with no stage transitions —
 counts as entering stage 3 only, not stages 1 and 2.
 
@@ -153,14 +177,14 @@ pdcli pipeline health --pipeline 1
 
 Column by column:
 
-| Column | Meaning |
-| ------ | ------- |
-| **Open** | Open deals currently in the stage. |
-| **Value** | Sum of those deals' `value`. |
-| **Weighted** | Value × probability. Per-deal `probability` wins; otherwise the stage's `deal_probability`; otherwise 100%. |
-| **Stale >14d** | Open deals not updated in more than 14 days. |
-| **No next step** | Open deals with no future, not-done activity scheduled. |
-| **Past close** | Open deals whose `expected_close_date` is before today. |
+| Column           | Meaning                                                                                                     |
+| ---------------- | ----------------------------------------------------------------------------------------------------------- |
+| **Open**         | Open deals currently in the stage.                                                                          |
+| **Value**        | Sum of those deals' `value`.                                                                                |
+| **Weighted**     | Value × probability. Per-deal `probability` wins; otherwise the stage's `deal_probability`; otherwise 100%. |
+| **Stale >14d**   | Open deals not updated in more than 14 days.                                                                |
+| **No next step** | Open deals with no future, not-done activity scheduled.                                                     |
+| **Past close**   | Open deals whose `expected_close_date` is before today.                                                     |
 
 Like `funnel`, `--pipeline` is required when there's more than one pipeline and inferred
 otherwise.
