@@ -51,4 +51,22 @@ describe('project list', () => {
 
     expect(JSON.parse(stdout)[0].title).toBe('Launch')
   })
+
+  it('routes to /api/v2/projects/archived with --archived', async () => {
+    mockApi()
+      .get('/api/v2/projects/archived')
+      .query({ limit: '100' })
+      .reply(200, {
+        success: true,
+        data: [{ id: 9, title: 'Archived project', status: 'completed' }],
+      })
+
+    const stdout = await runCmd(ProjectListCommand, [
+      '--archived',
+      '--output',
+      'json',
+    ])
+
+    expect(JSON.parse(stdout)[0].title).toBe('Archived project')
+  })
 })

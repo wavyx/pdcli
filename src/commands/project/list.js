@@ -1,3 +1,4 @@
+import { Flags } from '@oclif/core'
 import BaseCommand from '../../base-command.js'
 import { collectPages } from '../../lib/pagination.js'
 
@@ -20,6 +21,10 @@ export default class ProjectListCommand extends BaseCommand {
 
   static flags = {
     ...BaseCommand.baseFlags,
+    archived: Flags.boolean({
+      description: 'List archived projects instead of active ones',
+      default: false,
+    }),
   }
 
   async run() {
@@ -30,10 +35,11 @@ export default class ProjectListCommand extends BaseCommand {
       limit: Math.min(limit, 100),
     }
 
-    const items = await collectPages(
-      this.apiClient.pageV2('/api/v2/projects', query),
-      limit,
-    )
+    // Archived projects share the same cursor pager as active projects.
+    const path = flags.archived
+      ? '/api/v2/projects/archived'
+      : '/api/v2/projects'
+    const items = await collectPages(this.apiClient.pageV2(path, query), limit)
     await this.outputResults(items, columns)
   }
 }

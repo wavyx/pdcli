@@ -14,18 +14,34 @@ const ENTITY_FIELDS = {
 }
 
 /**
+ * Entities whose fields live ONLY on v1 — offset-paginated and returning the
+ * legacy key/name shape that getFields normalizes to field_code/field_name.
+ */
+const V1_ENTITY_FIELDS = {
+  lead: 'leadFields',
+  note: 'noteFields',
+}
+
+/**
  * @param {string} entity deal | person | org(anization) | product | activity
- * @returns {string} v2 fields endpoint path
+ *   | lead | note
+ * @returns {string} fields endpoint path (v2 for core entities, v1 for
+ *   lead/note)
  */
 export function entityToFieldsPath(entity) {
-  const resource = ENTITY_FIELDS[entity]
-  if (!resource) {
-    throw new CliError(
-      `Unknown entity "${entity}". Use one of: ${Object.keys(ENTITY_FIELDS).join(', ')}`,
-      { exitCode: 64 },
-    )
-  }
-  return `/api/v2/${resource}`
+  const v2 = ENTITY_FIELDS[entity]
+  if (v2) return `/api/v2/${v2}`
+
+  const v1 = V1_ENTITY_FIELDS[entity]
+  if (v1) return `/api/v1/${v1}`
+
+  throw new CliError(
+    `Unknown entity "${entity}". Use one of: ${[
+      ...Object.keys(ENTITY_FIELDS),
+      ...Object.keys(V1_ENTITY_FIELDS),
+    ].join(', ')}`,
+    { exitCode: 64 },
+  )
 }
 
 /** @type {Map<string, object[]>} per-run field-definition cache */
@@ -36,8 +52,21 @@ export function clearFieldsCache() {
 }
 
 /**
+ * Normalize a v1 field definition (key/name) to the v2 shape
+ * (field_code/field_name) so callers can treat both alike.
+ * @param {object} def
+ */
+function normalizeV1Field(def) {
+  const { key, name, ...rest } = def
+  return { ...rest, field_code: key, field_name: name }
+}
+
+/**
  * Fetch (and memoize for this run) all field definitions for an entity.
- * @param {{ pageV2: (path: string) => AsyncGenerator<object> }} client
+ * Core entities use the v2 cursor pager; lead/note use the v1 offset pager
+ * and are normalized to the v2 field_code/field_name shape.
+ * @param {{ pageV2: (path: string) => AsyncGenerator<object>,
+ *   pageV1: (path: string) => AsyncGenerator<object> }} client
  * @param {string} entity
  * @returns {Promise<object[]>}
  */
@@ -45,10 +74,12 @@ export async function getFields(client, entity) {
   const path = entityToFieldsPath(entity)
   if (cache.has(path)) return cache.get(path)
 
+  const isV1 = path.startsWith('/api/v1/')
   debug('fetching field definitions: %s', path)
   const defs = []
-  for await (const def of client.pageV2(path)) {
-    defs.push(def)
+  const pager = isV1 ? client.pageV1(path) : client.pageV2(path)
+  for await (const def of pager) {
+    defs.push(isV1 ? normalizeV1Field(def) : def)
   }
   cache.set(path, defs)
   return defs

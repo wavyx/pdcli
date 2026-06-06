@@ -29,6 +29,10 @@ export default class DealListCommand extends BaseCommand {
 
   static flags = {
     ...BaseCommand.baseFlags,
+    archived: Flags.boolean({
+      description: 'List archived deals instead of active ones',
+      default: false,
+    }),
     status: Flags.string({
       description: 'Filter by status',
       options: ['open', 'won', 'lost', 'deleted'],
@@ -91,10 +95,9 @@ export default class DealListCommand extends BaseCommand {
       limit: Math.min(limit, 500),
     }
 
-    const items = await collectPages(
-      this.apiClient.pageV2('/api/v2/deals', query),
-      limit,
-    )
+    // Archived deals share the same params and cursor pager as active deals.
+    const path = flags.archived ? '/api/v2/deals/archived' : '/api/v2/deals'
+    const items = await collectPages(this.apiClient.pageV2(path, query), limit)
     await this.outputResults(items, columns, { entity: 'deal' })
   }
 }

@@ -65,6 +65,12 @@
       "activity": {
         "description": "Activities (calls, meetings, tasks)"
       },
+      "activity:type": {
+        "description": "Activity types (key_string is what activity --type takes)"
+      },
+      "task": {
+        "description": "Tasks (project action items)"
+      },
       "field": {
         "description": "Custom-field discovery and name/key resolution"
       },
@@ -85,6 +91,21 @@
       },
       "deal:product": {
         "description": "Manage products (line items) on a deal"
+      },
+      "deal:participant": {
+        "description": "Manage extra people on a deal (buying committee)"
+      },
+      "deal:follower": {
+        "description": "Manage deal followers"
+      },
+      "person:follower": {
+        "description": "Manage person followers"
+      },
+      "org:follower": {
+        "description": "Manage organization followers"
+      },
+      "field:option": {
+        "description": "Manage enum/set field options"
       }
     },
     "hooks": {

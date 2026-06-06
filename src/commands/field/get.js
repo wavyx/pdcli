@@ -15,7 +15,16 @@ export default class FieldGetCommand extends BaseCommand {
     entity: Args.string({
       required: true,
       description: 'Entity type',
-      options: ['deal', 'person', 'org', 'organization', 'product', 'activity'],
+      options: [
+        'deal',
+        'person',
+        'org',
+        'organization',
+        'product',
+        'activity',
+        'lead',
+        'note',
+      ],
     }),
     field: Args.string({
       required: true,
