@@ -42,8 +42,25 @@ pdcli search "jane@acme.com" --item-types person --output json \
   | jq '.[] | {id, name}'
 ```
 
-`search` hits Pipedrive's itemSearch (40 token cost, throttled to 10 req/2s). Add `--exact`
-for an exact match.
+Add `--exact` for an exact match.
+
+### Scoped vs. multi-type search routing
+
+`search` routes by how many item types you ask for:
+
+- **A single routable type** — `--item-types deal`, `person`, `organization`, or `product` —
+  hits that entity's dedicated v2 search endpoint (e.g. `/api/v2/persons/search`). That's a
+  narrower OAuth scope and cheaper: **20 rate-limit tokens vs. 40**.
+- **Anything else** — no `--item-types`, multiple types, or a non-routable type like `lead`,
+  `file`, or `project` — stays on the generic `itemSearch` (40 tokens).
+
+When the scope is a single **deal** search, three filters narrow it server-side: `--status`
+(`open`/`won`/`lost`), `--person` (a person ID), and `--org` (an organization ID). These are
+rejected (exit 64) with any other scope, since only `/api/v2/deals/search` accepts them:
+
+```bash
+pdcli search "renewal" --item-types deal --status open --org 7 --output json
+```
 
 ## Create a deal with custom fields in one line
 

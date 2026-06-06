@@ -79,6 +79,18 @@ survivor whose data wins on conflict. Both commands confirm before deleting unle
 `--yes`. So a `duplicate-persons` or `duplicate-orgs` finding becomes a one-liner: merge the
 duplicate `id` into the one you want to keep.
 
+When the right fix is to change a record's _type_ — a misfiled deal that's really an early
+lead, or a duplicate that should fold back into the lead inbox — the convert commands move it
+across without re-keying. `lead convert <id>` turns a lead into a deal (and `deal convert <id>`
+goes the other way); both run as async jobs, so add `--wait` to block until the conversion
+finishes before you act on the result. On success the source record is deleted, so
+`deal convert` confirms first unless you pass `--yes`:
+
+```bash
+pdcli lead convert adf21080-0e10-11eb-879b-05d71fb426ec --wait   # promote a lead to a deal
+pdcli deal convert 204 --wait --yes                              # demote a misfiled deal to a lead
+```
+
 When a deal finding needs investigating before you touch it — _why_ is this deal stale, or
 who changed its stage — `deal history <id>` prints its field-change audit trail (who changed
 what, when), newest-first. Narrow to one field with `--field`:

@@ -76,7 +76,11 @@ pdcli deal create --help
 
 The full reference is at [/pdcli/reference/commands/](/pdcli/reference/commands/). Beyond
 CRUD, agents have `deal history <id>` for a deal's field-change audit trail, `deal product`
-for line items, and `--updated-since` on the list commands for incremental polling.
+for line items, `field create`/`field update`/`field option` to manage the custom-field
+schema, `deal participant` and `deal`/`person`/`org follower` for the people around a record,
+`task` for project action items, `lead convert`/`deal convert` (with `--wait`) to change a
+record's type, `deal summary` for a server-side per-currency value rollup, and
+`--updated-since` on the list commands for incremental polling.
 
 ## The host-locked `api` escape hatch
 

@@ -1,0 +1,110 @@
+---
+title: 'Relations: participants, followers, org hierarchy'
+description: Manage the people and links around a record — deal participants (the buying committee), followers on deals/persons/orgs, and parent/related links between organizations.
+---
+
+Records in Pipedrive don't stand alone. A deal has a **buying committee** of extra people, a
+deal/person/org can have **followers** who get notified of changes, and organizations link
+into a **hierarchy** of parents and related companies. pdcli manages each of these as a small
+command group that maps onto the matching Pipedrive endpoint.
+
+## Deal participants (the buying committee)
+
+A deal's _primary_ contact is its `person`; **participants** are the other people involved —
+the champion, the economic buyer, the blockers. Manage them under `deal participant`.
+
+```bash
+pdcli deal participant list 42
+```
+
+```text
+┌────┬────────┬───────────┬──────────────────────┐
+│ ID │ Person │ Name      │ Added                │
+├────┼────────┼───────────┼──────────────────────┤
+│ 3  │ 10     │ Jane Doe  │ 2026-05-01 09:12:00  │
+│ 7  │ 21     │ John Roe  │ 2026-05-03 14:40:00  │
+└────┴────────┴───────────┴──────────────────────┘
+```
+
+Add a person by their person ID, and remove a participant by the **deal-participant `ID`**
+from the list (the left column, distinct from the person ID):
+
+```bash
+pdcli deal participant add 42 --person 10
+pdcli deal participant remove 42 --participant 3
+pdcli deal participant remove 42 --participant 3 --yes
+```
+
+`remove` confirms first like every destructive command; `-y`/`--yes` skips the prompt.
+
+## Followers
+
+A **follower** is a _user_ (a teammate, by user ID) who gets notified about a record's
+activity. Deals, persons, and organizations each have an identical `follower` group:
+
+```bash
+pdcli deal follower list 42
+pdcli person follower list 17
+pdcli org follower list 7
+```
+
+```text
+┌──────┬──────────────────────┐
+│ User │ Added                │
+├──────┼──────────────────────┤
+│ 5    │ 2026-05-01 09:12:00  │
+└──────┴──────────────────────┘
+```
+
+Add and remove a follower by **user ID** (resolve names with `user find`/`user list`). The
+same shape works for `deal`, `person`, and `org`:
+
+```bash
+pdcli deal follower add 42 --user 5
+pdcli deal follower remove 42 --user 5
+pdcli deal follower remove 42 --user 5 --yes
+
+pdcli person follower add 17 --user 5
+pdcli org follower add 7 --user 5
+```
+
+Unlike participants, followers are keyed directly by the user ID on both add and remove —
+there's no separate follower handle to track.
+
+## Organization hierarchy
+
+Organizations link to each other two ways: a **parent** relationship (a corporate
+parent/subsidiary tree) and a looser **related** link between peers. Manage both under
+`org relationship`.
+
+List every relationship an org takes part in — on either side — with `--org`:
+
+```bash
+pdcli org relationship list --org 1481
+```
+
+```text
+┌────┬────────┬───────────┬───────────┬─────────┐
+│ ID │ Type   │ Owner Org │ Linked Org │ Related │
+├────┼────────┼───────────┼───────────┼─────────┤
+│ 7  │ parent │ 1481      │ 1480      │ Globex  │
+└────┴────────┴───────────┴───────────┴─────────┘
+```
+
+Create a link with `--type parent|related`, naming the two orgs with `--owner` and
+`--linked`. **For a `parent` relationship the `--owner` is the parent and `--linked` is the
+daughter**; for `related` the two are interchangeable peers:
+
+```bash
+pdcli org relationship add --type parent --owner 1481 --linked 1480
+pdcli org relationship add --type related --owner 1 --linked 2
+```
+
+Remove a link by its **relationship `ID`** (the left column from `list`, not an org ID):
+
+```bash
+pdcli org relationship remove 7
+pdcli org relationship remove 7 --yes
+```
+
+It confirms first; `-y`/`--yes` skips the prompt for scripts.
