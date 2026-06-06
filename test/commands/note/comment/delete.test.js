@@ -52,6 +52,7 @@ describe('note comment delete', () => {
     expect(mockConfirmAction).toHaveBeenCalledWith(
       expect.stringContaining(UUID),
       false,
+      { default: false },
     )
     expect(scope.isDone()).toBe(true)
     expect(stdout).toContain('Deleted')
@@ -65,7 +66,9 @@ describe('note comment delete', () => {
 
     await runCmd(NoteCommentDeleteCommand, ['5', '--comment', UUID, '--yes'])
 
-    expect(mockConfirmAction).toHaveBeenCalledWith(expect.any(String), true)
+    expect(mockConfirmAction).toHaveBeenCalledWith(expect.any(String), true, {
+      default: false,
+    })
     expect(scope.isDone()).toBe(true)
   })
 

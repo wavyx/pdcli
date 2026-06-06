@@ -107,4 +107,20 @@ describe('field option add', () => {
     expect(stdout).toContain('Critical')
     expect(stdout).toContain('4')
   })
+
+  it('renders an empty list when the API returns no data', async () => {
+    mockApi()
+      .post(`/api/v2/dealFields/${HASH}/options`)
+      .reply(200, { success: true })
+
+    const stdout = await runCmd(FieldOptionAddCommand, [
+      'deal',
+      HASH,
+      '--label',
+      'X',
+      '--output',
+      'json',
+    ])
+    expect(JSON.parse(stdout)).toEqual([])
+  })
 })

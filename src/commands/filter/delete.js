@@ -28,7 +28,9 @@ export default class FilterDeleteCommand extends BaseCommand {
   async run() {
     const { args, flags } = await this.parse(FilterDeleteCommand)
 
-    const ok = await confirmAction(`Delete filter ${args.id}?`, flags.yes)
+    const ok = await confirmAction(`Delete filter ${args.id}?`, flags.yes, {
+      default: false,
+    })
     if (!ok) {
       throw new CliError('Aborted', { exitCode: 1 })
     }

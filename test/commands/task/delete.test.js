@@ -46,6 +46,7 @@ describe('task delete', () => {
     expect(mockConfirmAction).toHaveBeenCalledWith(
       expect.stringContaining('7'),
       false,
+      { default: false },
     )
     expect(scope.isDone()).toBe(true)
     expect(stdout).toContain('Deleted')
@@ -59,7 +60,9 @@ describe('task delete', () => {
 
     await runCmd(TaskDeleteCommand, ['7', '--yes'])
 
-    expect(mockConfirmAction).toHaveBeenCalledWith(expect.any(String), true)
+    expect(mockConfirmAction).toHaveBeenCalledWith(expect.any(String), true, {
+      default: false,
+    })
     expect(scope.isDone()).toBe(true)
   })
 

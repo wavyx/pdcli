@@ -39,10 +39,9 @@ export default class OrgRelationshipListCommand extends BaseCommand {
     const { flags } = await this.parse(OrgRelationshipListCommand)
     const limit = flags.limit ?? 500
 
-    const query = {
-      org_id: flags.org,
-      limit: Math.min(limit, 500),
-    }
+    // The endpoint takes only org_id (no server-side pagination) — the
+    // client-side cap below is what --limit actually controls.
+    const query = { org_id: flags.org }
 
     const items = await collectPages(
       this.apiClient.pageV1('/api/v1/organizationRelationships', query),

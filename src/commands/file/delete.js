@@ -28,7 +28,9 @@ export default class FileDeleteCommand extends BaseCommand {
   async run() {
     const { args, flags } = await this.parse(FileDeleteCommand)
 
-    const ok = await confirmAction(`Delete file ${args.id}?`, flags.yes)
+    const ok = await confirmAction(`Delete file ${args.id}?`, flags.yes, {
+      default: false,
+    })
     if (!ok) {
       throw new CliError('Aborted', { exitCode: 1 })
     }

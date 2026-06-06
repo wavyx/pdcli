@@ -46,9 +46,10 @@ describe('org follower remove', () => {
     expect(mockConfirmAction).toHaveBeenCalledWith(
       expect.stringContaining('5'),
       false,
+      { default: false },
     )
     expect(scope.isDone()).toBe(true)
-    expect(stdout).toContain('Removed')
+    expect(stdout).toContain('from organization')
   })
 
   it('skips the prompt with --yes', async () => {
@@ -59,7 +60,9 @@ describe('org follower remove', () => {
 
     await runCmd(OrgFollowerRemoveCommand, ['42', '--user', '5', '--yes'])
 
-    expect(mockConfirmAction).toHaveBeenCalledWith(expect.any(String), true)
+    expect(mockConfirmAction).toHaveBeenCalledWith(expect.any(String), true, {
+      default: false,
+    })
     expect(scope.isDone()).toBe(true)
   })
 

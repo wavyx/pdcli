@@ -183,4 +183,35 @@ describe('field create', () => {
     ])
     expect(stdout).toContain('Plain')
   })
+
+  it('renders enum options as id=label pairs in table mode', async () => {
+    mockApi()
+      .post('/api/v2/dealFields')
+      .reply(200, {
+        success: true,
+        data: {
+          id: 91,
+          field_code: 'a'.repeat(40),
+          field_name: 'Tier',
+          options: [
+            { id: 1, label: 'Gold' },
+            { id: 2, label: 'Silver' },
+          ],
+        },
+      })
+
+    const stdout = await runCmd(FieldCreateCommand, [
+      'deal',
+      '--name',
+      'Tier',
+      '--type',
+      'enum',
+      '--options',
+      'Gold,Silver',
+      '--output',
+      'table',
+    ])
+    expect(stdout).toContain('1=Gold')
+    expect(stdout).toContain('2=Silver')
+  })
 })

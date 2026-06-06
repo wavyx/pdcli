@@ -12,7 +12,7 @@ const columns = {
 }
 
 // Item types that have a dedicated v2 scoped-search endpoint (narrower OAuth
-// scope, cost 20 vs itemSearch's 40). Singular type → scoped endpoint path.
+// scope, narrower scope + 500-row pages vs itemSearch). Singular type → scoped endpoint path.
 const SCOPED_PATHS = {
   deal: '/api/v2/deals/search',
   person: '/api/v2/persons/search',
@@ -103,7 +103,7 @@ export default class SearchCommand extends BaseCommand {
         },
       })
     } else {
-      // Search costs 40 rate-limit tokens — single request, no auto-paging.
+      // Search costs 20 rate-limit tokens — single request, no auto-paging.
       body = await this.apiClient.get('/api/v2/itemSearch', {
         query: {
           term: args.term,

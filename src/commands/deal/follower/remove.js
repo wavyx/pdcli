@@ -32,6 +32,7 @@ export default class DealFollowerRemoveCommand extends BaseCommand {
     const ok = await confirmAction(
       `Remove follower ${flags.user} from deal ${args.id}?`,
       flags.yes,
+      { default: false },
     )
     if (!ok) {
       throw new CliError('Aborted', { exitCode: 1 })

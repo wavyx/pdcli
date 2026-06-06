@@ -30,8 +30,9 @@ export default class OrgFollowerRemoveCommand extends BaseCommand {
     const { args, flags } = await this.parse(OrgFollowerRemoveCommand)
 
     const ok = await confirmAction(
-      `Remove follower ${flags.user} from deal ${args.id}?`,
+      `Remove follower ${flags.user} from organization ${args.id}?`,
       flags.yes,
+      { default: false },
     )
     if (!ok) {
       throw new CliError('Aborted', { exitCode: 1 })
@@ -40,6 +41,10 @@ export default class OrgFollowerRemoveCommand extends BaseCommand {
     await this.apiClient.del(
       `/api/v2/organizations/${args.id}/followers/${flags.user}`,
     )
-    this.log(chalk.green(`Removed follower ${flags.user} from deal ${args.id}`))
+    this.log(
+      chalk.green(
+        `Removed follower ${flags.user} from organization ${args.id}`,
+      ),
+    )
   }
 }

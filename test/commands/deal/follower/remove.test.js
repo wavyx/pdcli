@@ -50,6 +50,7 @@ describe('deal follower remove', () => {
     expect(mockConfirmAction).toHaveBeenCalledWith(
       expect.stringContaining('5'),
       false,
+      { default: false },
     )
     expect(scope.isDone()).toBe(true)
     expect(stdout).toContain('Removed')
@@ -63,7 +64,9 @@ describe('deal follower remove', () => {
 
     await runCmd(DealFollowerRemoveCommand, ['42', '--user', '5', '--yes'])
 
-    expect(mockConfirmAction).toHaveBeenCalledWith(expect.any(String), true)
+    expect(mockConfirmAction).toHaveBeenCalledWith(expect.any(String), true, {
+      default: false,
+    })
     expect(scope.isDone()).toBe(true)
   })
 

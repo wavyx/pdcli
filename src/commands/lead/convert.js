@@ -92,7 +92,7 @@ export default class LeadConvertCommand extends BaseCommand {
         throw new CliError(
           `Timed out after ${flags['timeout-secs']}s waiting for conversion ` +
             `${conversionId} (last status: ${state}). ` +
-            `Check status: ${this.config.bin} lead convert status ${args.id} ${conversionId}`,
+            `Check status: ${this.config.bin} api GET /api/v2/leads/${args.id}/convert/status/${conversionId}`,
           { exitCode: 1 },
         )
       }

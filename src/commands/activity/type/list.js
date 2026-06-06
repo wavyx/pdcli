@@ -29,7 +29,7 @@ export default class ActivityTypeListCommand extends BaseCommand {
     // Activity types are v1-only and returned in one unpaginated array.
     const body = await this.apiClient.get('/api/v1/activityTypes')
     let types = body.data ?? []
-    if (flags.limit) types = types.slice(0, flags.limit)
+    if (flags.limit != null) types = types.slice(0, flags.limit)
 
     await this.outputResults(types, columns)
   }

@@ -42,7 +42,7 @@ describe('org relationship list', () => {
   it('GETs relationships for the org and outputs JSON', async () => {
     const scope = mockApi()
       .get('/api/v1/organizationRelationships')
-      .query({ org_id: '1481', limit: '500' })
+      .query({ org_id: '1481' })
       .reply(200, { success: true, data: [REL] })
 
     const stdout = await runCmd(OrgRelationshipListCommand, [
@@ -59,7 +59,7 @@ describe('org relationship list', () => {
   it('paginates with the v1 offset pager', async () => {
     mockApi()
       .get('/api/v1/organizationRelationships')
-      .query({ org_id: '1481', limit: '500' })
+      .query({ org_id: '1481' })
       .reply(200, {
         success: true,
         data: [REL],
@@ -68,7 +68,7 @@ describe('org relationship list', () => {
         },
       })
       .get('/api/v1/organizationRelationships')
-      .query({ org_id: '1481', limit: '500', start: '1' })
+      .query({ org_id: '1481', start: '1' })
       .reply(200, {
         success: true,
         data: [{ ...REL, id: 2 }],
@@ -90,7 +90,7 @@ describe('org relationship list', () => {
   it('renders a table with id, type and org names', async () => {
     mockApi()
       .get('/api/v1/organizationRelationships')
-      .query({ org_id: '1481', limit: '500' })
+      .query({ org_id: '1481' })
       .reply(200, { success: true, data: [REL] })
 
     const stdout = await runCmd(OrgRelationshipListCommand, [
@@ -108,7 +108,7 @@ describe('org relationship list', () => {
   it('renders blank cells for missing org names in a table', async () => {
     mockApi()
       .get('/api/v1/organizationRelationships')
-      .query({ org_id: '1481', limit: '500' })
+      .query({ org_id: '1481' })
       .reply(200, {
         success: true,
         data: [{ id: 9, type: 'related' }],

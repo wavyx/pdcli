@@ -46,6 +46,7 @@ describe('file delete', () => {
     expect(mockConfirmAction).toHaveBeenCalledWith(
       expect.stringContaining('5'),
       false,
+      { default: false },
     )
     expect(scope.isDone()).toBe(true)
     expect(stdout).toContain('Deleted')
@@ -59,7 +60,9 @@ describe('file delete', () => {
 
     await runCmd(FileDeleteCommand, ['5', '--yes'])
 
-    expect(mockConfirmAction).toHaveBeenCalledWith(expect.any(String), true)
+    expect(mockConfirmAction).toHaveBeenCalledWith(expect.any(String), true, {
+      default: false,
+    })
     expect(scope.isDone()).toBe(true)
   })
 

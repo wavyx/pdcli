@@ -28,7 +28,9 @@ export default class TaskDeleteCommand extends BaseCommand {
   async run() {
     const { args, flags } = await this.parse(TaskDeleteCommand)
 
-    const ok = await confirmAction(`Delete task ${args.id}?`, flags.yes)
+    const ok = await confirmAction(`Delete task ${args.id}?`, flags.yes, {
+      default: false,
+    })
     if (!ok) {
       throw new CliError('Aborted', { exitCode: 1 })
     }

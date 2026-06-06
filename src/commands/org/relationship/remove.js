@@ -34,6 +34,7 @@ export default class OrgRelationshipRemoveCommand extends BaseCommand {
     const ok = await confirmAction(
       `Delete organization relationship ${args.id}?`,
       flags.yes,
+      { default: false },
     )
     if (!ok) {
       throw new CliError('Aborted', { exitCode: 1 })

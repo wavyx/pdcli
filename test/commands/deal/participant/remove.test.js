@@ -50,6 +50,7 @@ describe('deal participant remove', () => {
     expect(mockConfirmAction).toHaveBeenCalledWith(
       expect.stringContaining('3'),
       false,
+      { default: false },
     )
     expect(scope.isDone()).toBe(true)
     expect(stdout).toContain('Removed')
@@ -68,7 +69,9 @@ describe('deal participant remove', () => {
       '--yes',
     ])
 
-    expect(mockConfirmAction).toHaveBeenCalledWith(expect.any(String), true)
+    expect(mockConfirmAction).toHaveBeenCalledWith(expect.any(String), true, {
+      default: false,
+    })
     expect(scope.isDone()).toBe(true)
   })
 

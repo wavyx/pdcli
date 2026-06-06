@@ -35,6 +35,7 @@ export default class NoteCommentDeleteCommand extends BaseCommand {
     const ok = await confirmAction(
       `Delete comment ${flags.comment} from note ${args.noteId}?`,
       flags.yes,
+      { default: false },
     )
     if (!ok) {
       throw new CliError('Aborted', { exitCode: 1 })

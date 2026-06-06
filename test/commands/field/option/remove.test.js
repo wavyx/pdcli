@@ -101,4 +101,21 @@ describe('field option remove', () => {
     ]).catch((e) => e)
     expect(err.exitCode ?? err.oclif?.exit).toBe(64)
   })
+
+  it('renders an empty list when the API returns no data', async () => {
+    mockApi()
+      .delete(`/api/v2/dealFields/${HASH}/options`)
+      .reply(200, { success: true })
+
+    const stdout = await runCmd(FieldOptionRemoveCommand, [
+      'deal',
+      HASH,
+      '--option',
+      '4',
+      '--yes',
+      '--output',
+      'json',
+    ])
+    expect(JSON.parse(stdout)).toEqual([])
+  })
 })
