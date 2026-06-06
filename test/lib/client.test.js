@@ -965,6 +965,69 @@ describe('postForm (application/x-www-form-urlencoded)', () => {
     ).rejects.toThrow(/Refusing to send request outside/)
   })
 })
+describe('putForm (application/x-www-form-urlencoded)', () => {
+  beforeEach(() => nock.cleanAll())
+
+  it('PUTs a urlencoded body with the form content-type', async () => {
+    const client = createClient({
+      companyDomain: 'acme',
+      token: 'test-token',
+      retry: false,
+      timeout: 5000,
+    })
+    const scope = nock('https://acme.pipedrive.com')
+      .put('/api/v1/files/9', (body) => {
+        const params = new URLSearchParams(body)
+        return (
+          params.get('name') === 'renamed.pdf' &&
+          params.get('description') === 'Q3 report'
+        )
+      })
+      .matchHeader('content-type', 'application/x-www-form-urlencoded')
+      .matchHeader('x-api-token', 'test-token')
+      .reply(200, { success: true, data: { id: 9 } })
+
+    const result = await client.putForm('/api/v1/files/9', {
+      name: 'renamed.pdf',
+      description: 'Q3 report',
+    })
+
+    expect(result.data.id).toBe(9)
+    expect(scope.isDone()).toBe(true)
+  })
+
+  it('omits null/undefined fields from the body', async () => {
+    const client = createClient({
+      companyDomain: 'acme',
+      token: 'test-token',
+      retry: false,
+      timeout: 5000,
+    })
+    const scope = nock('https://acme.pipedrive.com')
+      .put('/api/v1/files/9', (body) => {
+        return body.name === 'renamed.pdf' && !('description' in body)
+      })
+      .reply(200, { success: true, data: { id: 9 } })
+
+    await client.putForm('/api/v1/files/9', {
+      name: 'renamed.pdf',
+      description: null,
+    })
+    expect(scope.isDone()).toBe(true)
+  })
+
+  it('refuses to send outside the locked host', async () => {
+    const client = createClient({
+      companyDomain: 'acme',
+      token: 'test-token',
+      retry: false,
+      timeout: 5000,
+    })
+    await expect(
+      client.putForm('https://evil.example.com/api/v1/files/9', {}),
+    ).rejects.toThrow(/Refusing to send request outside/)
+  })
+})
 describe('unified transport: retry/refresh on non-JSON paths', () => {
   beforeEach(() => nock.cleanAll())
 

@@ -104,8 +104,14 @@
       "org:follower": {
         "description": "Manage organization followers"
       },
+      "org:relationship": {
+        "description": "Manage parent/related links between organizations"
+      },
       "field:option": {
         "description": "Manage enum/set field options"
+      },
+      "note:comment": {
+        "description": "Manage comments on a note"
       }
     },
     "hooks": {

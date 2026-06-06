@@ -307,6 +307,24 @@ export function createClient({
     })
   }
 
+  /**
+   * PUT application/x-www-form-urlencoded (v1 form endpoints, e.g.
+   * /api/v1/files/:id — JSON is not accepted there).
+   * @param {string} path
+   * @param {Record<string, unknown>} fields Null/undefined values are omitted.
+   */
+  async function putForm(path, fields = {}) {
+    const params = new URLSearchParams()
+    for (const [k, v] of Object.entries(fields)) {
+      if (v != null) params.set(k, String(v))
+    }
+    return transport('PUT', lockedUrl(path), {
+      path,
+      makeBody: () => params.toString(),
+      extraHeaders: { 'content-type': 'application/x-www-form-urlencoded' },
+    })
+  }
+
   return {
     get: (path, opts) => request('GET', path, opts),
     post: (path, opts) => request('POST', path, opts),
@@ -316,6 +334,7 @@ export function createClient({
     download,
     postMultipart,
     postForm,
+    putForm,
     pageV1,
     pageV2,
   }
