@@ -158,13 +158,13 @@ export default class DigestCommand extends BaseCommand {
       return
     }
 
-    this.#renderTable(
+    await this.#renderTable(
       digestToReport(packet, { generatedAt: now.toISOString() }),
     )
   }
 
-  /** Render the report object as labeled terminal sections. */
-  #renderTable(report) {
+  /** Render the report object as labeled terminal sections, in order. */
+  async #renderTable(report) {
     this.log(report.title)
     for (const m of report.meta) this.log(`  ${m.label}: ${m.value}`)
 
@@ -176,15 +176,13 @@ export default class DigestCommand extends BaseCommand {
       } else if (section.type === 'lines') {
         for (const line of section.lines) this.log(`  ${line}`)
       } else {
-        this.#renderSectionTable(section)
+        const columns = {}
+        for (const col of section.columns) {
+          columns[col.key] = { header: col.header }
+        }
+        // Awaited so a later section can't print before this table resolves.
+        await this.outputResults(section.rows, columns)
       }
     }
-  }
-
-  /** Render a table section via outputResults (honors the table renderer). */
-  async #renderSectionTable(section) {
-    const columns = {}
-    for (const col of section.columns) columns[col.key] = { header: col.header }
-    await this.outputResults(section.rows, columns)
   }
 }
