@@ -67,4 +67,12 @@ describe('closeMonthKey', () => {
     // 2026-01-31 back to December; the string-prefix approach must not.
     expect(closeMonthKey('2026-01-31')).toBe('2026-01')
   })
+
+  it('treats Pipedrive zero/sentinel dates as no month', () => {
+    // Legacy/imported records carry "0000-00-00" for an unset close date —
+    // it must bucket as no-date, not as a literal "0000-00" month.
+    expect(closeMonthKey('0000-00-00')).toBeNull()
+    expect(closeMonthKey('2026-00-01')).toBeNull()
+    expect(closeMonthKey('2026-13-01')).toBeNull()
+  })
 })

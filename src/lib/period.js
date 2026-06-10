@@ -44,5 +44,11 @@ export function formatApiDatetime(date) {
 export function closeMonthKey(value) {
   if (value == null || String(value).trim() === '') return null
   const match = /^(\d{4})-(\d{2})/.exec(String(value).trim())
-  return match ? `${match[1]}-${match[2]}` : null
+  if (!match) return null
+  const [, year, month] = match
+  // Pipedrive legacy/imported records can carry a zero sentinel date
+  // ("0000-00-00"); a non-calendar year/month is "no date", not a real month.
+  const monthNum = Number(month)
+  if (year === '0000' || monthNum < 1 || monthNum > 12) return null
+  return `${year}-${month}`
 }
