@@ -146,6 +146,18 @@ describe('assembleDigest', () => {
     )
     expect(p.coverage).toBeNull()
   })
+
+  it('omits coverage when open deals span multiple currencies', () => {
+    // Goal is single-currency; a coverage ratio over a mixed open pipeline
+    // would divide a cross-currency sum by a one-currency quota. A null
+    // currency is its own bucket ('(none)'), so USD + none is still mixed.
+    const mixed = [OPEN[0], { ...OPEN[1], currency: null }]
+    const p = assembleDigest(
+      { ...FETCHED, open: mixed },
+      { ...OPTS, deep: false },
+    )
+    expect(p.coverage).toBeNull()
+  })
 })
 
 describe('digestToReport', () => {

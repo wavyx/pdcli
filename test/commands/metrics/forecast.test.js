@@ -72,7 +72,15 @@ function mockFetch(deals = OPEN_DEALS) {
     .reply(200, STAGES)
   mockApi()
     .get('/api/v2/deals')
-    .query((q) => q.status === 'open' && q.pipeline_id === '1')
+    // Forecast buckets ALL open deals by close-month — it must NOT window the
+    // open query. Assert the absence of updated_since so a windowing
+    // regression (silently dropping older open deals) fails loudly.
+    .query(
+      (q) =>
+        q.status === 'open' &&
+        q.pipeline_id === '1' &&
+        q.updated_since === undefined,
+    )
     .reply(200, deals)
 }
 

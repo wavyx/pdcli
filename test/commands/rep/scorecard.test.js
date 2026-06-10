@@ -174,6 +174,26 @@ describe('rep scorecard', () => {
     expect(stdout).toContain('—')
   })
 
+  it('renders n/a (not NaN) for cycle when a won deal lacks add_time', async () => {
+    mockFetch({
+      open: [],
+      // won in window but no add_time → cycle is NaN
+      won: [
+        {
+          id: 9,
+          owner_id: 1,
+          status: 'won',
+          value: 1000,
+          won_time: daysAgo(5),
+        },
+      ],
+      lost: [],
+    })
+    const stdout = await runCmd(ScorecardCommand, ['--output', 'table'])
+    expect(stdout).toContain('Alice')
+    expect(stdout).not.toContain('NaN')
+  })
+
   it('tolerates a users response with no data array', async () => {
     mockFetch({ users: { success: true } })
     const stdout = await runCmd(ScorecardCommand, ['--output', 'json'])

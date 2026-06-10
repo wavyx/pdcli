@@ -46,14 +46,22 @@ export function assembleDigest(fetched, options) {
   const openValue = health.reduce((sum, r) => sum + r.openValue, 0)
   const weightedOpen = health.reduce((sum, r) => sum + r.weightedValue, 0)
 
-  const coverage = goal
-    ? computeCoverage({
-        openValue,
-        weightedOpen,
-        goalTarget: goal.goalTarget,
-        progress: goal.progress,
-      })
-    : null
+  // computeHealth sums value across stages but NOT across currencies, and the
+  // goal/quota is single-currency (fetchRevenueGoal refuses mixed). So a
+  // coverage ratio over a multi-currency open pipeline would divide a
+  // cross-currency sum by a single-currency quota — a meaningless number, the
+  // very blind-summing the per-currency forecast avoids. Omit coverage then.
+  const mixedCurrency =
+    new Set(open.map((d) => d.currency ?? '(none)')).size > 1
+  const coverage =
+    goal && !mixedCurrency
+      ? computeCoverage({
+          openValue,
+          weightedOpen,
+          goalTarget: goal.goalTarget,
+          progress: goal.progress,
+        })
+      : null
 
   const forecast = computeForecast(open, stages, { commitThreshold })
 

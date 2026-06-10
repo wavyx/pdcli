@@ -34,9 +34,14 @@ function displayValue(value) {
 
 // ---- Markdown ----
 
+/** Collapse any CR/LF run to a single space so a value can't break structure. */
+function mdInline(value) {
+  return displayValue(value).replace(/[\r\n]+/g, ' ')
+}
+
 function mdCell(value) {
   // Escape pipes so a cell value can't break the table grid; collapse newlines.
-  return displayValue(value).replace(/\|/g, '\\|').replace(/\n/g, ' ')
+  return mdInline(value).replace(/\|/g, '\\|')
 }
 
 function mdTable(section) {
@@ -56,9 +61,9 @@ function mdTable(section) {
  * @returns {string}
  */
 export function formatMarkdownReport(report) {
-  const out = [`# ${report.title}`, '']
+  const out = [`# ${mdInline(report.title)}`, '']
   for (const m of report.meta) {
-    out.push(`- **${m.label}**: ${displayValue(m.value)}`)
+    out.push(`- **${m.label}**: ${mdInline(m.value)}`)
   }
   for (const section of report.sections) {
     out.push('', `## ${section.heading}`, '')
@@ -66,7 +71,7 @@ export function formatMarkdownReport(report) {
       out.push(...mdTable(section))
     } else if (section.type === 'kv') {
       for (const p of section.pairs) {
-        out.push(`- **${p.label}**: ${displayValue(p.value)}`)
+        out.push(`- **${p.label}**: ${mdInline(p.value)}`)
       }
     } else {
       for (const line of section.lines) out.push(`- ${line}`)

@@ -80,6 +80,37 @@ describe('formatMarkdownReport', () => {
   it('renders an empty table as a "None." line', () => {
     expect(md).toMatch(/## Findings\n\nNone\./)
   })
+
+  it('collapses newlines in title/meta/kv so a value cannot inject structure', () => {
+    const out = formatMarkdownReport({
+      title: 'Packet\n## Injected',
+      meta: [{ label: 'Pipeline', value: 'Acme\nCorp' }],
+      sections: [
+        { heading: 'V', type: 'kv', pairs: [{ label: 'x', value: 'a\nb' }] },
+      ],
+    })
+    expect(out).toContain('# Packet ## Injected')
+    expect(out).not.toMatch(/\n## Injected/) // not a real injected heading
+    expect(out).toContain('- **Pipeline**: Acme Corp')
+    expect(out).toContain('- **x**: a b')
+  })
+
+  it('collapses a CRLF inside a table cell', () => {
+    const out = formatMarkdownReport({
+      title: 'T',
+      meta: [],
+      sections: [
+        {
+          heading: 'S',
+          type: 'table',
+          columns: [{ key: 'v', header: 'V' }],
+          rows: [{ v: 'a\r\nb' }],
+        },
+      ],
+    })
+    expect(out).toContain('| a b |')
+    expect(out).not.toContain('\r')
+  })
 })
 
 describe('formatHtmlReport', () => {

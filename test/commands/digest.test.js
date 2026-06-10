@@ -89,7 +89,7 @@ const ACTIVITIES = {
   ],
 }
 
-function mockCore() {
+function mockCore({ open = OPEN } = {}) {
   mockApi()
     .get('/api/v2/pipelines')
     .reply(200, { success: true, data: [{ id: 1, name: 'Sales' }] })
@@ -100,7 +100,7 @@ function mockCore() {
   mockApi()
     .get('/api/v2/deals')
     .query((q) => q.status === 'open' && q.pipeline_id === '1')
-    .reply(200, { success: true, data: OPEN })
+    .reply(200, { success: true, data: open })
   mockApi()
     .get('/api/v2/deals')
     .query(
@@ -317,6 +317,63 @@ describe('digest', () => {
     const err = await DigestCommand.run(['--pipeline', '1']).catch((e) => e)
     // 401 → exit 77, not the 64 "no goal" case, so it must propagate.
     expect(err.exitCode ?? err.oclif?.exit).toBe(77)
+  })
+
+  it('omits coverage and notes when the open pipeline spans currencies', async () => {
+    const mixed = [
+      OPEN[0], // USD
+      { ...OPEN[1], currency: 'EUR' }, // EUR → mixed
+    ]
+    mockCore({ open: mixed })
+    mockGoal()
+
+    const writes = []
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((c) => {
+      writes.push(String(c))
+      return true
+    })
+    let stdout
+    try {
+      stdout = await runCmd(DigestCommand, [
+        '--pipeline',
+        '1',
+        '--output',
+        'json',
+      ])
+    } finally {
+      spy.mockRestore()
+    }
+    const p = JSON.parse(stdout)
+    expect(p.coverage).toBeNull()
+    expect(writes.join('')).toMatch(/multiple currencies/i)
+  })
+
+  it('errors with exit 64 when --jq is combined with --format', async () => {
+    const err = await DigestCommand.run([
+      '--pipeline',
+      '1',
+      '--format',
+      'md',
+      '--jq',
+      '.coverage',
+    ]).catch((e) => e)
+    expect(err.exitCode ?? err.oclif?.exit).toBe(64)
+    expect(err.message).toMatch(/--format/)
+  })
+
+  it('routes --jq through the whole packet even with --output table', async () => {
+    mockCore()
+    mockGoal()
+    // --output table + --jq must NOT fragment per-section; jq sees the packet.
+    const stdout = await runCmd(DigestCommand, [
+      '--pipeline',
+      '1',
+      '--output',
+      'table',
+      '--jq',
+      '.pipeline.name',
+    ])
+    expect(stdout.trim()).toBe('"Sales"')
   })
 
   it('errors with exit 64 when --out is given without --format', async () => {

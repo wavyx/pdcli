@@ -63,6 +63,14 @@ export default class DigestCommand extends BaseCommand {
     if (flags.out && !flags.format) {
       throw new CliError('--out requires --format md|html', { exitCode: 64 })
     }
+    // --format renders a document artifact; --jq/--fields operate on structured
+    // data and have nothing to act on there. Reject the combination explicitly.
+    if (flags.format && (flags.jq || flags.fields)) {
+      throw new CliError(
+        '--jq/--fields do not apply with --format; use --output json',
+        { exitCode: 64 },
+      )
+    }
 
     const { id: pipelineId, name: pipelineName } =
       await resolvePipelineWithName(this.apiClient, flags.pipeline)
@@ -138,6 +146,15 @@ export default class DigestCommand extends BaseCommand {
       },
     )
 
+    // A resolved goal with no coverage section means the open pipeline spans
+    // currencies (assembleDigest omits the ratio rather than mix them).
+    if (goal && packet.coverage === null) {
+      process.stderr.write(
+        'Note: coverage omitted — open pipeline spans multiple currencies; ' +
+          'a single coverage ratio would mix them.\n',
+      )
+    }
+
     if (flags.format) {
       const report = digestToReport(packet, { generatedAt: now.toISOString() })
       const rendered =
@@ -153,7 +170,10 @@ export default class DigestCommand extends BaseCommand {
       return
     }
 
-    if (this.resolveFormat() !== 'table') {
+    // --jq/--fields (and any non-table machine format) must see the whole
+    // packet exactly once; routing them through the multi-section table render
+    // would apply jq per-section and fragment the output.
+    if (flags.jq || flags.fields || this.resolveFormat() !== 'table') {
       await this.outputResults(packet, {})
       return
     }

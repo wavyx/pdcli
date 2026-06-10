@@ -74,10 +74,12 @@ export default class RepScorecardCommand extends BaseCommand {
       r.winRate == null
         ? 'n/a'
         : `${(r.winRate * 100).toFixed(0)}% (${r.wonCount}W/${r.lostCount}L)`
+    // Number.isFinite also rejects NaN — a won deal with an unparseable
+    // add_time yields a NaN cycle, which must render 'n/a', not 'NaN'.
     const num =
       (key, digits = 0) =>
       (r) =>
-        r[key] == null ? 'n/a' : r[key].toFixed(digits)
+        Number.isFinite(r[key]) ? r[key].toFixed(digits) : 'n/a'
 
     await this.outputResults(rows, {
       ownerName: { header: 'Rep' },
