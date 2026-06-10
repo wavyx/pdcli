@@ -3,7 +3,7 @@ import BaseCommand from '../../base-command.js'
 import { collectPages } from '../../lib/pagination.js'
 import { computeTransitionMatrix } from '../../lib/conversion-matrix.js'
 import { mineMany } from '../../lib/changelog.js'
-import { CliError } from '../../lib/errors.js'
+import { resolvePipeline } from '../../lib/pipelines.js'
 
 export default class MetricsConversionMatrixCommand extends BaseCommand {
   static description =
@@ -25,19 +25,7 @@ export default class MetricsConversionMatrixCommand extends BaseCommand {
   async run() {
     const { flags } = await this.parse(MetricsConversionMatrixCommand)
 
-    let pipelineId = flags.pipeline
-    if (pipelineId == null) {
-      const body = await this.apiClient.get('/api/v2/pipelines')
-      const pipelines = body.data ?? []
-      if (pipelines.length > 1) {
-        throw new CliError(
-          `Account has ${pipelines.length} pipelines — pass --pipeline <id> ` +
-            `(${pipelines.map((p) => `${p.id}=${p.name}`).join(', ')})`,
-          { exitCode: 64 },
-        )
-      }
-      pipelineId = pipelines[0]?.id
-    }
+    const pipelineId = await resolvePipeline(this.apiClient, flags.pipeline)
 
     const base = { pipeline_id: pipelineId, limit: 500 }
     const [stages, open, won, lost] = await Promise.all([

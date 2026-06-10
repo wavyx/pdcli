@@ -4,7 +4,7 @@ import BaseCommand from '../../base-command.js'
 import { collectPages } from '../../lib/pagination.js'
 import { mineMany } from '../../lib/changelog.js'
 import { computeStageSkips } from '../../lib/stage-skips.js'
-import { CliError } from '../../lib/errors.js'
+import { resolvePipeline } from '../../lib/pipelines.js'
 
 export default class AuditStageSkipsCommand extends BaseCommand {
   static description =
@@ -26,19 +26,7 @@ export default class AuditStageSkipsCommand extends BaseCommand {
   async run() {
     const { flags } = await this.parse(AuditStageSkipsCommand)
 
-    let pipelineId = flags.pipeline
-    if (pipelineId == null) {
-      const body = await this.apiClient.get('/api/v2/pipelines')
-      const pipelines = body.data ?? []
-      if (pipelines.length > 1) {
-        throw new CliError(
-          `Account has ${pipelines.length} pipelines — pass --pipeline <id> ` +
-            `(${pipelines.map((p) => `${p.id}=${p.name}`).join(', ')})`,
-          { exitCode: 64 },
-        )
-      }
-      pipelineId = pipelines[0]?.id
-    }
+    const pipelineId = await resolvePipeline(this.apiClient, flags.pipeline)
 
     // Stage skips are about history, so all deal states matter: a won or lost
     // deal can have jumped a gate just as an open one can. Fetch all three.
