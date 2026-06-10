@@ -5,7 +5,7 @@ description: Full command reference for the pdcli command-line interface.
 
 <!-- AUTO-GENERATED from the oclif manifest by scripts/gen-commands.mjs — do not edit by hand. -->
 
-Reference for `pdcli` v0.11.0 (130 commands). Every command also accepts the global flags `--output table|json`, `--profile`, `--no-color`, `--verbose`, `--no-retry`, `--timeout`, and `--limit`.
+Reference for `pdcli` v0.11.0 (134 commands). Every command also accepts the global flags `--output table|json`, `--profile`, `--no-color`, `--verbose`, `--no-retry`, `--timeout`, and `--limit`.
 
 ## Top-level
 
@@ -318,6 +318,25 @@ Examples:
 
 ```bash
 pdcli alias unset wd
+```
+
+## pdcli audit
+
+### `pdcli audit stage-skips`
+
+Stage-skip & sandbagging audit: deals that jumped gates or were pulled backward, mined from each deal’s changelog (one request per deal)
+
+```
+pdcli audit stage-skips [flags]
+```
+
+- `--pipeline <value>` — Pipeline ID (required when the account has several)
+
+Examples:
+
+```bash
+pdcli audit stage-skips
+pdcli audit stage-skips --pipeline 1 --output json
 ```
 
 ## pdcli auth
@@ -1283,6 +1302,41 @@ pdcli lead update adf21080-0e10-11eb-879b-05d71fb426ec --value 7500 --currency U
 
 ## pdcli metrics
 
+### `pdcli metrics aging`
+
+Deal aging: days-in-current-stage per open deal, bucketed, with a p90-dwell flag (mines each open deal’s changelog, one request per deal)
+
+```
+pdcli metrics aging [flags]
+```
+
+- `--pipeline <value>` — Pipeline ID (required when the account has several)
+- `--buckets <value>` — Comma-separated day thresholds; cohorts are 0-N1/N1-N2/.../last+ (lower bound inclusive, upper exclusive)
+
+Examples:
+
+```bash
+pdcli metrics aging
+pdcli metrics aging --pipeline 1 --buckets 30,60,90
+```
+
+### `pdcli metrics conversion-matrix`
+
+Stage-transition matrix: every stage move (incl. backward & re-entry) mined from per-deal changelogs, with Won/Lost terminal columns
+
+```
+pdcli metrics conversion-matrix [flags]
+```
+
+- `--pipeline <value>` — Pipeline ID (required when the account has several)
+
+Examples:
+
+```bash
+pdcli metrics conversion-matrix
+pdcli metrics conversion-matrix --pipeline 1 --output json
+```
+
 ### `pdcli metrics coverage`
 
 Pipeline coverage: probability-weighted open pipeline vs the revenue still needed to hit quota
@@ -1302,6 +1356,25 @@ pdcli metrics coverage
 pdcli metrics coverage --pipeline 1
 pdcli metrics coverage --target 250000
 pdcli metrics coverage --period 1m --output json
+```
+
+### `pdcli metrics slippage`
+
+Close-date slippage: open deals whose expected close date keeps getting pushed out (mined per-deal changelog)
+
+```
+pdcli metrics slippage [flags]
+```
+
+- `--pipeline <value>` — Pipeline ID (required when the account has several)
+- `--min-pushes <value>` — Only show deals pushed forward at least this many times
+
+Examples:
+
+```bash
+pdcli metrics slippage
+pdcli metrics slippage --pipeline 1
+pdcli metrics slippage --min-pushes 2 --output json
 ```
 
 ### `pdcli metrics velocity`

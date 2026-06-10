@@ -112,6 +112,9 @@
       },
       "note:comment": {
         "description": "Manage comments on a note"
+      },
+      "audit": {
+        "description": "Data-quality audit + compliance checks"
       }
     },
     "hooks": {
