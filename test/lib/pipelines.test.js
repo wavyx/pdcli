@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { resolvePipeline } from '../../src/lib/pipelines.js'
+import {
+  resolvePipeline,
+  resolvePipelineWithName,
+} from '../../src/lib/pipelines.js'
 
 /** Minimal fake client: returns a canned /api/v2/pipelines envelope. */
 function fakeClient(pipelines) {
@@ -51,5 +54,52 @@ describe('resolvePipeline', () => {
   it('treats a missing data array as no pipelines', async () => {
     const client = fakeClient(undefined)
     expect(await resolvePipeline(client, null)).toBeUndefined()
+  })
+})
+
+describe('resolvePipelineWithName', () => {
+  it('returns id and name for an explicit flag (still fetches the list)', async () => {
+    const client = fakeClient([
+      { id: 1, name: 'Sales' },
+      { id: 2, name: 'Partners' },
+    ])
+    expect(await resolvePipelineWithName(client, 2)).toEqual({
+      id: 2,
+      name: 'Partners',
+    })
+    expect(client.calls).toBe(1)
+  })
+
+  it('auto-picks the only pipeline with its name', async () => {
+    const client = fakeClient([{ id: 5, name: 'Default' }])
+    expect(await resolvePipelineWithName(client, undefined)).toEqual({
+      id: 5,
+      name: 'Default',
+    })
+  })
+
+  it('throws exit 64 when several exist and no flag is given', async () => {
+    const client = fakeClient([
+      { id: 1, name: 'Sales' },
+      { id: 2, name: 'Partners' },
+    ])
+    const err = await resolvePipelineWithName(client, undefined).catch((e) => e)
+    expect(err.exitCode).toBe(64)
+  })
+
+  it('returns undefined id/name for an empty account', async () => {
+    const client = fakeClient([])
+    expect(await resolvePipelineWithName(client, null)).toEqual({
+      id: undefined,
+      name: undefined,
+    })
+  })
+
+  it('treats a missing data array as no pipelines', async () => {
+    const client = fakeClient(undefined)
+    expect(await resolvePipelineWithName(client, null)).toEqual({
+      id: undefined,
+      name: undefined,
+    })
   })
 })
