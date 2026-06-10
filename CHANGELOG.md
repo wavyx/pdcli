@@ -4,6 +4,25 @@ All notable changes to `pdcli` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/).
 
+## [0.12.0] - 2026-06-06
+
+### Added
+
+- Time-intelligence analytics, each mining real stage/close-date
+  history from per-deal changelogs (20 tokens/deal; a >100-deal
+  warning prints once):
+  - `metrics aging` — days-in-current-stage bucketed
+    (`--buckets`, default 30,60,90) with per-stage p50/p90 dwell
+    baselines; flags deals past their stage's p90.
+  - `metrics slippage` — `expected_close_date` pushes: count, net days
+    slipped, original→current close date, serial offenders
+    (`--min-pushes`).
+  - `metrics conversion-matrix` — full stage-to-stage transition counts
+    including backward edges and won/lost terminals (the flow graph the
+    funnel collapses).
+  - `audit stage-skips` — forward gate-skips and backward regressions
+    with actor attribution (informational; always exits 0).
+
 ## [0.11.0] - 2026-06-06
 
 ### Added
