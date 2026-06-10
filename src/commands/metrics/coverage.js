@@ -4,6 +4,7 @@ import { collectPages } from '../../lib/pagination.js'
 import { computeHealth, computeCoverage } from '../../lib/analytics.js'
 import { fetchRevenueGoal } from '../../lib/goals.js'
 import { resolvePipeline } from '../../lib/pipelines.js'
+import { CliError } from '../../lib/errors.js'
 
 export default class MetricsCoverageCommand extends BaseCommand {
   static description =
@@ -29,6 +30,11 @@ export default class MetricsCoverageCommand extends BaseCommand {
       description:
         'Manual revenue quota override (skips the Goals API entirely)',
     }),
+    currency: Flags.string({
+      description:
+        'Restrict the open pipeline to this currency code (required when the ' +
+        'pipeline holds deals in more than one currency)',
+    }),
   }
 
   async run() {
@@ -53,10 +59,26 @@ export default class MetricsCoverageCommand extends BaseCommand {
       ),
     ])
 
+    // Coverage sums open value into a single ratio, so it cannot mix
+    // currencies (the goal is single-currency too). Scope with --currency if
+    // given; otherwise a multi-currency open pipeline is a usage error rather
+    // than a meaningless cross-currency sum.
+    const scopedOpen = flags.currency
+      ? open.filter((d) => d.currency === flags.currency)
+      : open
+    const currencies = new Set(scopedOpen.map((d) => d.currency ?? '(none)'))
+    if (currencies.size > 1) {
+      throw new CliError(
+        `Open pipeline spans currencies (${[...currencies].join(', ')}) — ` +
+          `pass --currency <code> to compute coverage for one`,
+        { exitCode: 64 },
+      )
+    }
+
     // computeHealth gives both the raw open value (classic coverage input)
     // and the probability-weighted value (risk-adjusted secondary view).
     // Activities are irrelevant here, so pass an empty list.
-    const healthRows = computeHealth(open, stages, [], { now })
+    const healthRows = computeHealth(scopedOpen, stages, [], { now })
     const openValue = healthRows.reduce((sum, row) => sum + row.openValue, 0)
     const weightedOpen = healthRows.reduce(
       (sum, row) => sum + row.weightedValue,

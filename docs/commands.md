@@ -1373,6 +1373,7 @@ pdcli metrics coverage [flags]
 - `--pipeline <value>` — Pipeline ID (required when the account has several)
 - `--period <value>` — Goal measurement window (Nd or Nm)
 - `--target <value>` — Manual revenue quota override (skips the Goals API entirely)
+- `--currency <value>` — Restrict the open pipeline to this currency code (required when the pipeline holds deals in more than one currency)
 
 Examples:
 

@@ -242,6 +242,10 @@ The quota comes from your active revenue goal via the [Goals API](https://develo
 measured over `--period` (default `90d`). `--target <amount>` overrides it with a manual
 number and skips the Goals API entirely — useful when no goal is configured.
 
+Coverage collapses open value into a single ratio, so it can't mix currencies. If the
+pipeline holds deals in more than one currency the command exits **64**; scope it to one
+with `--currency <code>` (e.g. `--currency USD`).
+
 ```bash
 pdcli metrics coverage --pipeline 1
 pdcli metrics coverage --target 500000

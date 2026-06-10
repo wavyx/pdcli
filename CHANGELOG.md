@@ -35,6 +35,14 @@ All notable changes to `pdcli` are documented here. Format follows
   `src/lib/goals.js`; the seven pipeline-scoped commands now share one
   tested implementation. No behavior change.
 
+### Fixed
+
+- `metrics coverage` no longer blind-sums open value across currencies
+  (a meaningless cross-currency ratio against a single-currency quota).
+  A multi-currency open pipeline now errors with exit 64; scope it with
+  the new `--currency <code>` flag. `digest` applies the same guard by
+  omitting its coverage section (with a stderr note) on mixed currencies.
+
 ## [0.12.0] - 2026-06-06
 
 ### Added
