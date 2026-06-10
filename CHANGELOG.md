@@ -4,6 +4,37 @@ All notable changes to `pdcli` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/).
 
+## [0.13.0] - 2026-06-10
+
+### Added
+
+- The "Monday packet" — forecasting, rep performance, and a one-command
+  digest that fans a single fetch into the existing analytics:
+  - `metrics forecast` — open pipeline bucketed by close-month into
+    **commit / best-case / weighted** views. Commit counts deals whose
+    effective win-probability (`--commit-threshold`, default 70) clears
+    the bar, at full value; weighted uses
+    `deal probability ?? stage default ?? 100`. Values are **segregated
+    per currency** (never cross-summed), with a per-currency totals line.
+  - `rep scorecard` — per-owner win rate, cycle, velocity and deal
+    hygiene (stale / past-close / no-date / no-contact), with owner names
+    resolved from the users roster. Account-wide by default; narrow with
+    `--pipeline`, `--owner`, `--period`.
+  - `digest` — the whole packet from ONE pipeline-scoped fetch: velocity,
+    pipeline health, coverage, funnel, forecast and must-fix hygiene.
+    Cheap by default; `--deep` mines per-deal changelogs to add aging,
+    slippage and stage-skips. `--format md|html` (optionally `--out
+<file>`) renders a shareable artifact for cron → Slack/email; a
+    missing revenue goal degrades to no coverage section rather than
+    failing.
+
+### Changed
+
+- Extracted the duplicated `>1-pipeline` guard and the Goals-API
+  resolution recipe into shared `src/lib/pipelines.js` and
+  `src/lib/goals.js`; the seven pipeline-scoped commands now share one
+  tested implementation. No behavior change.
+
 ## [0.12.0] - 2026-06-06
 
 ### Added

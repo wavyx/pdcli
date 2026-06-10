@@ -5,7 +5,7 @@ description: Every pdcli command, flag, and example — generated from the CLI m
 
 {/* AUTO-GENERATED from the oclif manifest by scripts/gen-commands.mjs — do not edit by hand. */}
 
-All 134 commands in `pdcli` v0.12.0. Every command also
+All 137 commands in `pdcli` v0.13.0. Every command also
 accepts the [global flags](/pdcli/reference/config/) `--output`, `--jq`,
 `--fields`, `--profile`, `--limit`, `--no-color`, `--verbose`,
 `--no-retry`, and `--timeout`. Run `pdcli <command> --help` for the live version.
@@ -67,6 +67,31 @@ pdcli backup [flags]
 pdcli backup
 pdcli backup --dir ./my-backup
 pdcli backup --dir ./my-backup --resume
+```
+
+### `pdcli digest`
+
+Monday packet: one pipeline-scoped fetch fanned into velocity, health, coverage, funnel, forecast and hygiene. --deep adds changelog-mined aging/slippage/stage-skips; --format md\|html (+ --out) writes a shareable artifact for cron → Slack/email.
+
+```text
+pdcli digest [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--pipeline` &lt;value&gt; | Pipeline ID (required when the account has several) |
+| `--period` &lt;value&gt; | Trailing window for closed deals / the goal (Nd or Nm) |
+| `--target` &lt;value&gt; | Manual revenue quota override (skips the Goals API) |
+| `--commit-threshold` &lt;value&gt; | Min effective win-probability (%) counted toward commit |
+| `--deep` | Mine each deal’s changelog to add aging/slippage/stage-skips (one request per deal; warns over 100) |
+| `--format` &lt;md\|html&gt; | Render the packet as a shareable artifact |
+| `--out` &lt;value&gt; | Write the --format artifact to this file instead of stdout |
+
+```bash
+pdcli digest
+pdcli digest --pipeline 1 --output json
+pdcli digest --deep
+pdcli digest --format md --out monday.md
 ```
 
 ### `pdcli doctor`
@@ -1315,6 +1340,25 @@ pdcli metrics coverage --target 250000
 pdcli metrics coverage --period 1m --output json
 ```
 
+### `pdcli metrics forecast`
+
+Time-phased forecast: open pipeline bucketed by close-month into commit / best-case / weighted views, segregated per currency
+
+```text
+pdcli metrics forecast [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--pipeline` &lt;value&gt; | Pipeline ID (required when the account has several) |
+| `--commit-threshold` &lt;value&gt; | Min effective win-probability (%) for a deal to count toward commit |
+
+```bash
+pdcli metrics forecast
+pdcli metrics forecast --pipeline 1
+pdcli metrics forecast --commit-threshold 80 --output json
+```
+
 ### `pdcli metrics slippage`
 
 Close-date slippage: open deals whose expected close date keeps getting pushed out (mined per-deal changelog)
@@ -2220,6 +2264,28 @@ pdcli project update <id> [flags]
 pdcli project update 7 --title "Relaunch"
 pdcli project update 7 --status closed
 pdcli project update 7 --owner 9
+```
+
+## pdcli rep
+
+### `pdcli rep scorecard`
+
+Per-rep scorecard: win rate, cycle, velocity and deal hygiene by owner, across all pipelines (account-wide) unless narrowed
+
+```text
+pdcli rep scorecard [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--period` &lt;value&gt; | Trailing window for closed deals (Nd or Nm) |
+| `--pipeline` &lt;value&gt; | Restrict to a pipeline ID |
+| `--owner` &lt;value&gt; | Restrict to a single owner (user) ID |
+
+```bash
+pdcli rep scorecard
+pdcli rep scorecard --period 30d --pipeline 1
+pdcli rep scorecard --owner 42 --output json
 ```
 
 ## pdcli stage
