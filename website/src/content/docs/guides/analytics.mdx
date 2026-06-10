@@ -119,6 +119,117 @@ In `--exact` mode, `--period` scopes only the closed (won/lost) deals it mines; 
 are always included** regardless of the window. If a single deal's changelog can't be fetched,
 that deal is skipped (not the whole run) and pdcli notes how many were skipped on stderr.
 
+## Time intelligence
+
+Three commands answer questions Pipedrive's UI simply doesn't: **where are deals rotting?**
+(`metrics aging`), **which close dates keep slipping?** (`metrics slippage`), and **what's the
+real transition graph between stages, backward edges and all?** (`metrics conversion-matrix`).
+
+All three reconstruct stage and close-date history by **mining each deal's changelog — one
+request per deal, 20 tokens each.** That's the cost of accuracy: the changelog is the only
+source that records when a deal actually entered a stage or had its close date moved. Above
+100 deals, pdcli warns on stderr before it starts (the rate limiter then paces the calls);
+a deal whose changelog can't be fetched is skipped, counted, and reported on stderr rather
+than aborting the run. `--pipeline <id>` is required when the account has more than one
+pipeline, inferred otherwise.
+
+### `metrics aging`
+
+Days-in-current-stage for every open deal, bucketed, so you can see at a glance how much
+value is going stale and where. For each stage it also mines the **completed** dwell
+distribution (entry → next-entry across all deals) and reports per-stage **p50/p90**, then
+flags how many open deals have now sat in the stage longer than its own p90 — the deals most
+likely to be quietly dying.
+
+```bash
+pdcli metrics aging --pipeline 1 --buckets 30,60,90
+```
+
+```text
+┌──────────────────────┬───────────┬───────────┬───────────┬───────────┬──────────────────┐
+│ Stage                │ 0-30      │ 30-60     │ 60-90     │ 90+       │ > p90 dwell      │
+├──────────────────────┼───────────┼───────────┼───────────┼───────────┼──────────────────┤
+│ Qualified            │ 31 (820000) │ 12 (410000) │ 6 (180000) │ 5 (240000) │ 4 (p90 47d)    │
+│ Proposal Made        │ 7 (390000)  │ 3 (120000)  │ 1 (60000)  │ 1 (80000)  │ 2 (p90 22d)    │
+│ Negotiations Started │ 1 (40000)   │ 1 (42000)   │ 0          │ 0          │ — │
+└──────────────────────┴───────────┴───────────┴───────────┴───────────┴──────────────────┘
+```
+
+Each bucket cell is `count (summed value)`; `0` when empty. Buckets are `0-N1 / N1-N2 / … /
+last+` with the lower bound inclusive and the upper exclusive, so a deal sitting exactly 30
+days lands in `30-60`. The `> p90 dwell` column shows the count past p90 with the threshold
+itself (`—` when the stage has no completed-dwell history to learn a p90 from).
+
+**One limitation, stated honestly:** a deal's **starting** stage shows an `Unknown` dwell.
+The changelog records stage _transitions_, and a deal is created _in_ its first stage — there
+is no entry-transition into it — so pdcli can't timestamp when it arrived. Those deals are
+counted in an `Unknown` column (shown only when present) rather than bucketed against a guess.
+
+### `metrics slippage`
+
+Open deals whose `expected_close_date` keeps getting pushed out. pdcli walks each deal's
+close-date changes, counts the forward **pushes**, and reports the **net days slipped**
+(original → current). `--min-pushes` (default 1) filters to the serial offenders — the deals
+whose timeline you can no longer trust.
+
+```bash
+pdcli metrics slippage --pipeline 1 --min-pushes 2
+```
+
+```text
+┌──────┬──────────────────┬───────┬────────┬──────────────────┬──────────────────────────┐
+│ Deal │ Title            │ Owner │ Pushes │ Net days slipped │ Close date               │
+├──────┼──────────────────┼───────┼────────┼──────────────────┼──────────────────────────┤
+│ 204  │ Acme renewal     │ 42    │ 4      │ 96               │ 2026-02-15 → 2026-05-22  │
+│ 311  │ Globex expansion │ 17    │ 3      │ 61               │ 2026-03-01 → 2026-05-01  │
+└──────┴──────────────────┴───────┴────────┴──────────────────┴──────────────────────────┘
+```
+
+A high push count with a large net slip is the classic "always closing next month" deal.
+`Owner` is a user ID — resolve it with `user find` / `user list` (see the
+[audit guide](/pdcli/guides/audit/)).
+
+### `metrics conversion-matrix`
+
+The real stage-transition graph. Unlike `funnel`, which hides backward moves and collapses
+re-entries, this counts **every** `stage_id` hop as a directed edge and reports its occurrence
+count — so a deal that bounces 1→2→1→2 contributes two 1→2 edges and one 2→1 edge. Won/Lost
+are added as terminal columns, attributed to the stage the deal sat in when it closed. The
+full source×destination grid is too wide to read, so the table renders a long-format **edge
+list** with a forward/backward tag, plus a per-source **forward-rate** summary underneath.
+
+```bash
+pdcli metrics conversion-matrix --pipeline 1
+```
+
+```text
+┌──────────────────────┬──────────────────────┬───────┬───────────┐
+│ From                 │ To                   │ Edges │ Direction │
+├──────────────────────┼──────────────────────┼───────┼───────────┤
+│ Qualified            │ Proposal Made        │ 64    │ forward   │
+│ Qualified            │ Lost                 │ 22    │ forward   │
+│ Proposal Made        │ Negotiations Started │ 28    │ forward   │
+│ Proposal Made        │ Qualified            │ 9     │ backward  │
+│ Negotiations Started │ Won                  │ 18    │ forward   │
+│ Negotiations Started │ Proposal Made        │ 4     │ backward  │
+└──────────────────────┴──────────────────────┴───────┴───────────┘
+┌──────────────────────┬───────────┬───────────┐
+│ Source stage         │ Edges out │ Forward % │
+├──────────────────────┼───────────┼───────────┤
+│ Qualified            │ 86        │ 100%      │
+│ Proposal Made        │ 41        │ 78%       │
+│ Negotiations Started │ 22        │ 82%       │
+└──────────────────────┴───────────┴───────────┘
+```
+
+`--output json` returns the raw object — `sources`, `destinations`, the dense `matrix`, and
+the `edges` / `backwardEdges` lists — for feeding into a graph or a spreadsheet. The backward
+edges are the ones worth a second look: they're deals your reps walked _back_ down the
+pipeline, often the precursor to a slip or a loss.
+
+The process-compliance side of this same changelog data — gate-skips and regressions with
+actor attribution — lives in [`audit stage-skips`](/pdcli/guides/audit/#process-compliance-audit-stage-skips).
+
 ## `metrics coverage`
 
 Are you carrying enough pipeline to hit your number? `metrics coverage` weighs your **open**

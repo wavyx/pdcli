@@ -79,8 +79,10 @@ CRUD, agents have `deal history <id>` for a deal's field-change audit trail, `de
 for line items, `field create`/`field update`/`field option` to manage the custom-field
 schema, `deal participant` and `deal`/`person`/`org follower` for the people around a record,
 `task` for project action items, `lead convert`/`deal convert` (with `--wait`) to change a
-record's type, `deal summary` for a server-side per-currency value rollup, and
-`--updated-since` on the list commands for incremental polling.
+record's type, `deal summary` for a server-side per-currency value rollup, time-intelligence
+metrics (`metrics aging`/`slippage`/`conversion-matrix`) plus `audit stage-skips` for
+stage-skip compliance — all mined from per-deal changelogs — and `--updated-since` on the
+list commands for incremental polling.
 
 ## The host-locked `api` escape hatch
 

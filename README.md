@@ -95,6 +95,8 @@ pdcli metrics velocity --period 90d      # the Sales Velocity Equation, in your 
 pdcli funnel --pipeline 1                # stage-to-stage conversion
 pdcli funnel --exact                     # mine real stage transitions per deal (one call each)
 pdcli metrics coverage --target 500000   # weighted pipeline vs quota — the 3x coverage rule
+pdcli metrics aging --pipeline 1         # days-in-stage bucketed, per-stage p90 dwell flag
+pdcli metrics slippage --min-pushes 2    # open deals whose close date keeps getting pushed
 pdcli pipeline health                    # per-stage value, weighted value, stale, no-next-step
 pdcli audit                              # 11 data-hygiene checks (duplicates, stale, gaps)
 pdcli audit --strict                     # exit 1 on must-severity findings — wire into CI

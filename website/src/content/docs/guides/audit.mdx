@@ -165,3 +165,39 @@ PDCLI_COMPANY_DOMAIN=acme PDCLI_API_TOKEN=$PD_TOKEN \
 
 See [CI recipes](/pdcli/automation/ci/) and [Exit codes](/pdcli/automation/exit-codes/) for
 wiring this into a pipeline.
+
+## Process compliance: `audit stage-skips`
+
+Where the 11 checks above grade your _data_, `audit stage-skips` grades your _process_: did
+deals move through the pipeline the way they're supposed to? It mines each deal's changelog
+(open, won, and lost — history matters in every state) and walks the `stage_id` transitions
+chronologically, flagging two kinds of out-of-band move with **who made them**:
+
+- **Forward skips** — a deal that jumped a gate (destination order > source order + 1),
+  listing the stages it leapt over. A clean single-stage advance is normal and never flagged.
+- **Backward moves** — a deal pulled back to an earlier stage (often sandbagging: dragging a
+  deal down to look conservative, or to reset its age).
+
+```bash
+pdcli audit stage-skips --pipeline 1
+```
+
+```text
+┌──────┬──────────┬──────────────────────────┬──────────────────────┬──────────────────────┬───────┐
+│ Deal │ Kind     │ From                     │ To                   │ Skipped gates        │ Actor │
+├──────┼──────────┼──────────────────────────┼──────────────────────┼──────────────────────┼───────┤
+│ 204  │ skip     │ Qualified (1)            │ Negotiations Started (3) │ Proposal Made    │ 42    │
+│ 311  │ backward │ Negotiations Started (3) │ Qualified (1)        │                      │ 17    │
+└──────┴──────────┴──────────────────────────┴──────────────────────┴──────────────────────┴───────┘
+```
+
+`From`/`To` carry the stage's order number in parentheses; `Skipped gates` names the stages a
+forward skip leapt over (empty for a backward move). `Actor` is the user ID who made the
+change — resolve it with `user find` / `user list`, exactly as for the deal findings above.
+
+This is **informational and always exits 0** — it surfaces moves for review rather than
+gating CI. Cross-pipeline hops and moves touching a since-deleted stage are ignored (stage
+order is only comparable within one pipeline). Like the time-intelligence metrics, it costs
+**one changelog request per deal (20 tokens each)** and warns on stderr above 100 deals. The
+conversion-side view of the same data — every transition counted, with backward edges and
+Won/Lost terminals — is [`metrics conversion-matrix`](/pdcli/guides/analytics/#metrics-conversion-matrix).
