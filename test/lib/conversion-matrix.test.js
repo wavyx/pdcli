@@ -231,4 +231,21 @@ describe('computeTransitionMatrix', () => {
       forward: true,
     })
   })
+
+  it('does not count a lost terminal as forward progress in forwardRate', () => {
+    const stages = [
+      { id: 1, name: 'A', pipeline_id: 1, order_nr: 0 },
+      { id: 2, name: 'B', pipeline_id: 1, order_nr: 1 },
+    ]
+    // From stage 1: one advance (1->2) and one loss (status lost @ stage 1).
+    const transitionsByDeal = [
+      { dealId: 1, stageId: 2, rows: [stage(1, 2)] },
+      { dealId: 2, stageId: 1, rows: [status('lost')] },
+    ]
+    const m = computeTransitionMatrix(transitionsByDeal, stages, {})
+    const s1 = m.sources.find((x) => x.stageId === 1)
+    // 1 forward (advance) + 1 won-only-if-won... lost is NOT forward.
+    // Two edges out of stage 1 (advance + lost); only the advance is forward.
+    expect(s1.forwardRate).toBeCloseTo(0.5)
+  })
 })

@@ -186,6 +186,22 @@ describe('metrics aging', () => {
     ).rejects.toMatchObject({ oclif: { exit: 64 } })
   })
 
+  it('rejects a zero or duplicate --buckets threshold with exit 64', async () => {
+    mockApi()
+      .get('/api/v2/pipelines')
+      .reply(200, { success: true, data: [{ id: 1, name: 'P' }] })
+    await expect(AgingCommand.run(['--buckets', '0,30'])).rejects.toMatchObject(
+      { oclif: { exit: 64 } },
+    )
+
+    mockApi()
+      .get('/api/v2/pipelines')
+      .reply(200, { success: true, data: [{ id: 1, name: 'P' }] })
+    await expect(
+      AgingCommand.run(['--buckets', '30,30']),
+    ).rejects.toMatchObject({ oclif: { exit: 64 } })
+  })
+
   it('shows an Unknown column and a — p90 cell when dwell is unknown', async () => {
     // The open deal sits in stage 2 but its only transition is INTO stage 1,
     // so its time in stage 2 is unknown. Stage 2 has no completed dwell

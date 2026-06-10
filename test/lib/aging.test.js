@@ -416,4 +416,62 @@ describe('computeAging', () => {
     expect(s1.buckets['7-14'].count).toBe(1)
     expect(s1.buckets['14+'].count).toBe(1)
   })
+
+  it('ages a deal created in its first stage (no stage_id rows) via add_time', () => {
+    // The dominant real case: created in stage 1, never moved, so the
+    // changelog has no stage_id transition. add_time IS its stage entry.
+    const open = [{ id: 11, stage_id: 1, value: 5000, add_time: daysAgo(120) }]
+    const transitionsByDeal = [
+      { dealId: 11, stageId: 1, rows: [] }, // mined, but no stage moves
+    ]
+    const result = computeAging(open, transitionsByDeal, STAGES, {
+      now: NOW,
+      buckets: [30, 60, 90],
+    })
+    const s1 = result.find((r) => r.stageId === 1)
+    expect(s1.buckets['90+'].count).toBe(1)
+    expect(s1.buckets['90+'].value).toBe(5000)
+    expect(s1.unknownCount).toBe(0)
+  })
+
+  it('prefers stage_change_time over add_time when a stage move was not mined', () => {
+    // Deal moved into stage 2 (stage_change_time) but the changelog row was
+    // not captured; fall back to stage_change_time, not the older add_time.
+    const open = [
+      {
+        id: 12,
+        stage_id: 2,
+        value: 100,
+        add_time: daysAgo(200),
+        stage_change_time: daysAgo(10),
+      },
+    ]
+    const transitionsByDeal = [{ dealId: 12, stageId: 2, rows: [] }]
+    const result = computeAging(open, transitionsByDeal, STAGES, {
+      now: NOW,
+      buckets: [30, 60, 90],
+    })
+    const s2 = result.find((r) => r.stageId === 2)
+    expect(s2.buckets['0-30'].count).toBe(1)
+  })
+
+  it('counts a deal as unknown only when no entry, stage_change_time, or add_time exists', () => {
+    const open = [{ id: 13, stage_id: 3, value: 1 }]
+    const transitionsByDeal = [{ dealId: 13, stageId: 3, rows: [] }]
+    const result = computeAging(open, transitionsByDeal, STAGES, {
+      now: NOW,
+      buckets: [30, 60, 90],
+    })
+    expect(result.find((r) => r.stageId === 3).unknownCount).toBe(1)
+  })
+
+  it('routes an unparseable entry time to unknownCount instead of crashing', () => {
+    const open = [{ id: 14, stage_id: 1, value: 1, add_time: 'not-a-date' }]
+    const transitionsByDeal = [{ dealId: 14, stageId: 1, rows: [] }]
+    const result = computeAging(open, transitionsByDeal, STAGES, {
+      now: NOW,
+      buckets: [30, 60, 90],
+    })
+    expect(result.find((r) => r.stageId === 1).unknownCount).toBe(1)
+  })
 })

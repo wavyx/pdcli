@@ -24,10 +24,11 @@ function parseDateMs(value) {
  *                      so a deal that pushed then pulled back still surfaces the
  *                      slippage it caused. Unparseable dates skip the transition.
  *
- * `originalCloseDate` is the earliest date ever set (oldest transition's value),
- * `currentCloseDate` is the deal's live `expected_close_date`. Rows arrive
- * newest-first (the changelog's native order), so transitions are sorted by
- * time ascending to derive the original date deterministically.
+ * `originalCloseDate` is the earliest date ever set, `currentCloseDate` is the
+ * deal's live `expected_close_date`. Rows arrive newest-first and rapid edits
+ * collide at the API's 1-second granularity, so a time sort is NOT a total
+ * order — the original is derived from the transition GRAPH instead: the chain
+ * root is the row whose old_value never appears as any other row's new_value.
  *
  * @param {object[]} openDeals open deals (id, title, owner_id, expected_close_date)
  * @param {{ dealId: number, stageId: number, rows: object[] }[]} transitionsByDeal
@@ -48,36 +49,41 @@ export function computeSlippage(
     const rows = rowsByDeal.get(deal.id)
     if (rows == null) continue
 
-    // Oldest-first so the first date set is found deterministically.
-    const changes = rows
-      .filter((r) => r.field_key === 'expected_close_date')
-      .slice()
-      .sort((a, b) => String(a.time ?? '').localeCompare(String(b.time ?? '')))
+    const changes = rows.filter((r) => r.field_key === 'expected_close_date')
+
+    // Original = the chain root's value: the row whose old_value is never
+    // produced as another row's new_value. Graph-derived so same-second ties
+    // (which break a time sort) can't pick the wrong "first" date. The root's
+    // old_value is the original when it's a real date; on a leading
+    // blank->date (initial set) the root's new_value is the first date.
+    const producedValues = new Set(
+      changes
+        .filter((c) => !isBlank(c.new_value))
+        .map((c) => String(c.new_value)),
+    )
+    let originalCloseDate = null
+    for (const change of changes) {
+      const oldReal = !isBlank(change.old_value)
+      // Root = a row whose old_value was never produced by another row.
+      if (oldReal && producedValues.has(String(change.old_value))) continue
+      // The original is the root's old_value when it's a real date, else the
+      // first date the chain actually sets (root's new_value).
+      if (oldReal && parseDateMs(change.old_value) != null) {
+        originalCloseDate = String(change.old_value)
+        break
+      }
+      if (parseDateMs(change.new_value) != null) {
+        originalCloseDate = String(change.new_value)
+        break
+      }
+    }
 
     let pushCount = 0
     let netDaysSlipped = 0
-    let originalCloseDate = null
 
     for (const change of changes) {
       const oldBlank = isBlank(change.old_value)
       const newBlank = isBlank(change.new_value)
-
-      // Capture the first parseable date we ever see as the original — garbage
-      // values never become the reported original close date.
-      if (
-        originalCloseDate == null &&
-        !oldBlank &&
-        parseDateMs(change.old_value) != null
-      ) {
-        originalCloseDate = String(change.old_value)
-      }
-      if (
-        originalCloseDate == null &&
-        !newBlank &&
-        parseDateMs(change.new_value) != null
-      ) {
-        originalCloseDate = String(change.new_value)
-      }
 
       // Initial set or clear: not a push.
       if (oldBlank || newBlank) continue

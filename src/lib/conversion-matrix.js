@@ -7,8 +7,10 @@
  * so re-entry and churn are visible rather than averaged away.
  *
  * Two synthetic terminal destinations, 'won' and 'lost', are derived from
- * `status` transitions (new_value won/lost). The terminal edge is attributed to
- * the stage the deal sat in when it closed — its current `stageId`.
+ * `status` transitions (new_value won/lost) and attributed to the deal's
+ * current `stageId` — which equals the close stage unless the deal was moved
+ * after closing. A deal re-closed more than once (won→open→won) contributes
+ * one terminal edge per close, all attributed to the final stage.
  *
  * Each stage_id row already carries old_value->new_value, so an edge needs no
  * time/graph ordering to be counted (order between identical edges is
@@ -88,7 +90,10 @@ export function computeTransitionMatrix(
   ]
 
   const isForward = (from, to) => {
-    if (to === 'won' || to === 'lost') return true
+    // A win is forward progress; a loss is not. Stage-to-stage is forward
+    // only when the destination's order is higher than the source's.
+    if (to === 'won') return true
+    if (to === 'lost') return false
     return orderById.get(to) > orderById.get(from)
   }
 

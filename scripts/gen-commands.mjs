@@ -48,7 +48,7 @@ description: Full command reference for the pdcli command-line interface.
 
 <!-- AUTO-GENERATED from the oclif manifest by scripts/gen-commands.mjs — do not edit by hand. -->
 
-Reference for \`${bin}\` v${manifest.version} (${commands.length} commands). Every command also accepts the global flags \`--output table|json\`, \`--profile\`, \`--no-color\`, \`--verbose\`, \`--no-retry\`, \`--timeout\`, and \`--limit\`.
+Reference for \`${bin}\` v${manifest.version} (${commands.length} commands). Every command also accepts the global flags \`--output table|json|yaml|csv\`, \`--profile\`, \`--no-color\`, \`--verbose\`, \`--no-retry\`, \`--timeout\`, and \`--limit\`.
 
 `
   for (const topic of Object.keys(byTopic).sort()) {

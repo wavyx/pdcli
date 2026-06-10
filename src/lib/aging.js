@@ -68,6 +68,10 @@ function percentile(sorted, p) {
  * @param {object[]} stages v2 stages (id, name, order_nr, pipeline_id)
  */
 export function computeStageDwell(transitionsByDeal, stages) {
+  // NOTE: the dwell baseline reflects only the COMPLETED dwells observed in
+  // the deals passed in (the command mines open deals), so it is a "deals that
+  // passed through" baseline, not a won/lost-inclusive one — it can skew slow
+  // relative to deals that closed quickly. Documented intentionally.
   const ordered = [...stages].sort((a, b) => a.order_nr - b.order_nr)
   const dwellsByStage = new Map(ordered.map((s) => [s.id, []]))
 
@@ -113,10 +117,14 @@ function bucketBounds(thresholds) {
 
 /**
  * Open-deal aging: for each open deal compute days-in-current-stage
- * (now − the LATEST entry into its current stage) and bucket it. The current
- * stage is the deal's stage_id; its entry time is the most recent stage_id
- * transition whose new_value equals that stage. A deal with no such entry has
- * an unknown dwell and is counted under `unknownCount` rather than bucketed.
+ * (now − the LATEST entry into its current stage) and bucket it. Entry time
+ * priority: the most recent stage_id transition into the current stage; else
+ * the deal's `stage_change_time` (when it last changed stage but the row was
+ * not mined); else `add_time` (a deal created in — and never moved out of —
+ * its current stage entered it at creation). Only when none of those yields a
+ * parseable time is the deal counted under `unknownCount`. This is essential:
+ * deals created in the first stage have no stage_id transition, and they are
+ * usually the most-aged cohort — they must not vanish into "unknown".
  *
  * Each row also carries the stage's p90 dwell (from completed history) and how
  * many open deals in the stage exceed it.
@@ -157,12 +165,19 @@ export function computeAging(
     let p90ExceededCount = 0
 
     for (const deal of inStage) {
-      const entry = latestEntry.get(deal.id)
-      if (entry == null) {
+      // Entry time: mined transition → stage_change_time → add_time.
+      let entry = latestEntry.get(deal.id) ?? null
+      if (entry == null && deal.stage_change_time != null) {
+        entry = new Date(deal.stage_change_time)
+      }
+      if (entry == null && deal.add_time != null) {
+        entry = new Date(deal.add_time)
+      }
+      const days = entry == null ? NaN : (now - entry) / DAY_MS
+      if (Number.isNaN(days)) {
         unknownCount++
         continue
       }
-      const days = (now - entry) / DAY_MS
       const bucket = bounds.find((b) => days >= b.lower && days < b.upper)
       stageBuckets[bucket.label].count++
       stageBuckets[bucket.label].value += deal.value ?? 0

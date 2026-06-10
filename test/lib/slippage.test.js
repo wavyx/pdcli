@@ -360,4 +360,79 @@ describe('computeSlippage', () => {
     const rows = computeSlippage(deals, [], {})
     expect(rows).toHaveLength(0)
   })
+
+  it('derives the original close date from the chain root on same-second rows', () => {
+    // Three close-date sets at the SAME second — the live API writes rapid
+    // edits at 1s granularity. Newest-first delivery order must NOT decide
+    // which is "original"; the chain root (null -> 2026-09-01) does.
+    const deals = [
+      {
+        id: 11,
+        title: 'Same-second',
+        owner_id: 1,
+        expected_close_date: '2026-09-21',
+      },
+    ]
+    const t = '2026-06-05 14:36:05' // identical timestamp, space-separated
+    const transitionsByDeal = [
+      entry(11, [
+        // newest-first
+        {
+          field_key: 'expected_close_date',
+          old_value: '2026-09-11',
+          new_value: '2026-09-21',
+          time: t,
+        },
+        {
+          field_key: 'expected_close_date',
+          old_value: '2026-09-01',
+          new_value: '2026-09-11',
+          time: t,
+        },
+        {
+          field_key: 'expected_close_date',
+          old_value: '',
+          new_value: '2026-09-01',
+          time: t,
+        },
+      ]),
+    ]
+
+    const rows = computeSlippage(deals, transitionsByDeal, {})
+    expect(rows[0].originalCloseDate).toBe('2026-09-01')
+    expect(rows[0].pushCount).toBe(2)
+    expect(rows[0].netDaysSlipped).toBe(20) // 10 + 10
+  })
+
+  it('falls past a fully-garbage chain row to the next real date', () => {
+    const deals = [
+      {
+        id: 15,
+        title: 'Garbled',
+        owner_id: 1,
+        expected_close_date: '2026-02-01',
+      },
+    ]
+    const transitionsByDeal = [
+      entry(15, [
+        // a garbage->garbage row (its old is never produced -> looks like a
+        // root, but neither side parses) must be skipped for the original.
+        {
+          field_key: 'expected_close_date',
+          old_value: 'xx',
+          new_value: 'yy',
+          time: '2026-01-03 00:00:00',
+        },
+        {
+          field_key: 'expected_close_date',
+          old_value: '2026-01-01',
+          new_value: '2026-02-01',
+          time: '2026-01-02 00:00:00',
+        },
+      ]),
+    ]
+    const rows = computeSlippage(deals, transitionsByDeal, {})
+    expect(rows[0].originalCloseDate).toBe('2026-01-01')
+    expect(rows[0].pushCount).toBe(1)
+  })
 })

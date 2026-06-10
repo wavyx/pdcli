@@ -41,6 +41,16 @@ export default class MetricsAgingCommand extends BaseCommand {
       )
     }
     const thresholds = buckets.map(Number)
+    if (
+      thresholds.some((n) => n <= 0) ||
+      new Set(thresholds).size !== thresholds.length
+    ) {
+      throw new CliError(
+        `Invalid --buckets "${flags.buckets}" — thresholds must be positive ` +
+          `and distinct, e.g. 30,60,90`,
+        { exitCode: 64 },
+      )
+    }
 
     let pipelineId = flags.pipeline
     if (pipelineId == null) {

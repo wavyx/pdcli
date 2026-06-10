@@ -97,11 +97,13 @@ function gatesBetween(orderedStages, from, to) {
 }
 
 /**
- * Reorder stage_id transition rows oldest-first. The changelog is newest-first
- * and the hops form a chain, so the chronological order is recovered from the
- * transition graph: start at the source that is never a destination, then
- * follow each old_value→new_value edge. Falls back to a time sort when the
- * graph is not a simple chain (e.g. a re-entered stage forms a cycle).
+ * Reorder stage_id transition rows oldest-first. Each finding is classified
+ * from its OWN old/new order_nr, so this ordering is DISPLAY-ONLY and does not
+ * affect which findings are produced or their kind — it only sorts the emitted
+ * rows chronologically. The changelog is newest-first and the hops form a
+ * chain, so order is recovered from the transition graph (start at the source
+ * never seen as a destination, follow each old_value→new_value edge), with a
+ * time-sort fallback when the graph is not a simple chain (a re-entered stage).
  */
 function orderChronologically(stageRows) {
   if (stageRows.length <= 1) return stageRows
