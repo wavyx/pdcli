@@ -31,3 +31,18 @@ export function parsePeriod(period, now = new Date()) {
 export function formatApiDatetime(date) {
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z')
 }
+
+/**
+ * Reduce a date string to its calendar-month key, "YYYY-MM". Works on a plain
+ * `YYYY-MM-DD` (the format `expected_close_date` uses) or an RFC 3339 timestamp
+ * by taking the leading year-month verbatim — no `Date` parsing, so a negative
+ * timezone offset can never roll an end-of-month date into the previous month.
+ * Returns null for a null/blank/unparseable value.
+ * @param {string | null | undefined} value
+ * @returns {string | null}
+ */
+export function closeMonthKey(value) {
+  if (value == null || String(value).trim() === '') return null
+  const match = /^(\d{4})-(\d{2})/.exec(String(value).trim())
+  return match ? `${match[1]}-${match[2]}` : null
+}
