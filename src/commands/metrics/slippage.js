@@ -3,7 +3,7 @@ import BaseCommand from '../../base-command.js'
 import { collectPages } from '../../lib/pagination.js'
 import { computeSlippage } from '../../lib/slippage.js'
 import { mineMany } from '../../lib/changelog.js'
-import { CliError } from '../../lib/errors.js'
+import { resolvePipeline } from '../../lib/pipelines.js'
 
 export default class MetricsSlippageCommand extends BaseCommand {
   static description =
@@ -29,7 +29,7 @@ export default class MetricsSlippageCommand extends BaseCommand {
   async run() {
     const { flags } = await this.parse(MetricsSlippageCommand)
 
-    const pipelineId = await this.#resolvePipeline(flags.pipeline)
+    const pipelineId = await resolvePipeline(this.apiClient, flags.pipeline)
 
     // Pipeline scoping is done in the deals query itself, so no stages call is
     // needed. Each open deal then costs one changelog request (mineMany paces
@@ -58,25 +58,5 @@ export default class MetricsSlippageCommand extends BaseCommand {
         get: (row) => `${row.originalCloseDate} → ${row.currentCloseDate}`,
       },
     })
-  }
-
-  /**
-   * Resolve the pipeline to report on: the explicit flag, else the only
-   * pipeline in the account. Several pipelines without a flag is a usage error.
-   * @param {number | undefined} flagPipeline
-   */
-  async #resolvePipeline(flagPipeline) {
-    if (flagPipeline != null) return flagPipeline
-
-    const body = await this.apiClient.get('/api/v2/pipelines')
-    const pipelines = body.data ?? []
-    if (pipelines.length > 1) {
-      throw new CliError(
-        `Account has ${pipelines.length} pipelines — pass --pipeline <id> ` +
-          `(${pipelines.map((p) => `${p.id}=${p.name}`).join(', ')})`,
-        { exitCode: 64 },
-      )
-    }
-    return pipelines[0]?.id
   }
 }

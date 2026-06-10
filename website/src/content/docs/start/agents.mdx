@@ -81,8 +81,11 @@ schema, `deal participant` and `deal`/`person`/`org follower` for the people aro
 `task` for project action items, `lead convert`/`deal convert` (with `--wait`) to change a
 record's type, `deal summary` for a server-side per-currency value rollup, time-intelligence
 metrics (`metrics aging`/`slippage`/`conversion-matrix`) plus `audit stage-skips` for
-stage-skip compliance — all mined from per-deal changelogs — and `--updated-since` on the
-list commands for incremental polling.
+stage-skip compliance — all mined from per-deal changelogs — `metrics forecast` for a
+per-currency commit/best-case/weighted close-month forecast, `rep scorecard` for per-owner
+performance, `digest` for the whole Monday packet in one fetch (`--format md|html --out` for
+a cron → Slack/email artifact), and `--updated-since` on the list commands for incremental
+polling.
 
 ## The host-locked `api` escape hatch
 

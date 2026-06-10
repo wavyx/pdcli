@@ -4,6 +4,7 @@ import { collectPages } from '../../lib/pagination.js'
 import { computeAging } from '../../lib/aging.js'
 import { mineMany } from '../../lib/changelog.js'
 import { CliError } from '../../lib/errors.js'
+import { resolvePipeline } from '../../lib/pipelines.js'
 
 export default class MetricsAgingCommand extends BaseCommand {
   static description =
@@ -52,19 +53,7 @@ export default class MetricsAgingCommand extends BaseCommand {
       )
     }
 
-    let pipelineId = flags.pipeline
-    if (pipelineId == null) {
-      const body = await this.apiClient.get('/api/v2/pipelines')
-      const pipelines = body.data ?? []
-      if (pipelines.length > 1) {
-        throw new CliError(
-          `Account has ${pipelines.length} pipelines — pass --pipeline <id> ` +
-            `(${pipelines.map((p) => `${p.id}=${p.name}`).join(', ')})`,
-          { exitCode: 64 },
-        )
-      }
-      pipelineId = pipelines[0]?.id
-    }
+    const pipelineId = await resolvePipeline(this.apiClient, flags.pipeline)
 
     // Open deals are not period-bound — aging asks "how long has this open
     // deal sat where it is now?", so there is no --period flag; all open deals

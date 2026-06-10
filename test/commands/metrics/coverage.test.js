@@ -587,4 +587,71 @@ describe('metrics coverage', () => {
     expect(err.exitCode ?? err.oclif?.exit).toBe(64)
     expect(String(err.message)).toMatch(/multiple currencies/i)
   })
+
+  const MIXED_OPEN = {
+    success: true,
+    data: [
+      {
+        id: 1,
+        status: 'open',
+        stage_id: 1,
+        value: 100000,
+        currency: 'USD',
+        probability: null,
+      },
+      {
+        id: 2,
+        status: 'open',
+        stage_id: 2,
+        value: 50000,
+        currency: 'EUR',
+        probability: null,
+      },
+    ],
+  }
+
+  it('errors with exit 64 when the open pipeline spans multiple currencies', async () => {
+    mockApi()
+      .get('/api/v2/stages')
+      .query((q) => q.pipeline_id === '1')
+      .reply(200, STAGES)
+    mockApi()
+      .get('/api/v2/deals')
+      .query((q) => q.status === 'open' && q.pipeline_id === '1')
+      .reply(200, MIXED_OPEN)
+    // No goal mock: the currency guard must fire before any Goals API call.
+
+    const err = await CoverageCommand.run(['--pipeline', '1']).catch((e) => e)
+    expect(err.exitCode ?? err.oclif?.exit).toBe(64)
+    expect(err.message).toMatch(/currenc/i)
+    expect(err.message).toMatch(/USD/)
+    expect(err.message).toMatch(/EUR/)
+    expect(err.message).toMatch(/--currency/)
+  })
+
+  it('scopes the open pipeline to one currency with --currency', async () => {
+    mockApi()
+      .get('/api/v2/stages')
+      .query((q) => q.pipeline_id === '1')
+      .reply(200, STAGES)
+    mockApi()
+      .get('/api/v2/deals')
+      .query((q) => q.status === 'open' && q.pipeline_id === '1')
+      .reply(200, MIXED_OPEN)
+
+    const stdout = await runCmd(CoverageCommand, [
+      '--pipeline',
+      '1',
+      '--currency',
+      'USD',
+      '--target',
+      '50000',
+      '--output',
+      'json',
+    ])
+    const c = JSON.parse(stdout)
+    // Only the USD deal counts: openValue 100000 (the EUR 50000 is excluded).
+    expect(c.openValue).toBe(100000)
+    expect(c.coverage).toBeCloseTo(2)
+  })
 })

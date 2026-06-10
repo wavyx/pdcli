@@ -242,6 +242,10 @@ The quota comes from your active revenue goal via the [Goals API](https://develo
 measured over `--period` (default `90d`). `--target <amount>` overrides it with a manual
 number and skips the Goals API entirely — useful when no goal is configured.
 
+Coverage collapses open value into a single ratio, so it can't mix currencies. If the
+pipeline holds deals in more than one currency the command exits **64**; scope it to one
+with `--currency <code>` (e.g. `--currency USD`).
+
 ```bash
 pdcli metrics coverage --pipeline 1
 pdcli metrics coverage --target 500000
@@ -302,3 +306,88 @@ otherwise.
 
 These same hygiene signals drive the [data-hygiene audit](/pdcli/guides/audit/) — `audit`
 applies them account-wide with severities and a CI gate.
+
+## `metrics forecast`
+
+Pipedrive's forecast view is UI-only. `metrics forecast` reconstructs it on the command
+line: your **open** pipeline bucketed by close-month into three views.
+
+- **Commit** — full value of deals whose effective win-probability clears
+  `--commit-threshold` (default `70`): the deals you're confident will close.
+- **Best case** — every open deal at full value: the optimistic ceiling.
+- **Weighted** — each deal's value × probability (`deal probability ?? stage default ?? 100`).
+
+Values are **segregated per currency** — a USD deal and an EUR deal are different units, so
+they are never summed together (the same rule `metrics coverage` and `deal summary` follow).
+A deal with no `expected_close_date` lands in a `no-date` bucket; one with no currency under
+`(none)`.
+
+```bash
+pdcli metrics forecast --pipeline 1
+pdcli metrics forecast --commit-threshold 80 --output json
+```
+
+```text
+┌─────┬─────────┬───────┬──────────┬──────────┐
+│ Cur │ Month   │ Deals │ Commit   │ Best case│ … Weighted
+├─────┼─────────┼───────┼──────────┼──────────┤
+│ EUR │ 2026-07 │ 2     │ 40000    │ 55000    │   48200
+│ USD │ 2026-07 │ 6     │ 120000   │ 180000   │   142500
+│ USD │ 2026-08 │ 4     │ 90000    │ 140000   │   101000
+│ USD │ no-date │ 1     │ 0        │ 20000    │   12000
+└─────┴─────────┴───────┴──────────┴──────────┘
+
+Totals by currency:
+…
+```
+
+`--pipeline` is required only when the account has more than one. For quota-vs-pipeline
+coverage, see [`metrics coverage`](#metrics-coverage); to combine forecast with everything
+else in one shot, see [`digest`](#digest).
+
+## `rep scorecard`
+
+Per-rep performance across **all** pipelines (narrow with `--pipeline`/`--owner`). It reuses
+the velocity equation per owner and adds the hygiene a manager actually chases.
+
+```bash
+pdcli rep scorecard --period 90d
+pdcli rep scorecard --owner 42 --output json
+```
+
+```text
+┌───────┬────────┬──────┬───────────────────┬───────────┬────────────┬───────┬────────────┬─────────┬────────────┐
+│ Rep   │ Active │ Open │ Win rate          │ Cycle (d) │ Velocity/d │ Stale │ Past close │ No date │ No contact │
+├───────┼────────┼──────┼───────────────────┼───────────┼────────────┼───────┼────────────┼─────────┼────────────┤
+│ Alice │ yes    │ 14   │ 58% (11W/8L)      │ 34        │ 2380       │ 2     │ 1          │ 0       │ 0          │
+│ Bob   │ no     │ 9    │ n/a               │ n/a       │ n/a        │ 4     │ 2          │ 3       │ 1          │
+└───────┴────────┴──────┴───────────────────┴───────────┴────────────┴───────┴────────────┴─────────┴────────────┘
+```
+
+Win rate and cycle are decided over the trailing `--period` (default `90d`). Owners with no
+matching user fall back to `#<id>`; deals with no owner roll up under **Unassigned**. Reps
+are ordered by velocity per day (those with too little data to compute it sort last).
+
+## `digest`
+
+The Monday packet in one command. A single pipeline-scoped fetch is fanned into velocity,
+pipeline health, coverage, funnel, forecast and the must-fix hygiene checks — no need to run
+six commands.
+
+```bash
+pdcli digest --pipeline 1                 # structured table in the terminal
+pdcli digest --output json                # the whole packet for agents
+pdcli digest --deep                        # + changelog-mined aging/slippage/stage-skips
+pdcli digest --format md --out monday.md   # shareable markdown artifact
+pdcli digest --format html --out monday.html
+```
+
+By default `digest` skips changelog mining and stays cheap. `--deep` mines each deal's
+history (one request per deal, the usual >100-deal warning applies) to add aging, close-date
+slippage and stage-skip sections. The quota comes from your revenue goal over `--period`, or
+`--target <amount>`; if no goal is configured the coverage section is simply omitted (the
+digest never fails for that reason).
+
+`--format md|html` renders the packet as a shareable document — pipe it to Slack/email from
+cron, or write it to a file with `--out`. These artifact formats are distinct from the global
+`--output table|json|yaml|csv` (which stays for scripting the structured packet).
