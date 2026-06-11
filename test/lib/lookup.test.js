@@ -265,6 +265,21 @@ describe('lookupByField', () => {
     expect(err.message).toMatch(/not searchable/i)
   })
 
+  it('rejects a non-numeric value for a numeric custom field with exit 65', async () => {
+    const defs = [
+      { field_name: 'Score', field_code: 'sc', field_type: 'double' },
+    ]
+    const err = await lookupByField({
+      client: fakeClient([]),
+      entity: 'deal',
+      defs,
+      field: 'Score',
+      value: 'notanumber',
+    }).catch((e) => e)
+    expect(err.exitCode).toBe(65)
+    expect(err.message).toMatch(/number/i)
+  })
+
   it('rejects an unknown field with exit 64', async () => {
     const err = await lookupByField({
       client: fakeClient([]),

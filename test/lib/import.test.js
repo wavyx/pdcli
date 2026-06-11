@@ -29,6 +29,34 @@ const PERSON_SPECIALS = {
   },
 }
 
+describe('prepareImportBodies duplicate headers', () => {
+  it('rejects a duplicate column header with exit 65 instead of losing data', () => {
+    expect(() =>
+      prepareImportBodies({
+        headers: ['name', 'email', 'email'],
+        rows: [['Jane', 'first@a.com', 'second@a.com']],
+        specialColumns: PERSON_SPECIALS,
+        defs: DEFS,
+      }),
+    ).toThrowError(/duplicate/i)
+  })
+
+  it('rejects duplicate headers case-insensitively', () => {
+    let caught
+    try {
+      prepareImportBodies({
+        headers: ['Name', 'name'],
+        rows: [['Jane', 'Jane']],
+        specialColumns: PERSON_SPECIALS,
+        defs: DEFS,
+      })
+    } catch (e) {
+      caught = e
+    }
+    expect(caught.exitCode).toBe(65)
+  })
+})
+
 describe('prepareImportBodies', () => {
   it('maps special columns and resolves the rest via field defs', () => {
     const bodies = prepareImportBodies({

@@ -113,7 +113,20 @@ export async function lookupByField({
     const key = def.field_code
     extract = (it) => [it.custom_fields?.[key]]
     ci = false
-    compareValue = NUMERIC_TYPES.has(def.field_type) ? Number(value) : value
+    if (NUMERIC_TYPES.has(def.field_type)) {
+      compareValue = Number(value)
+      // A non-numeric value coerces to NaN, which loses every comparison
+      // (NaN !== NaN) — so a match would silently miss and we'd create or
+      // inject a NaN value. Refuse loudly instead.
+      if (!Number.isFinite(compareValue)) {
+        throw new CliError(
+          `"${value}" is not a valid number for field "${field}"`,
+          { exitCode: 65 },
+        )
+      }
+    } else {
+      compareValue = value
+    }
   }
 
   const matches = []

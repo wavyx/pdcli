@@ -332,7 +332,7 @@ describe('person import --upsert', () => {
     })
   })
 
-  it('collects an ambiguous row as a failure and exits 1', async () => {
+  it('exits 65 when an ambiguous row is the only failure', async () => {
     await withEmptyFields(async () => {
       mockReadFileSync.mockReturnValue('name,email\nJane,dup@x.com\n')
       mockApi()
@@ -349,15 +349,47 @@ describe('person import --upsert', () => {
           additional_data: { next_cursor: null },
         })
 
-      await expect(
-        PersonImportCommand.run([
-          'p.csv',
-          '--upsert',
-          '--match-on',
-          'email',
-          '--yes',
-        ]),
-      ).rejects.toThrow(/1 of 1/i)
+      const err = await PersonImportCommand.run([
+        'p.csv',
+        '--upsert',
+        '--match-on',
+        'email',
+        '--yes',
+      ]).catch((e) => e)
+      expect(err.message).toMatch(/1 of 1/i)
+      expect(err.exitCode ?? err.oclif?.exit).toBe(65)
+    })
+  })
+
+  it('exits 1 when a row fails on a non-validation API error', async () => {
+    await withEmptyFields(async () => {
+      mockReadFileSync.mockReturnValue('name,email,owner_id\nJane,a@x.com,42\n')
+      mockApi()
+        .get('/api/v2/persons/search')
+        .query((q) => q.term === 'a@x.com')
+        .reply(200, {
+          success: true,
+          data: {
+            items: [
+              { item: { id: 7, emails: [{ value: 'a@x.com' }], owner_id: 1 } },
+            ],
+          },
+          additional_data: { next_cursor: null },
+        })
+      mockApi()
+        .patch('/api/v2/persons/7')
+        .reply(401, { success: false, error: 'unauthorized' })
+
+      const err = await PersonImportCommand.run([
+        'p.csv',
+        '--upsert',
+        '--match-on',
+        'email',
+        '--no-retry',
+        '--yes',
+      ]).catch((e) => e)
+      expect(err.message).toMatch(/1 of 1/i)
+      expect(err.exitCode ?? err.oclif?.exit).toBe(1)
     })
   })
 

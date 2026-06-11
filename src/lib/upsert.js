@@ -46,11 +46,47 @@ function injectMatch(body, entity, field, value, defs) {
     : value
 }
 
+/** True if every element of an array is a primitive (or null). */
+function isPrimitiveArray(value) {
+  return (
+    Array.isArray(value) &&
+    value.every((v) => v == null || typeof v !== 'object')
+  )
+}
+
+/**
+ * Idempotency-aware field equality for diffBody. Beyond key-order insensitive
+ * `eq`, it treats two classes of field as equal when they carry the same
+ * *content* regardless of incidental shape the API adds back:
+ *   - emails/phones: compared by their set of `value`s (case-insensitive),
+ *     ignoring the `primary`/`label` flags the API echoes — otherwise an
+ *     injected `primary:true` would PATCH on every run.
+ *   - set-like primitive arrays (label_ids, multi-option custom fields):
+ *     compared order-insensitively, since the API may return them sorted.
+ */
+function fieldEq(incoming, existing, key) {
+  if (
+    (key === 'emails' || key === 'phones') &&
+    Array.isArray(incoming) &&
+    Array.isArray(existing)
+  ) {
+    const values = (arr) =>
+      arr.map((e) => String(e?.value ?? '').toLowerCase()).sort()
+    return eq(values(incoming), values(existing))
+  }
+  if (isPrimitiveArray(incoming) && isPrimitiveArray(existing)) {
+    return eq([...incoming].sort(), [...existing].sort())
+  }
+  return eq(incoming, existing)
+}
+
 /**
  * Field-level diff for an idempotent PATCH: the subset of `incoming` whose
  * value differs from `existing`. Top-level fields compare directly; the nested
  * v2 `custom_fields` object is diffed key by key. Equality is key-order
- * insensitive. An empty result means "no change → skip the PATCH".
+ * insensitive and set-aware for emails/phones/primitive arrays (see fieldEq),
+ * so re-running an unchanged upsert produces no PATCH. An empty result means
+ * "no change → skip the PATCH".
  * @param {object} incoming the desired body
  * @param {object} existing the current record
  * @returns {object} the changed-only body
@@ -61,10 +97,10 @@ export function diffBody(incoming, existing) {
     if (key === 'custom_fields' && value && typeof value === 'object') {
       const cf = {}
       for (const [ck, cv] of Object.entries(value)) {
-        if (!eq(cv, existing?.custom_fields?.[ck])) cf[ck] = cv
+        if (!fieldEq(cv, existing?.custom_fields?.[ck], ck)) cf[ck] = cv
       }
       if (Object.keys(cf).length > 0) changed.custom_fields = cf
-    } else if (!eq(value, existing?.[key])) {
+    } else if (!fieldEq(value, existing?.[key], key)) {
       changed[key] = value
     }
   }

@@ -194,9 +194,12 @@ export default class PersonImportCommand extends BaseCommand {
       for (const { item, error } of summary.failed) {
         this.log(chalk.red(`  ✘ ${matchOn}="${item.value}": ${error}`))
       }
+      // Surface 65 when every failure is a data-validation error (ambiguous
+      // match, empty match value); fall back to 1 for mixed/transport errors.
+      const allData = summary.failed.every((f) => f.exitCode === 65)
       throw new CliError(
         `${summary.failed.length} of ${items.length} rows failed`,
-        { exitCode: 1 },
+        { exitCode: allData ? 65 : 1 },
       )
     }
   }

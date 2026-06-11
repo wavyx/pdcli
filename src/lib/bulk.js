@@ -97,7 +97,9 @@ export async function bulkRun(
       succeeded.push({ item, result })
     } catch (err) {
       debug('bulk item %o failed: %s', item, err.message)
-      failed.push({ item, error: err.message })
+      // Keep the exit code so the caller can map a batch of data-validation
+      // failures (e.g. ambiguous upsert matches → 65) to the right exit code.
+      failed.push({ item, error: err.message, exitCode: err.exitCode })
     }
     onProgress?.(index + 1, items.length)
   }

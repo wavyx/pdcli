@@ -299,7 +299,7 @@ describe('org import --upsert', () => {
     expect(mockConfirmAction).not.toHaveBeenCalled()
   })
 
-  it('collects an ambiguous row as a failure and exits 1', async () => {
+  it('exits 65 when an ambiguous row is the only failure', async () => {
     mockFields()
     mockReadFileSync.mockReturnValue('name\ndup\n')
     mockApi()
@@ -316,15 +316,42 @@ describe('org import --upsert', () => {
         additional_data: { next_cursor: null },
       })
 
-    await expect(
-      OrgImportCommand.run([
-        'o.csv',
-        '--upsert',
-        '--match-on',
-        'name',
-        '--yes',
-      ]),
-    ).rejects.toThrow(/1 of 1/i)
+    const err = await OrgImportCommand.run([
+      'o.csv',
+      '--upsert',
+      '--match-on',
+      'name',
+      '--yes',
+    ]).catch((e) => e)
+    expect(err.message).toMatch(/1 of 1/i)
+    expect(err.exitCode ?? err.oclif?.exit).toBe(65)
+  })
+
+  it('exits 1 when a row fails on a non-validation API error', async () => {
+    mockFields()
+    mockReadFileSync.mockReturnValue('name,owner_id\nAcme,42\n')
+    mockApi()
+      .get('/api/v2/organizations/search')
+      .query((q) => q.term === 'Acme')
+      .reply(200, {
+        success: true,
+        data: { items: [{ item: { id: 7, name: 'Acme', owner_id: 1 } }] },
+        additional_data: { next_cursor: null },
+      })
+    mockApi()
+      .patch('/api/v2/organizations/7')
+      .reply(401, { success: false, error: 'unauthorized' })
+
+    const err = await OrgImportCommand.run([
+      'o.csv',
+      '--upsert',
+      '--match-on',
+      'name',
+      '--no-retry',
+      '--yes',
+    ]).catch((e) => e)
+    expect(err.message).toMatch(/1 of 1/i)
+    expect(err.exitCode ?? err.oclif?.exit).toBe(1)
   })
 
   it('aborts when the upsert confirmation is declined', async () => {

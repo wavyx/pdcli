@@ -39,6 +39,66 @@ describe('diffBody', () => {
       diffBody({ custom_fields: { a: 1 } }, { custom_fields: { a: 1 } }),
     ).toEqual({})
   })
+
+  it('treats emails as unchanged when the value set matches (ignores primary, case)', () => {
+    expect(
+      diffBody(
+        { emails: [{ value: 'A@x.com', primary: true }] },
+        { emails: [{ value: 'a@x.com', label: 'work' }] },
+      ),
+    ).toEqual({})
+  })
+
+  it('detects a genuinely changed email set', () => {
+    expect(
+      diffBody(
+        { emails: [{ value: 'b@x.com', primary: true }] },
+        { emails: [{ value: 'a@x.com' }] },
+      ),
+    ).toEqual({ emails: [{ value: 'b@x.com', primary: true }] })
+  })
+
+  it('treats phones as unchanged when the value set matches', () => {
+    expect(
+      diffBody(
+        { phones: [{ value: '+15551234', primary: true }] },
+        { phones: [{ value: '+15551234' }] },
+      ),
+    ).toEqual({})
+  })
+
+  it('emits emails when the existing record has none', () => {
+    expect(diffBody({ emails: [{ value: 'a@x.com' }] }, {})).toEqual({
+      emails: [{ value: 'a@x.com' }],
+    })
+  })
+
+  it('treats a reordered primitive array (label_ids) as unchanged', () => {
+    expect(
+      diffBody({ label_ids: [2, 1, 3] }, { label_ids: [1, 2, 3] }),
+    ).toEqual({})
+  })
+
+  it('detects an added id in a primitive array', () => {
+    expect(diffBody({ label_ids: [1, 2, 3] }, { label_ids: [1, 2] })).toEqual({
+      label_ids: [1, 2, 3],
+    })
+  })
+
+  it('treats a reordered multi-option custom field as unchanged', () => {
+    expect(
+      diffBody(
+        { custom_fields: { k: [2, 1] } },
+        { custom_fields: { k: [1, 2] } },
+      ),
+    ).toEqual({})
+  })
+
+  it('tolerates null / value-less email entries when comparing sets', () => {
+    expect(
+      diffBody({ emails: [{ value: 'a@x.com' }] }, { emails: [null, {}] }),
+    ).toEqual({ emails: [{ value: 'a@x.com' }] })
+  })
 })
 
 /** Fake client: queued search items for lookup + captured post/patch. */
