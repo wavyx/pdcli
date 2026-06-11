@@ -118,6 +118,9 @@
       },
       "audit": {
         "description": "Data-quality audit + compliance checks"
+      },
+      "backup": {
+        "description": "Full-account export and zero-API snapshot diff"
       }
     },
     "hooks": {
