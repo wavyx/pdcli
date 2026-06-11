@@ -115,7 +115,13 @@ describe('BaseCommand', () => {
 
   it('propagates AuthRequiredError when credentials are missing', async () => {
     mockResolveCredentials.mockRejectedValue(new AuthRequiredError())
-    await expect(captureLogs(ApiCmd)).rejects.toThrow('Not authenticated')
+    const origIsTTY = process.stdout.isTTY
+    process.stdout.isTTY = true // interactive → human error carries the message
+    try {
+      await expect(captureLogs(ApiCmd)).rejects.toThrow('Not authenticated')
+    } finally {
+      process.stdout.isTTY = origIsTTY
+    }
   })
 
   it('defaults to json output when not TTY', async () => {
@@ -159,9 +165,15 @@ describe('BaseCommand', () => {
       .get('/api/v2/users/me')
       .reply(422, { success: false, error: 'Validation failed' })
 
-    await expect(captureLogs(ApiCmd)).rejects.toThrow(
-      'Pipedrive API 422: Validation failed',
-    )
+    const origIsTTY = process.stdout.isTTY
+    process.stdout.isTTY = true // interactive → human error carries the message
+    try {
+      await expect(captureLogs(ApiCmd)).rejects.toThrow(
+        'Pipedrive API 422: Validation failed',
+      )
+    } finally {
+      process.stdout.isTTY = origIsTTY
+    }
   })
 
   it('sends a pdcli User-Agent on API requests', async () => {
@@ -185,9 +197,15 @@ describe('BaseCommand', () => {
       .get('/api/v2/users/me')
       .reply(429, '', { 'x-ratelimit-reset': '9' })
 
-    await expect(captureLogs(ApiCmd, ['--no-retry'])).rejects.toThrow(
-      /Rate limited/,
-    )
+    const origIsTTY = process.stdout.isTTY
+    process.stdout.isTTY = true // interactive → human error carries the message
+    try {
+      await expect(captureLogs(ApiCmd, ['--no-retry'])).rejects.toThrow(
+        /Rate limited/,
+      )
+    } finally {
+      process.stdout.isTTY = origIsTTY
+    }
   })
 
   it('defines a --resolve-fields global flag for non-table formats', () => {
@@ -410,9 +428,14 @@ describe('resolveFormat with default_output', () => {
       activeProfile: 'default',
       default_output: 'bogus',
     })
-    const stdout = await captureLogs(FormatCmd, [])
-    // vitest runs piped (non-TTY), so the fallback is json
-    expect(stdout).toContain('format:json')
+    const origIsTTY = process.stdout.isTTY
+    process.stdout.isTTY = false // piped → the fallback is json
+    try {
+      const stdout = await captureLogs(FormatCmd, [])
+      expect(stdout).toContain('format:json')
+    } finally {
+      process.stdout.isTTY = origIsTTY
+    }
   })
 
   it('emits JSON errors when default_output is json (no --output flag)', async () => {
@@ -448,12 +471,52 @@ describe('resolveFormat with default_output', () => {
     // Before the fix this died with "Cannot read properties of undefined
     // (reading 'profile')" because handleError consulted
     // storedDefaultOutput() while this.flags was still undefined.
-    await expect(ParseCmd.run(['--no-such-flag'])).rejects.toThrow(
-      /Nonexistent flag/,
-    )
+    const origIsTTY = process.stdout.isTTY
+    process.stdout.isTTY = true // interactive → human error carries the message
+    try {
+      await expect(ParseCmd.run(['--no-such-flag'])).rejects.toThrow(
+        /Nonexistent flag/,
+      )
+    } finally {
+      process.stdout.isTTY = origIsTTY
+    }
   })
 
-  it('keeps human-form errors when no flag and no stored default', async () => {
+  it('maps oclif parse errors to exit 64 (usage), not 70 (internal)', async () => {
+    mockLoadConfig.mockReturnValue({ activeProfile: 'default' })
+    class ParseCmd extends BaseCommand {
+      static skipAuth = true
+      async run() {}
+    }
+    const origIsTTY = process.stdout.isTTY
+    process.stdout.isTTY = true // human path
+    const err = await ParseCmd.run(['--no-such-flag']).catch((e) => e)
+    process.stdout.isTTY = origIsTTY
+    expect(err.exitCode ?? err.oclif?.exit).toBe(64)
+  })
+
+  it('emits a JSON parse error (exit 64) when piped', async () => {
+    mockLoadConfig.mockReturnValue({ activeProfile: 'default' })
+    class ParseCmd extends BaseCommand {
+      static skipAuth = true
+      async run() {}
+    }
+    const origIsTTY = process.stdout.isTTY
+    process.stdout.isTTY = false // piped
+    const writes = []
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((c) => {
+      writes.push(String(c))
+      return true
+    })
+    await ParseCmd.run(['--no-such-flag']).catch(() => {})
+    spy.mockRestore()
+    process.stdout.isTTY = origIsTTY
+    const payload = JSON.parse(writes.join(''))
+    expect(payload.exitCode).toBe(64)
+    expect(payload.message).toMatch(/nonexistent flag/i)
+  })
+
+  it('emits JSON errors when piped, even with no flag or stored default', async () => {
     mockLoadConfig.mockReturnValue({ activeProfile: 'default' })
     class FailCmd extends BaseCommand {
       static skipAuth = true
@@ -461,16 +524,90 @@ describe('resolveFormat with default_output', () => {
         throw new AuthRequiredError()
       }
     }
+    const origIsTTY = process.stdout.isTTY
+    process.stdout.isTTY = false // piped → machine consumer
     const writes = []
-    const spy = vi
-      .spyOn(process.stderr, 'write')
-      .mockImplementation((chunk) => {
-        writes.push(String(chunk))
-        return true
-      })
-    // piped (non-TTY) but no explicit intent → human error, not JSON
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((c) => {
+      writes.push(String(c))
+      return true
+    })
+    await expect(FailCmd.run([])).rejects.toThrow()
+    spy.mockRestore()
+    process.stdout.isTTY = origIsTTY
+    const payload = JSON.parse(writes.join(''))
+    expect(payload.error).toBe('AuthRequiredError')
+    expect(payload.exitCode).toBe(77)
+  })
+
+  it('keeps human (non-JSON) errors in a TTY with no flag or stored default', async () => {
+    mockLoadConfig.mockReturnValue({ activeProfile: 'default' })
+    class FailCmd extends BaseCommand {
+      static skipAuth = true
+      async run() {
+        throw new AuthRequiredError()
+      }
+    }
+    const origIsTTY = process.stdout.isTTY
+    process.stdout.isTTY = true // interactive terminal
+    const writes = []
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((c) => {
+      writes.push(String(c))
+      return true
+    })
     await expect(FailCmd.run([])).rejects.toThrow(/auth login/i)
     spy.mockRestore()
+    process.stdout.isTTY = origIsTTY
     expect(() => JSON.parse(writes.join(''))).toThrow()
+  })
+
+  it('keeps a genuine internal error at exit 70', async () => {
+    mockLoadConfig.mockReturnValue({ activeProfile: 'default' })
+    class BoomCmd extends BaseCommand {
+      static skipAuth = true
+      async run() {
+        throw new Error('unexpected boom')
+      }
+    }
+    const origIsTTY = process.stdout.isTTY
+    process.stdout.isTTY = true
+    const err = await BoomCmd.run([]).catch((e) => e)
+    process.stdout.isTTY = origIsTTY
+    expect(err.exitCode ?? err.oclif?.exit).toBe(70)
+  })
+
+  it.each(['yaml', 'csv'])(
+    'emits a JSON error envelope (not %s) for a non-table default_output',
+    async (fmt) => {
+      mockLoadConfig.mockReturnValue({
+        activeProfile: 'default',
+        default_output: fmt,
+      })
+      class FailCmd extends BaseCommand {
+        static skipAuth = true
+        async run() {
+          throw new AuthRequiredError()
+        }
+      }
+      const writes = []
+      const spy = vi.spyOn(process.stderr, 'write').mockImplementation((c) => {
+        writes.push(String(c))
+        return true
+      })
+      await expect(FailCmd.run([])).rejects.toThrow()
+      spy.mockRestore()
+      const payload = JSON.parse(writes.join(''))
+      expect(payload.error).toBe('AuthRequiredError')
+      expect(payload.exitCode).toBe(77)
+    },
+  )
+
+  it('storedDefaultOutput swallows a throwing config read (error reporting must not crash)', () => {
+    mockLoadConfig.mockImplementation(() => {
+      throw new Error('corrupt config')
+    })
+    // Called by handleError while reporting another failure — must degrade to
+    // undefined (→ TTY/pipe fallback), never throw a secondary error.
+    const result = BaseCommand.prototype.storedDefaultOutput.call({ flags: {} })
+    expect(result).toBeUndefined()
   })
 })

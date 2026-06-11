@@ -35,6 +35,12 @@ const DEFS = [
 ]
 
 describe('buildWriteBody', () => {
+  it('tolerates a field def with no field_name when matching by hash code', () => {
+    const defs = [{ field_code: HASH, field_type: 'varchar' }] // no field_name
+    const body = buildWriteBody({ fields: [`${HASH}=X-9`], defs })
+    expect(body.custom_fields).toEqual({ [HASH]: 'X-9' })
+  })
+
   it('keeps defined typed values and drops undefined ones', () => {
     const body = buildWriteBody({
       typed: { title: 'New deal', value: 100, stage_id: undefined },

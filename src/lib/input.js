@@ -78,7 +78,7 @@ function isHashKey(s) {
 function findField(defs, name) {
   const lower = name.toLowerCase()
   return defs.find(
-    (d) => d.field_name.toLowerCase() === lower || d.field_code === name,
+    (d) => d.field_name?.toLowerCase() === lower || d.field_code === name,
   )
 }
 
