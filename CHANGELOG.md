@@ -4,6 +4,38 @@ All notable changes to `pdcli` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/).
 
+## [0.17.0] - 2026-06-11
+
+Contract-hardening release — the last changes to the machine-facing surface
+(exit codes + error output) before the 1.0 stability freeze.
+
+### Changed
+
+- **BREAKING — usage errors now exit 64, not 70.** Malformed invocations
+  (unknown flag, missing argument, invalid flag value) are oclif parse errors;
+  they previously fell through to exit 70 (`EX_SOFTWARE`, "internal bug") and
+  now correctly exit 64 (`EX_USAGE`) per the sysexits ladder. Exit 70 is now
+  reserved for genuinely unexpected internal failures. Scripts branching on the
+  exit code should treat 64 as "fix your command line".
+- **BREAKING — piped errors emit JSON.** Error output now follows the same
+  format resolution as success output: human (`table`) in a TTY, but a JSON
+  envelope (`{ error, message, exitCode, … }`) on stderr whenever output is a
+  machine format — `--output json|yaml|csv`, a non-`table` profile
+  `default_output`, **or when stdout is piped**. Previously a piped run emitted
+  JSON on success but human text on failure; a non-interactive consumer now
+  always gets a parseable error. Pass `--output table` to force human errors.
+
+### Fixed
+
+- OAuth: a token that expired _during_ a 429 backoff is now refreshed. The
+  refresh was gated on the first attempt, so a rate-limit retry consumed the
+  window and the later 401 failed unrecoverably; the refresh is now a single
+  free round independent of the retry budget (works under `--no-retry` too).
+- CSV/`--field`: a field definition missing `field_name` no longer throws when
+  matching by hash code (null-guarded, matching the other resolvers).
+- Error reporting no longer crashes if reading the profile's `default_output`
+  throws (e.g. a corrupt config) while formatting another error.
+
 ## [0.16.0] - 2026-06-11
 
 ### Added

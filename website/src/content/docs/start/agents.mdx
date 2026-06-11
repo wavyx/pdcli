@@ -44,15 +44,18 @@ script can react to the failure class without parsing text:
 | ---- | ------------------------------------------------------------------------------------------------- |
 | 0    | Success                                                                                           |
 | 1    | Generic error                                                                                     |
-| 64   | Invalid input data (e.g. a CSV missing its name column) — note: malformed flags/arguments exit 70 |
+| 64   | Usage / bad flags or arguments (unknown flag, missing arg, invalid value, missing CSV column)     |
 | 65   | Bad input data (API 400 / 422)                                                                    |
 | 69   | Service unavailable (API 5xx, or unreachable)                                                     |
-| 70   | Internal software error (unexpected)                                                              |
+| 70   | Internal software error (unexpected — a genuine bug, not a usage mistake)                          |
 | 75   | Rate limited (API 429) — retry later                                                              |
 | 77   | Not authenticated / forbidden (API 401 / 403)                                                     |
 | 78   | Configuration error (e.g. API 402, missing domain)                                                |
 
-With `--output json`, errors also print a JSON object on **stderr**:
+Errors print a JSON object on **stderr** whenever output is JSON — with
+`--output json`, a `json` profile default, **or when stdout is piped** (the same
+TTY→JSON rule as success output), so a non-interactive consumer always gets a
+parseable failure:
 
 ```json
 {
