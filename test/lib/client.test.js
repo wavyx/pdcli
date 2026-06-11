@@ -720,6 +720,30 @@ describe('OAuth mode', () => {
     expect(scope.isDone()).toBe(true)
   })
 
+  it('still refreshes once on a 401 even with retry disabled (--no-retry)', async () => {
+    const onRefresh = vi.fn().mockResolvedValue('refreshed-access')
+    const oauthClient = createClient({
+      apiDomain: 'https://acme.pipedrive.com',
+      token: 'expired-access',
+      authMode: 'oauth',
+      onRefresh,
+      retry: false,
+      timeout: 5000,
+    })
+    const scope = nock('https://acme.pipedrive.com')
+      .get('/api/v2/users/me')
+      .matchHeader('authorization', 'Bearer expired-access')
+      .reply(401, { success: false, error: 'expired' })
+      .get('/api/v2/users/me')
+      .matchHeader('authorization', 'Bearer refreshed-access')
+      .reply(200, { success: true, data: { id: 42 } })
+
+    const result = await oauthClient.get('/api/v2/users/me')
+    expect(result.data.id).toBe(42)
+    expect(onRefresh).toHaveBeenCalledOnce()
+    expect(scope.isDone()).toBe(true)
+  })
+
   it('does not let the refresh round consume the retry budget', async () => {
     const onRefresh = vi.fn().mockResolvedValue('refreshed-access')
     const oauthClient = createClient({

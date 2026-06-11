@@ -130,7 +130,14 @@ export default class BaseCommand extends Command {
    * when `this.flags` is still undefined).
    */
   storedDefaultOutput() {
-    const stored = loadConfig(this.flags?.profile).default_output
+    let stored
+    try {
+      stored = loadConfig(this.flags?.profile).default_output
+    } catch {
+      // The error handler consults this while reporting another failure — a
+      // broken/unreadable config must never crash error reporting itself.
+      return undefined
+    }
     return ['table', 'json', 'yaml', 'csv'].includes(stored)
       ? stored
       : undefined

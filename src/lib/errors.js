@@ -91,10 +91,12 @@ export function handleError(err, cmd) {
   const exitCode = isUsageError ? 64 : (err.exitCode ?? 70)
   const flags = cmd.flags ?? {}
 
-  // Error output format MIRRORS success output (resolveFormat): explicit flag,
-  // else the profile default, else JSON when piped / human ('table') in a TTY.
-  // A machine consumer that gets JSON on success must get JSON on failure too;
-  // only an interactive 'table' context stays human.
+  // Resolve the format like success output (resolveFormat): explicit flag,
+  // else the profile default, else JSON when piped / 'table' in a TTY. Any
+  // non-table format (json/yaml/csv, or piped) gets the JSON error envelope —
+  // there is no yaml/csv error serializer, and a machine consumer that gets
+  // JSON on success must get a parseable error on failure. Only an interactive
+  // 'table' context stays human.
   const stored =
     typeof cmd.storedDefaultOutput === 'function'
       ? cmd.storedDefaultOutput()

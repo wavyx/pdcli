@@ -574,4 +574,40 @@ describe('resolveFormat with default_output', () => {
     process.stdout.isTTY = origIsTTY
     expect(err.exitCode ?? err.oclif?.exit).toBe(70)
   })
+
+  it.each(['yaml', 'csv'])(
+    'emits a JSON error envelope (not %s) for a non-table default_output',
+    async (fmt) => {
+      mockLoadConfig.mockReturnValue({
+        activeProfile: 'default',
+        default_output: fmt,
+      })
+      class FailCmd extends BaseCommand {
+        static skipAuth = true
+        async run() {
+          throw new AuthRequiredError()
+        }
+      }
+      const writes = []
+      const spy = vi.spyOn(process.stderr, 'write').mockImplementation((c) => {
+        writes.push(String(c))
+        return true
+      })
+      await expect(FailCmd.run([])).rejects.toThrow()
+      spy.mockRestore()
+      const payload = JSON.parse(writes.join(''))
+      expect(payload.error).toBe('AuthRequiredError')
+      expect(payload.exitCode).toBe(77)
+    },
+  )
+
+  it('storedDefaultOutput swallows a throwing config read (error reporting must not crash)', () => {
+    mockLoadConfig.mockImplementation(() => {
+      throw new Error('corrupt config')
+    })
+    // Called by handleError while reporting another failure — must degrade to
+    // undefined (→ TTY/pipe fallback), never throw a secondary error.
+    const result = BaseCommand.prototype.storedDefaultOutput.call({ flags: {} })
+    expect(result).toBeUndefined()
+  })
 })

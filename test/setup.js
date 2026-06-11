@@ -7,3 +7,9 @@
 beforeEach(() => {
   process.stdout.isTTY = true
 })
+
+// Restore to the original (undefined) between tests so a test that flips to
+// piped without restoring can't leak its setting into the next file/test.
+afterEach(() => {
+  process.stdout.isTTY = undefined
+})
