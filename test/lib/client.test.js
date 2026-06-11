@@ -693,6 +693,60 @@ describe('OAuth mode', () => {
     })
     expect(onRefresh).toHaveBeenCalledOnce()
   })
+
+  it('refreshes when the 401 lands after a 429 backoff (not just on attempt 1)', async () => {
+    const onRefresh = vi.fn().mockResolvedValue('refreshed-access')
+    const oauthClient = createClient({
+      apiDomain: 'https://acme.pipedrive.com',
+      token: 'expired-access',
+      authMode: 'oauth',
+      onRefresh,
+      retry: true,
+      timeout: 5000,
+    })
+    const scope = nock('https://acme.pipedrive.com')
+      .get('/api/v2/users/me')
+      .reply(429, '', { 'x-ratelimit-reset': '0' })
+      .get('/api/v2/users/me')
+      .matchHeader('authorization', 'Bearer expired-access')
+      .reply(401, { success: false, error: 'expired' })
+      .get('/api/v2/users/me')
+      .matchHeader('authorization', 'Bearer refreshed-access')
+      .reply(200, { success: true, data: { id: 7 } })
+
+    const result = await oauthClient.get('/api/v2/users/me')
+    expect(result.data.id).toBe(7)
+    expect(onRefresh).toHaveBeenCalledOnce()
+    expect(scope.isDone()).toBe(true)
+  })
+
+  it('does not let the refresh round consume the retry budget', async () => {
+    const onRefresh = vi.fn().mockResolvedValue('refreshed-access')
+    const oauthClient = createClient({
+      apiDomain: 'https://acme.pipedrive.com',
+      token: 'expired-access',
+      authMode: 'oauth',
+      onRefresh,
+      retry: true,
+      timeout: 5000,
+    })
+    const scope = nock('https://acme.pipedrive.com')
+      .get('/api/v2/users/me')
+      .reply(429, '', { 'x-ratelimit-reset': '0' })
+      .get('/api/v2/users/me')
+      .reply(429, '', { 'x-ratelimit-reset': '0' })
+      .get('/api/v2/users/me')
+      .matchHeader('authorization', 'Bearer expired-access')
+      .reply(401, { success: false, error: 'expired' })
+      .get('/api/v2/users/me')
+      .matchHeader('authorization', 'Bearer refreshed-access')
+      .reply(200, { success: true, data: { id: 9 } })
+
+    const result = await oauthClient.get('/api/v2/users/me')
+    expect(result.data.id).toBe(9)
+    expect(onRefresh).toHaveBeenCalledOnce()
+    expect(scope.isDone()).toBe(true)
+  })
 })
 
 describe('binary download', () => {

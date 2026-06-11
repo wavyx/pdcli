@@ -163,6 +163,7 @@ export function createClient({
     const maxAttempts = retry ? 3 : 1
     let attempts = 0
     let sawRateLimit = false
+    let refreshed = false
 
     while (attempts < maxAttempts) {
       attempts++
@@ -214,10 +215,15 @@ export function createClient({
         )
       }
 
-      // OAuth access tokens expire (~1h) — refresh once and retry.
-      if (res.status === 401 && onRefresh && attempts === 1) {
+      // OAuth access tokens expire (~1h) — refresh once and retry. Gate on a
+      // dedicated flag, NOT attempts===1: a 429 backoff can consume the early
+      // attempts, so the expiring-token 401 may not arrive until later. The
+      // refresh round is free (attempts--) so it never eats the retry budget.
+      if (res.status === 401 && onRefresh && !refreshed) {
         debug('401, attempting OAuth token refresh')
+        refreshed = true
         token = await onRefresh()
+        attempts--
         continue
       }
 
