@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { diffBody, runUpsert } from '../../src/lib/upsert.js'
+import { diffBody, runUpsert, summarizeUpsert } from '../../src/lib/upsert.js'
 
 describe('diffBody', () => {
   it('returns only the changed top-level fields', () => {
@@ -261,5 +261,40 @@ describe('runUpsert', () => {
       defs,
     })
     expect(client.calls.post[0].body.custom_fields.ext).toBe('EXPLICIT')
+  })
+})
+
+describe('summarizeUpsert', () => {
+  it('counts changed fields, pluralizing past one', () => {
+    expect(
+      summarizeUpsert({ action: 'updated', id: 7, changed: { a: 1 } }, 'deal'),
+    ).toBe('update deal #7 (1 field)')
+    expect(
+      summarizeUpsert(
+        { action: 'updated', id: 7, changed: { a: 1, b: 2 } },
+        'deal',
+      ),
+    ).toBe('update deal #7 (2 fields)')
+  })
+
+  it('treats an updated result with no change set as zero fields', () => {
+    expect(summarizeUpsert({ action: 'updated', id: 7 }, 'deal')).toBe(
+      'update deal #7 (0 fields)',
+    )
+  })
+
+  it('prefixes dry-run and omits the id when a created record has none', () => {
+    expect(summarizeUpsert({ action: 'created', dryRun: true }, 'org')).toBe(
+      '[dry-run] would create org',
+    )
+    expect(summarizeUpsert({ action: 'created', id: 5 }, 'org')).toBe(
+      'create org #5',
+    )
+  })
+
+  it('reports an unchanged record', () => {
+    expect(summarizeUpsert({ action: 'unchanged', id: 7 }, 'person')).toBe(
+      'person #7 unchanged',
+    )
   })
 })

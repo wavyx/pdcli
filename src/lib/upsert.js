@@ -1,6 +1,8 @@
 import { CliError } from './errors.js'
 import { eq } from './backup-diff.js'
 import { lookupByField } from './lookup.js'
+import { getFields } from './fields.js'
+import { buildWriteBody } from './input.js'
 
 /** Entity → v2 write path. */
 const WRITE_PATH = {
@@ -120,4 +122,35 @@ export async function runUpsert({
   if (dryRun) return { action: 'updated', id: match.id, dryRun: true, changed }
   const res = await client.patch(`${writePath}/${match.id}`, { body: changed })
   return { action: 'updated', id: match.id, changed, record: res.data }
+}
+
+/**
+ * Command-facing wrapper: fetch field defs, build the write body from --field /
+ * --body, then run the upsert. Keeps the three entity commands trivial.
+ * @param {object} options
+ * @returns {Promise<object>} the runUpsert result
+ */
+export async function upsertWithDefs({
+  client,
+  entity,
+  by,
+  value,
+  fields = [],
+  rawBody,
+  dryRun = false,
+}) {
+  const defs = await getFields(client, entity)
+  const body = buildWriteBody({ fields, rawBody, defs })
+  return runUpsert({ client, entity, by, value, body, defs, dryRun })
+}
+
+/** One-line human summary of an upsert result for table output. */
+export function summarizeUpsert(result, entity) {
+  const prefix = result.dryRun ? '[dry-run] would ' : ''
+  if (result.action === 'unchanged') return `${entity} #${result.id} unchanged`
+  if (result.action === 'created') {
+    return `${prefix}create ${entity}${result.id != null ? ` #${result.id}` : ''}`
+  }
+  const n = result.changed ? Object.keys(result.changed).length : 0
+  return `${prefix}update ${entity} #${result.id} (${n} field${n === 1 ? '' : 's'})`
 }
