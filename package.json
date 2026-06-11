@@ -121,6 +121,9 @@
       },
       "backup": {
         "description": "Full-account export and zero-API snapshot diff"
+      },
+      "sync": {
+        "description": "Incremental data-warehouse export"
       }
     },
     "hooks": {
