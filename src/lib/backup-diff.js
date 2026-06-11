@@ -17,7 +17,7 @@ const FIELDS_FOR = {
 const SCHEMA_RESOURCES = new Set(Object.values(FIELDS_FOR))
 
 /** Recursively sort object keys so equality is key-order insensitive. */
-function canon(value) {
+export function canon(value) {
   if (Array.isArray(value)) return value.map(canon)
   if (value && typeof value === 'object') {
     return Object.fromEntries(
@@ -30,7 +30,7 @@ function canon(value) {
 }
 
 /** Stable equality for scalar/array/object field values (key-order safe). */
-function eq(a, b) {
+export function eq(a, b) {
   return JSON.stringify(canon(a ?? null)) === JSON.stringify(canon(b ?? null))
 }
 
