@@ -216,8 +216,14 @@ describe('org import --upsert', () => {
       .query((q) => q.term === 'Acme')
       .reply(200, {
         success: true,
-        data: { items: [{ item: { id: 7, name: 'Acme', owner_id: 1 } }] },
+        data: { items: [{ item: { id: 7 } }] },
         additional_data: { next_cursor: null },
+      })
+    mockApi()
+      .get('/api/v2/organizations/7')
+      .reply(200, {
+        success: true,
+        data: { id: 7, name: 'Acme', owner_id: 1 },
       })
     mockApi()
       .get('/api/v2/organizations/search')
@@ -307,14 +313,15 @@ describe('org import --upsert', () => {
       .query((q) => q.term === 'dup')
       .reply(200, {
         success: true,
-        data: {
-          items: [
-            { item: { id: 1, name: 'dup' } },
-            { item: { id: 2, name: 'dup' } },
-          ],
-        },
+        data: { items: [{ item: { id: 1 } }, { item: { id: 2 } }] },
         additional_data: { next_cursor: null },
       })
+    mockApi()
+      .get('/api/v2/organizations/1')
+      .reply(200, { success: true, data: { id: 1, name: 'dup' } })
+    mockApi()
+      .get('/api/v2/organizations/2')
+      .reply(200, { success: true, data: { id: 2, name: 'dup' } })
 
     const err = await OrgImportCommand.run([
       'o.csv',
@@ -335,9 +342,12 @@ describe('org import --upsert', () => {
       .query((q) => q.term === 'Acme')
       .reply(200, {
         success: true,
-        data: { items: [{ item: { id: 7, name: 'Acme', owner_id: 1 } }] },
+        data: { items: [{ item: { id: 7 } }] },
         additional_data: { next_cursor: null },
       })
+    mockApi()
+      .get('/api/v2/organizations/7')
+      .reply(200, { success: true, data: { id: 7, name: 'Acme', owner_id: 1 } })
     mockApi()
       .patch('/api/v2/organizations/7')
       .reply(401, { success: false, error: 'unauthorized' })

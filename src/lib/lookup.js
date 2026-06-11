@@ -13,13 +13,15 @@ const SEARCHABLE_TYPES = new Set([
 const NUMERIC_TYPES = new Set(['double', 'monetary'])
 
 /**
- * Per-entity scoped-search config + built-in match fields. Each built-in gives
- * the search `fields` scope, how to pull the comparable value(s) off a result
- * record, and whether the compare is case-insensitive.
+ * Per-entity config: the scoped-search endpoint, the record-fetch base, and
+ * the built-in match fields. Each built-in gives the search `fields` scope,
+ * how to pull the comparable value(s) off the *full* record (NOT the search
+ * item — see lookupByField), and whether the compare is case-insensitive.
  */
 const SEARCH_CONFIG = {
   person: {
     searchPath: '/api/v2/persons/search',
+    recordPath: '/api/v2/persons',
     builtins: {
       email: {
         scope: 'email',
@@ -36,12 +38,14 @@ const SEARCH_CONFIG = {
   },
   org: {
     searchPath: '/api/v2/organizations/search',
+    recordPath: '/api/v2/organizations',
     builtins: {
       name: { scope: 'name', extract: (it) => [it.name], ci: false },
     },
   },
   deal: {
     searchPath: '/api/v2/deals/search',
+    recordPath: '/api/v2/deals',
     builtins: {
       title: { scope: 'title', extract: (it) => [it.title], ci: false },
     },
@@ -59,11 +63,16 @@ function valuesEqual(actual, expected, ci) {
 /**
  * Find the record of `entity` whose `field` exactly equals `value`. Routes a
  * built-in field (person email/name/phone, org name, deal title) or a
- * searchable custom field (by name) to the scoped /search endpoint, collects
- * ALL matches across cursor pages, then RE-VERIFIES each client-side — because
- * `exact_match` is not a unique-key lookup (it's case-insensitive and, for
- * custom fields, searches every custom field at once). The surviving count
- * decides the tri-state: 0 → create, 1 → update, >1 → caller must refuse.
+ * searchable custom field (by name) to the scoped /search endpoint to collect
+ * candidate ids across cursor pages, then FETCHES each candidate's full record
+ * and RE-VERIFIES it client-side. The fetch is not optional: the search result
+ * `item` is a lossy projection (emails/phones come back as bare strings,
+ * custom_fields as an unattributed value array) so it can neither be trusted
+ * for verification nor used as the record to diff against. `exact_match` is
+ * also not a unique-key lookup (case-insensitive; a custom-field search scans
+ * every custom field at once), which is the other reason to re-verify against
+ * the authoritative record. The surviving count decides the tri-state:
+ * 0 → create, 1 → update, >1 → caller must refuse.
  *
  * @param {{ get: Function }} client
  * @param {'person'|'org'|'deal'} entity
@@ -129,7 +138,10 @@ export async function lookupByField({
     }
   }
 
-  const matches = []
+  // 1. Collect candidate ids from the scoped exact_match search (the cheap
+  //    finder). The item body is lossy, so we keep only the id.
+  const candidateIds = []
+  const seen = new Set()
   let cursor
   do {
     const body = await client.get(cfg.searchPath, {
@@ -137,17 +149,35 @@ export async function lookupByField({
         term: value,
         exact_match: true,
         fields: scope,
-        limit: 500,
+        // The per-entity /search endpoints cap limit at 100 (the live API 400s
+        // on more, despite the 500 list cap); cursor paging collects the rest.
+        limit: 100,
         cursor,
       },
     })
-    for (const entry of body.data?.items ?? []) matches.push(entry.item)
+    for (const entry of body.data?.items ?? []) {
+      const id = entry.item?.id
+      if (id != null && !seen.has(id)) {
+        seen.add(id)
+        candidateIds.push(id)
+      }
+    }
     cursor = body.additional_data?.next_cursor ?? null
   } while (cursor)
 
-  const survivors = matches.filter((item) =>
-    extract(item).some((v) => valuesEqual(v, compareValue, ci)),
-  )
+  // 2. Fetch each candidate's full record and re-verify the matched field
+  //    against its authoritative value(s). The surviving records are both the
+  //    ambiguity count and (when unique) the record to diff against.
+  const survivors = []
+  for (const id of candidateIds) {
+    const record = (await client.get(`${cfg.recordPath}/${id}`)).data
+    if (
+      record &&
+      extract(record).some((v) => valuesEqual(v, compareValue, ci))
+    ) {
+      survivors.push(record)
+    }
+  }
 
   if (survivors.length === 0) return { status: 'none' }
   if (survivors.length === 1) {

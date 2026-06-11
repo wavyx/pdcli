@@ -101,16 +101,24 @@ describe('diffBody', () => {
   })
 })
 
-/** Fake client: queued search items for lookup + captured post/patch. */
+/**
+ * Fake client modelling lookup's two-step flow: `/search` advertises candidate
+ * ids, then a record-fetch returns the full record. `items` are full records.
+ */
 function fakeClient({ items = [] } = {}) {
   const calls = { post: [], patch: [] }
+  const byId = new Map(items.map((it) => [it.id, it]))
   return {
     calls,
-    async get() {
-      return {
-        data: { items: items.map((item) => ({ item })) },
-        additional_data: { next_cursor: null },
+    async get(path) {
+      if (path.endsWith('/search')) {
+        return {
+          data: { items: items.map((it) => ({ item: { id: it.id } })) },
+          additional_data: { next_cursor: null },
+        }
       }
+      const id = Number(path.split('/').pop())
+      return { data: byId.get(id) ?? null }
     },
     async post(path, opts) {
       calls.post.push({ path, body: opts.body })
@@ -364,18 +372,29 @@ describe('summarizeUpsert', () => {
   })
 })
 
-/** Fake client whose search results vary by the search `term`. */
+/**
+ * Fake client whose search candidates vary by the search `term`; a record
+ * fetch then returns the full record by id (lookup's two-step flow).
+ */
 function termFakeClient(byTerm = {}) {
   const calls = { post: [], patch: [], terms: [] }
+  const byId = new Map()
+  for (const recs of Object.values(byTerm)) {
+    for (const r of recs) byId.set(r.id, r)
+  }
   return {
     calls,
     async get(path, opts) {
-      calls.terms.push(opts.query.term)
-      const items = byTerm[opts.query.term] ?? []
-      return {
-        data: { items: items.map((item) => ({ item })) },
-        additional_data: { next_cursor: null },
+      if (path.endsWith('/search')) {
+        calls.terms.push(opts.query.term)
+        const items = byTerm[opts.query.term] ?? []
+        return {
+          data: { items: items.map((r) => ({ item: { id: r.id } })) },
+          additional_data: { next_cursor: null },
+        }
       }
+      const id = Number(path.split('/').pop())
+      return { data: byId.get(id) ?? null }
     },
     async post(path, opts) {
       calls.post.push({ path, body: opts.body })

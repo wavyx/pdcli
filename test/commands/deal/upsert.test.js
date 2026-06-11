@@ -26,9 +26,14 @@ function mockSearch(records = []) {
     .query(true)
     .reply(200, {
       success: true,
-      data: { items: records.map((item) => ({ item })) },
+      data: { items: records.map((r) => ({ item: { id: r.id } })) },
       additional_data: { next_cursor: null },
     })
+  for (const r of records) {
+    mockApi()
+      .get(`/api/v2/deals/${r.id}`)
+      .reply(200, { success: true, data: r })
+  }
 }
 
 describe('deal upsert', () => {

@@ -243,12 +243,14 @@ describe('person import --upsert', () => {
         .query((q) => q.term === 'a@x.com')
         .reply(200, {
           success: true,
-          data: {
-            items: [
-              { item: { id: 7, emails: [{ value: 'a@x.com' }], owner_id: 1 } },
-            ],
-          },
+          data: { items: [{ item: { id: 7 } }] },
           additional_data: { next_cursor: null },
+        })
+      mockApi()
+        .get('/api/v2/persons/7')
+        .reply(200, {
+          success: true,
+          data: { id: 7, emails: [{ value: 'a@x.com' }], owner_id: 1 },
         })
       mockApi()
         .get('/api/v2/persons/search')
@@ -340,13 +342,20 @@ describe('person import --upsert', () => {
         .query((q) => q.term === 'dup@x.com')
         .reply(200, {
           success: true,
-          data: {
-            items: [
-              { item: { id: 1, emails: [{ value: 'dup@x.com' }] } },
-              { item: { id: 2, emails: [{ value: 'dup@x.com' }] } },
-            ],
-          },
+          data: { items: [{ item: { id: 1 } }, { item: { id: 2 } }] },
           additional_data: { next_cursor: null },
+        })
+      mockApi()
+        .get('/api/v2/persons/1')
+        .reply(200, {
+          success: true,
+          data: { id: 1, emails: [{ value: 'dup@x.com' }] },
+        })
+      mockApi()
+        .get('/api/v2/persons/2')
+        .reply(200, {
+          success: true,
+          data: { id: 2, emails: [{ value: 'dup@x.com' }] },
         })
 
       const err = await PersonImportCommand.run([
@@ -369,12 +378,14 @@ describe('person import --upsert', () => {
         .query((q) => q.term === 'a@x.com')
         .reply(200, {
           success: true,
-          data: {
-            items: [
-              { item: { id: 7, emails: [{ value: 'a@x.com' }], owner_id: 1 } },
-            ],
-          },
+          data: { items: [{ item: { id: 7 } }] },
           additional_data: { next_cursor: null },
+        })
+      mockApi()
+        .get('/api/v2/persons/7')
+        .reply(200, {
+          success: true,
+          data: { id: 7, emails: [{ value: 'a@x.com' }], owner_id: 1 },
         })
       mockApi()
         .patch('/api/v2/persons/7')

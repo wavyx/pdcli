@@ -23,16 +23,24 @@ function mockFields(defs = []) {
     .reply(200, { success: true, data: defs })
 }
 
-/** Mock the scoped search, returning the given records as search items. */
+/**
+ * Mock the scoped search as a candidate-id finder, then a record fetch per
+ * candidate (lookup verifies against the full record, not the search item).
+ */
 function mockSearch(records = []) {
   mockApi()
     .get('/api/v2/persons/search')
     .query(true)
     .reply(200, {
       success: true,
-      data: { items: records.map((item) => ({ item })) },
+      data: { items: records.map((r) => ({ item: { id: r.id } })) },
       additional_data: { next_cursor: null },
     })
+  for (const r of records) {
+    mockApi()
+      .get(`/api/v2/persons/${r.id}`)
+      .reply(200, { success: true, data: r })
+  }
 }
 
 describe('person upsert', () => {
