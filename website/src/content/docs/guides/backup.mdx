@@ -93,3 +93,32 @@ straight into cron or CI. Use env-var auth so nothing prompts:
 
 For incremental safety on a flaky link, point repeated runs at the same directory with
 `--resume`. See [CI recipes](/pdcli/automation/ci/) for a scheduled-job example.
+
+## Diffing snapshots: `backup diff`
+
+Because pdcli owns the backup format, it can diff two snapshots **entirely locally — zero
+API calls**. Point it at two backup directories (older first):
+
+```bash
+pdcli backup diff ./backup-2026-06-10 ./backup-2026-06-11
+```
+
+```text
+┌───────────┬─────┬──────────┬────────────┬──────────┬──────────┐
+│ Resource  │ ID  │ Change   │ Field      │ Old      │ New      │
+├───────────┼─────┼──────────┼────────────┼──────────┼──────────┤
+│ deals     │ 42  │ modified │ value      │ 100000   │ 150000   │
+│ deals     │ 42  │ modified │ Region     │ EMEA     │ APAC     │
+│ deals     │ 99  │ added    │            │          │          │
+│ persons   │ 7   │ removed  │            │          │          │
+└───────────┴─────┴──────────┴────────────┴──────────┴──────────┘
+
+3 added · 1 removed · 5 modified (11 field changes)
+```
+
+Each record is classified `added` / `removed` / `modified`, and every changed field is one
+row with its old → new value. Custom-field hash keys and option ids are resolved to names
+and labels using each snapshot's own captured `*Fields.json` (still no network); pass
+`--raw` to keep the raw hashes. Resources present in only one snapshot are reported
+separately rather than shown as wholesale added/removed. `--output json` emits the full
+`{ summary, skipped, changes }` object for diffing in CI.

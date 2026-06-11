@@ -5,7 +5,7 @@ description: Full command reference for the pdcli command-line interface.
 
 <!-- AUTO-GENERATED from the oclif manifest by scripts/gen-commands.mjs — do not edit by hand. -->
 
-Reference for `pdcli` v0.13.0 (137 commands). Every command also accepts the global flags `--output table|json|yaml|csv`, `--profile`, `--no-color`, `--verbose`, `--no-retry`, `--timeout`, and `--limit`.
+Reference for `pdcli` v0.14.0 (140 commands). Every command also accepts the global flags `--output table|json|yaml|csv`, `--profile`, `--no-color`, `--verbose`, `--no-retry`, `--timeout`, and `--limit`.
 
 ## Top-level
 
@@ -64,6 +64,25 @@ Examples:
 pdcli backup
 pdcli backup --dir ./my-backup
 pdcli backup --dir ./my-backup --resume
+```
+
+### `pdcli changes`
+
+Incremental change feed across deals/persons/orgs/activities/products. Self-advancing watermark: each run resumes where the last left off and advances it past the newest change only after a successful emit, so a failed run replays rather than skips (use --peek to read without advancing).
+
+```
+pdcli changes [flags]
+```
+
+- `--since <value>` — Start point: RFC3339 timestamp or Nd/Nm. Omit to resume from the stored watermark.
+- `--peek` — Read without advancing the stored watermark
+
+Examples:
+
+```bash
+pdcli changes --since 7d
+pdcli changes
+pdcli changes --peek --output json
 ```
 
 ### `pdcli digest`
@@ -418,6 +437,26 @@ Examples:
 pdcli auth status
 ```
 
+## pdcli backup
+
+### `pdcli backup diff`
+
+Field-level diff between two backup snapshots — added/removed/modified records and per-field changes, computed locally with no API calls
+
+```
+pdcli backup diff <a> <b> [flags]
+```
+
+- `--raw` — Do not resolve custom-field names/option labels (show raw hash keys/ids)
+
+Examples:
+
+```bash
+pdcli backup diff ./backup-mon ./backup-tue
+pdcli backup diff ./old ./new --output json
+pdcli backup diff ./old ./new --raw
+```
+
 ## pdcli config
 
 ### `pdcli config get`
@@ -506,6 +545,29 @@ pdcli deal bulk-update --ids 1,2,3 --stage 5
 pdcli deal bulk-update --filter 9 --status won
 pdcli deal list --status open --jq '.[].id' | pdcli deal bulk-update --owner 42
 pdcli deal bulk-update --filter 9 --stage 5 --dry-run
+```
+
+### `pdcli deal context`
+
+One-call denormalized deal bundle — deal + person + org + activities + notes + products + participants, custom fields resolved to names and risk flags derived. Prompt-ready for agents (the joins v2 will not do).
+
+```
+pdcli deal context <id> [flags]
+```
+
+- `--no-activities` — Skip the activities slice
+- `--no-notes` — Skip the notes slice
+- `--no-products` — Skip the products slice
+- `--no-participants` — Skip the participants slice
+- `--activity-limit <value>` — Max activities to include
+- `--note-limit <value>` — Max notes to include
+
+Examples:
+
+```bash
+pdcli deal context 42
+pdcli deal context 42 --no-notes --no-products
+pdcli deal context 42 --output json
 ```
 
 ### `pdcli deal convert`
