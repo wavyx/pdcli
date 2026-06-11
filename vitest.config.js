@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     globals: true,
     include: ['test/**/*.test.js'],
+    setupFiles: ['test/setup.js'],
     coverage: {
       include: ['src/**/*.js'],
       exclude: ['src/hooks/**'],

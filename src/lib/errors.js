@@ -84,19 +84,25 @@ export class ApiError extends CliError {
  * @param {import('@oclif/core').Command} cmd
  */
 export function handleError(err, cmd) {
-  const exitCode = err.exitCode ?? 70
+  // oclif parse/usage errors (unknown flag, missing arg, bad enum) carry
+  // `oclif.exit === 2` and no `exitCode` of ours — they're a USAGE problem
+  // (64), not an internal CLI bug (70). Everything else: our exitCode, else 70.
+  const isUsageError = err.exitCode == null && err.oclif?.exit === 2
+  const exitCode = isUsageError ? 64 : (err.exitCode ?? 70)
   const flags = cmd.flags ?? {}
 
-  // JSON errors when the user asked for JSON — via the flag or the
-  // profile's default_output. (The piped-TTY fallback intentionally does
-  // NOT apply here; errors stay human unless JSON was requested.)
-  const format =
-    flags.output ??
-    (typeof cmd.storedDefaultOutput === 'function'
+  // Error output format MIRRORS success output (resolveFormat): explicit flag,
+  // else the profile default, else JSON when piped / human ('table') in a TTY.
+  // A machine consumer that gets JSON on success must get JSON on failure too;
+  // only an interactive 'table' context stays human.
+  const stored =
+    typeof cmd.storedDefaultOutput === 'function'
       ? cmd.storedDefaultOutput()
-      : undefined)
+      : undefined
+  const format =
+    flags.output ?? stored ?? (process.stdout.isTTY ? 'table' : 'json')
 
-  if (format === 'json') {
+  if (format !== 'table') {
     const payload = {
       error: err.constructor.name,
       message: err.message,
