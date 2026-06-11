@@ -1,9 +1,13 @@
 import { Flags } from '@oclif/core'
 import chalk from 'chalk'
 import ora from 'ora'
+import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import BaseCommand from '../../base-command.js'
-import { runWarehouseSync } from '../../lib/warehouse.js'
+import { runWarehouseSync, INCREMENTAL_ENTITIES } from '../../lib/warehouse.js'
 import { resolveSince } from '../../lib/period.js'
+import { confirmAction } from '../../lib/confirm.js'
+import { CliError } from '../../lib/errors.js'
 
 export default class SyncWarehouseCommand extends BaseCommand {
   static description =
@@ -33,6 +37,11 @@ export default class SyncWarehouseCommand extends BaseCommand {
         'Ignore watermarks and rebuild from scratch (truncates files)',
       default: false,
     }),
+    yes: Flags.boolean({
+      char: 'y',
+      description: 'Skip the --full truncation confirmation',
+      default: false,
+    }),
   }
 
   async run() {
@@ -40,6 +49,22 @@ export default class SyncWarehouseCommand extends BaseCommand {
     const now = new Date()
     const since =
       flags.since != null ? resolveSince(flags.since, now) : undefined
+
+    // --full truncates existing NDJSON files — confirm before destroying data.
+    if (flags.full) {
+      const hasFiles = INCREMENTAL_ENTITIES.some((e) =>
+        existsSync(join(flags.dir, `${e.name}.ndjson`)),
+      )
+      if (
+        hasFiles &&
+        !(await confirmAction(
+          `Truncate existing warehouse files in ${flags.dir} and rebuild?`,
+          flags.yes,
+        ))
+      ) {
+        throw new CliError('Aborted', { exitCode: 1 })
+      }
+    }
 
     const spinner = ora('Syncing to warehouse...').start()
     let result

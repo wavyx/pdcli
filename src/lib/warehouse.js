@@ -21,7 +21,9 @@ export const INCREMENTAL_ENTITIES = [
   { name: 'products', path: '/api/v2/products' },
 ]
 
-const MANIFEST = 'manifest.json'
+// Distinct from backup's manifest.json so a warehouse and a backup can share
+// a directory without one resetting the other's state.
+const MANIFEST = 'warehouse-manifest.json'
 
 function readManifest(dir) {
   const file = join(dir, MANIFEST)
@@ -41,11 +43,17 @@ function writeManifest(dir, manifest) {
 /**
  * Incremental NDJSON export to `dir`. Each entity is appended (one JSON object
  * per line) to `<entity>.ndjson` and advances its OWN high-water mark in
- * manifest.json. Per entity the start is: `since` override → stored watermark
- * → none (first run = full pull). The watermark advances to the newest
- * `update_time` seen + 1s (updated_since is inclusive) ONLY after the append
- * succeeds, so an interrupted entity replays rather than skips. `full` ignores
- * watermarks and truncates each file for a clean rebuild.
+ * warehouse-manifest.json. Per entity the start is: `since` override → stored
+ * watermark → none (first run = full pull).
+ *
+ * The watermark advances to the newest `update_time` seen — NOT +1s. The log
+ * is at-least-once (consumers dedupe by `(entity, id)`), so re-emitting the
+ * inclusive boundary record is harmless, whereas +1s could skip a record saved
+ * later in the boundary second. The advance never moves BACKWARD, so a one-off
+ * `--since` backfill can't rewind the maintained cursor. It happens only after
+ * the append succeeds, so an interrupted entity replays rather than skips.
+ * `full` clears the watermarks (persisted up-front, before any truncation) and
+ * truncates each file for a clean rebuild.
  *
  * NOTE: pull-based CDC sees creates and updates only — a hard delete in
  * Pipedrive simply stops appearing and leaves a stale row in the log. Reconcile
@@ -63,7 +71,15 @@ export async function runWarehouseSync(
 ) {
   mkdirSync(dir, { recursive: true })
   const manifest = readManifest(dir)
-  if (full) manifest.watermarks = {}
+  if (full) {
+    // Persist the cleared state BEFORE truncating any file. If a --full run is
+    // interrupted, the on-disk watermarks are already cleared, so a later run
+    // full-re-pulls a truncated entity instead of resuming incrementally
+    // against an emptied file (which would silently lose history).
+    manifest.watermarks = {}
+    manifest.counts = {}
+    writeManifest(dir, manifest)
+  }
 
   for (const { name, path } of INCREMENTAL_ENTITIES) {
     const file = join(dir, `${name}.ndjson`)
@@ -74,21 +90,25 @@ export async function runWarehouseSync(
     if (entitySince != null) query.updated_since = entitySince
 
     let count = 0
-    let maxUpdate = null
+    let maxMs = null
     // Stream straight to the appender — never buffer the whole delta.
     for await (const item of client.pageV2(path, query)) {
       appendFileSync(file, `${JSON.stringify(item)}\n`)
       count++
       if (item.update_time != null) {
-        const d = new Date(item.update_time)
-        if (maxUpdate == null || d > maxUpdate) maxUpdate = d
+        const t = Date.parse(item.update_time)
+        // A malformed timestamp is treated like a missing one: exported, but
+        // it never becomes the watermark (so it can't crash formatApiDatetime).
+        if (!Number.isNaN(t) && (maxMs == null || t > maxMs)) maxMs = t
       }
     }
 
-    if (maxUpdate != null) {
-      manifest.watermarks[name] = formatApiDatetime(
-        new Date(maxUpdate.getTime() + 1000),
-      )
+    if (maxMs != null) {
+      const advanced = formatApiDatetime(new Date(maxMs))
+      const existing = manifest.watermarks[name]
+      // Never regress: a one-off --since backfill must not rewind the cursor.
+      manifest.watermarks[name] =
+        existing != null && Date.parse(existing) >= maxMs ? existing : advanced
     }
     manifest.counts[name] = count
     manifest.updated_at = new Date().toISOString()

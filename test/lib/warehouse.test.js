@@ -39,7 +39,7 @@ function mockAll(data = {}, cap = {}) {
 }
 
 function readManifest(dir) {
-  return JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'))
+  return JSON.parse(readFileSync(join(dir, 'warehouse-manifest.json'), 'utf8'))
 }
 function readNdjson(dir, name) {
   const file = join(dir, `${name}.ndjson`)
@@ -82,9 +82,7 @@ describe('runWarehouseSync', () => {
 
     const m = readManifest(dir)
     expect(m.watermarks.deals).toBe(
-      formatApiDatetime(
-        new Date(new Date('2026-06-09T00:00:00Z').getTime() + 1000),
-      ),
+      formatApiDatetime(new Date('2026-06-09T00:00:00Z')),
     )
     // an empty entity advances no watermark and writes no file
     expect(readNdjson(dir, 'persons')).toBeNull()
@@ -93,7 +91,7 @@ describe('runWarehouseSync', () => {
 
   it('incremental run: queries updated_since from the stored per-entity watermark', async () => {
     writeFileSync(
-      join(dir, 'manifest.json'),
+      join(dir, 'warehouse-manifest.json'),
       JSON.stringify({
         watermarks: { deals: '2026-06-09T00:00:01Z' },
         counts: {},
@@ -106,16 +104,14 @@ describe('runWarehouseSync', () => {
     expect(cap.deals.updated_since).toBe('2026-06-09T00:00:01Z')
     expect(readNdjson(dir, 'deals').map((r) => r.id)).toEqual([3])
     expect(readManifest(dir).watermarks.deals).toBe(
-      formatApiDatetime(
-        new Date(new Date('2026-06-10T00:00:00Z').getTime() + 1000),
-      ),
+      formatApiDatetime(new Date('2026-06-10T00:00:00Z')),
     )
   })
 
   it('appends across runs (true CDC log)', async () => {
     writeFileSync(join(dir, 'deals.ndjson'), JSON.stringify({ id: 1 }) + '\n')
     writeFileSync(
-      join(dir, 'manifest.json'),
+      join(dir, 'warehouse-manifest.json'),
       JSON.stringify({
         watermarks: { deals: '2026-06-01T00:00:00Z' },
         counts: {},
@@ -129,7 +125,7 @@ describe('runWarehouseSync', () => {
   it('--full truncates the files and ignores stored watermarks', async () => {
     writeFileSync(join(dir, 'deals.ndjson'), JSON.stringify({ id: 99 }) + '\n')
     writeFileSync(
-      join(dir, 'manifest.json'),
+      join(dir, 'warehouse-manifest.json'),
       JSON.stringify({
         watermarks: { deals: '2026-06-09T00:00:00Z' },
         counts: {},
@@ -163,7 +159,7 @@ describe('runWarehouseSync', () => {
   })
 
   it('treats a corrupt manifest as a fresh run', async () => {
-    writeFileSync(join(dir, 'manifest.json'), '{not json')
+    writeFileSync(join(dir, 'warehouse-manifest.json'), '{not json')
     const cap = {}
     mockAll({ deals: [{ id: 1, update_time: '2026-06-10T00:00:00Z' }] }, cap)
     await runWarehouseSync(client(), dir, {})
@@ -172,7 +168,7 @@ describe('runWarehouseSync', () => {
   })
 
   it('tolerates a manifest missing watermarks/counts keys', async () => {
-    writeFileSync(join(dir, 'manifest.json'), '{}')
+    writeFileSync(join(dir, 'warehouse-manifest.json'), '{}')
     const cap = {}
     mockAll({ deals: [{ id: 1, update_time: '2026-06-10T00:00:00Z' }] }, cap)
     await runWarehouseSync(client(), dir, {})
@@ -189,9 +185,7 @@ describe('runWarehouseSync', () => {
     })
     await runWarehouseSync(client(), dir, {})
     expect(readManifest(dir).watermarks.deals).toBe(
-      formatApiDatetime(
-        new Date(new Date('2026-06-09T00:00:00Z').getTime() + 1000),
-      ),
+      formatApiDatetime(new Date('2026-06-09T00:00:00Z')),
     )
   })
 
@@ -200,5 +194,63 @@ describe('runWarehouseSync', () => {
     await runWarehouseSync(client(), dir, {})
     expect(readNdjson(dir, 'deals').map((r) => r.id)).toEqual([1]) // still exported
     expect(readManifest(dir).watermarks.deals).toBeUndefined() // no advance
+  })
+
+  it('does not crash on a malformed update_time (treated like missing)', async () => {
+    mockAll({ deals: [{ id: 1, update_time: 'not-a-date' }] })
+    await runWarehouseSync(client(), dir, {}) // must not throw
+    expect(readNdjson(dir, 'deals').map((r) => r.id)).toEqual([1]) // exported
+    expect(readManifest(dir).watermarks.deals).toBeUndefined() // no advance
+  })
+
+  it('queries each entity with its OWN stored watermark (independent)', async () => {
+    writeFileSync(
+      join(dir, 'warehouse-manifest.json'),
+      JSON.stringify({
+        watermarks: {
+          deals: '2026-06-01T00:00:00Z',
+          persons: '2026-05-01T00:00:00Z',
+        },
+        counts: {},
+      }),
+    )
+    const cap = {}
+    mockAll({}, cap)
+    await runWarehouseSync(client(), dir, {})
+    expect(cap.deals.updated_since).toBe('2026-06-01T00:00:00Z')
+    expect(cap.persons.updated_since).toBe('2026-05-01T00:00:00Z')
+  })
+
+  it('a one-off --since does not rewind a higher stored watermark', async () => {
+    writeFileSync(
+      join(dir, 'warehouse-manifest.json'),
+      JSON.stringify({
+        watermarks: { deals: '2026-06-10T00:00:00Z' },
+        counts: {},
+      }),
+    )
+    // backfill window's newest record (06-08) is OLDER than the stored cursor
+    mockAll({ deals: [{ id: 1, update_time: '2026-06-08T00:00:00Z' }] })
+    await runWarehouseSync(client(), dir, { since: '2026-06-01T00:00:00Z' })
+    expect(readManifest(dir).watermarks.deals).toBe('2026-06-10T00:00:00Z') // unchanged
+  })
+
+  it('an interrupted --full clears the on-disk watermark before truncating', async () => {
+    writeFileSync(
+      join(dir, 'warehouse-manifest.json'),
+      JSON.stringify({
+        watermarks: { deals: '2026-06-09T00:00:00Z' },
+        counts: {},
+      }),
+    )
+    nock(API_BASE)
+      .get('/api/v2/deals')
+      .query(() => true)
+      .reply(500, { success: false })
+    await expect(
+      runWarehouseSync(client(), dir, { full: true }),
+    ).rejects.toBeTruthy()
+    // watermark was persisted-cleared up-front → next run full-re-pulls deals
+    expect(readManifest(dir).watermarks.deals).toBeUndefined()
   })
 })

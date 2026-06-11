@@ -98,6 +98,28 @@ describe('computeNewFindings', () => {
     expect(stale.item.id).toBeDefined()
   })
 
+  it('re-fires a finding that cleared and later reappeared (replace-not-union)', () => {
+    const finding = {
+      name: 'stale-deals',
+      severity: 'must',
+      title: 'Stale',
+      count: 1,
+      items: [{ id: 1, title: 'One' }],
+    }
+    const cleared = { ...finding, count: 0, items: [] }
+
+    // 1) first sighting → emitted, state seeds the key
+    const run1 = computeNewFindings([finding], {})
+    expect(run1.newFindings.map((f) => f.key)).toContain('1')
+    // 2) resolved → not emitted, state pruned to []
+    const run2 = computeNewFindings([cleared], run1.nextState)
+    expect(run2.newFindings).toHaveLength(0)
+    expect(run2.nextState['stale-deals']).toEqual([])
+    // 3) reappears → emitted AGAIN (state no longer remembers it)
+    const run3 = computeNewFindings([finding], run2.nextState)
+    expect(run3.newFindings.map((f) => f.key)).toContain('1')
+  })
+
   it('treats absent prior state as everything-new (first run)', () => {
     const { newFindings, nextState } = computeNewFindings(results)
     // 2 stale + 1 org (note excluded)

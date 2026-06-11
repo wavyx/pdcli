@@ -137,8 +137,9 @@ export default class WatchCommand extends BaseCommand {
     const armed = ARMED[flags.severity]
     const armedNew = newFindings.filter((f) => armed.includes(f.severity))
     if (armedNew.length > 0) {
+      const label = flags.severity === 'all' ? 'must/should' : flags.severity
       throw new CliError(
-        `${armedNew.length} new ${flags.severity}-severity finding${armedNew.length > 1 ? 's' : ''}`,
+        `${armedNew.length} new ${label}-severity finding${armedNew.length > 1 ? 's' : ''}`,
         { exitCode: 8 },
       )
     }
