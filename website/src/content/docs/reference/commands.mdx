@@ -5,7 +5,7 @@ description: Every pdcli command, flag, and example — generated from the CLI m
 
 {/* AUTO-GENERATED from the oclif manifest by scripts/gen-commands.mjs — do not edit by hand. */}
 
-All 142 commands in `pdcli` v0.15.0. Every command also
+All 145 commands in `pdcli` v0.16.0. Every command also
 accepts the [global flags](/pdcli/reference/config/) `--output`, `--jq`,
 `--fields`, `--profile`, `--limit`, `--no-color`, `--verbose`,
 `--no-retry`, and `--timeout`. Run `pdcli <command> --help` for the live version.
@@ -929,6 +929,27 @@ pdcli deal update 42 --status won
 pdcli deal update 42 --field "Deal Size=Large"
 ```
 
+### `pdcli deal upsert`
+
+Idempotent deal upsert: match by --by, then create or PATCH only the changed fields. Refuses (exit 65) if more than one record matches.
+
+```text
+pdcli deal upsert <value> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--by` &lt;value&gt; | Match field: title, or a searchable custom field |
+| `--field` &lt;value&gt; | Field to set as "Name=Value" (repeatable) |
+| `--body` &lt;value&gt; | Raw JSON body to merge |
+| `--dry-run` | Preview the action without writing |
+
+```bash
+pdcli deal upsert "Acme expansion" --by title --field "Stage=Won"
+pdcli deal upsert "D-42" --by "External ID" --body '{"value":5000}'
+pdcli deal upsert "Acme expansion" --by title --field "Stage=Won" --dry-run
+```
+
 ## pdcli field
 
 ### `pdcli field create`
@@ -1749,6 +1770,8 @@ pdcli org import <file> [flags]
 
 | Flag | Description |
 | --- | --- |
+| `--upsert` | Match each row on --match-on, then create or update |
+| `--match-on` &lt;value&gt; | Field to match rows on in --upsert mode (e.g. name) |
 | `--dry-run` | Validate every row without creating anything |
 | `-y, --yes` | Skip the confirmation prompt |
 
@@ -1872,6 +1895,27 @@ pdcli org update 7 --owner 9
 pdcli org update 7 --field "Tier=Gold"
 ```
 
+### `pdcli org upsert`
+
+Idempotent organization upsert: match by --by, then create or PATCH only the changed fields. Refuses (exit 65) if more than one record matches.
+
+```text
+pdcli org upsert <value> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--by` &lt;value&gt; | Match field: name, or a searchable custom field |
+| `--field` &lt;value&gt; | Field to set as "Name=Value" (repeatable) |
+| `--body` &lt;value&gt; | Raw JSON body to merge |
+| `--dry-run` | Preview the action without writing |
+
+```bash
+pdcli org upsert Acme --by name --field "Tier=Gold"
+pdcli org upsert "D-42" --by "External ID" --body '{"owner_id":42}'
+pdcli org upsert Acme --by name --field "Tier=Gold" --dry-run
+```
+
 ## pdcli person
 
 ### `pdcli person create`
@@ -1986,6 +2030,8 @@ pdcli person import <file> [flags]
 
 | Flag | Description |
 | --- | --- |
+| `--upsert` | Match each row on --match-on, then create or update |
+| `--match-on` &lt;value&gt; | Field to match rows on in --upsert mode (e.g. email) |
 | `--dry-run` | Validate every row without creating anything |
 | `-y, --yes` | Skip the confirmation prompt |
 
@@ -2058,6 +2104,27 @@ pdcli person update <id> [flags]
 pdcli person update 42 --name "New name"
 pdcli person update 42 --email new@acme.com
 pdcli person update 42 --field "Segment=Enterprise"
+```
+
+### `pdcli person upsert`
+
+Idempotent person upsert: match by --by, then create or PATCH only the changed fields. Refuses (exit 65) if more than one record matches.
+
+```text
+pdcli person upsert <value> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--by` &lt;value&gt; | Match field: email, name, phone, or a searchable custom field |
+| `--field` &lt;value&gt; | Field to set as "Name=Value" (repeatable) |
+| `--body` &lt;value&gt; | Raw JSON body to merge |
+| `--dry-run` | Preview the action without writing |
+
+```bash
+pdcli person upsert a@x.com --by email --field "Tier=Gold"
+pdcli person upsert "Jane Doe" --by name --body '{"owner_id":42}'
+pdcli person upsert a@x.com --by email --field "Tier=Gold" --dry-run
 ```
 
 ## pdcli pipeline

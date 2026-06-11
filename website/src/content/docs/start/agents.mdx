@@ -92,6 +92,13 @@ an exit-code-gated anomaly poller that fires only on findings new since the last
 (`pdcli watch || notify`), `sync warehouse` for an incremental NDJSON export with per-entity
 high-water marks, and `--updated-since` on the list commands for incremental polling.
 
+For writes that must be safe to retry, `person`/`org`/`deal upsert` match a record by `--by`
+(a built-in key or a searchable custom field) and then create or PATCH only what changed —
+and **refuse with exit 65** when more than one record matches, so an agent never silently
+writes the wrong one. `person import`/`org import --upsert --match-on <field>` apply the same
+match-or-create per CSV row, reporting created/updated/unchanged counts. Pair upsert with an
+external key (a custom field carrying your system's ID) for clean, repeatable sync.
+
 ## The host-locked `api` escape hatch
 
 When no dedicated command exists, call any endpoint directly. The request is

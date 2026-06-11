@@ -4,6 +4,36 @@ All notable changes to `pdcli` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/).
 
+## [0.16.0] - 2026-06-11
+
+### Added
+
+- Idempotent writes — match-or-create that never guesses:
+  - `person upsert`, `org upsert`, `deal upsert` — match a record by `--by`
+    (a built-in key — person email/name/phone, org name, deal title — or a
+    searchable custom field), then **create** it if absent or **PATCH only the
+    changed fields** if exactly one matches. More than one match **refuses with
+    exit 65** rather than writing the wrong record: search `exact_match` is not
+    a unique key, so every candidate is re-verified client-side before the
+    count decides. `--dry-run` previews the action; table prints a one-line
+    summary, `--output json` emits the full action result.
+  - `person import --upsert --match-on <field>` and the same on `org import` —
+    the CSV equivalent: each row is matched on its `--match-on` value, then
+    created or PATCHed. Per-row failures (ambiguous matches, empty match
+    values) are collected without aborting the batch and reported as
+    `created / updated / unchanged` counts; a batch whose failures are all
+    data-validation errors exits 65, otherwise 1. `--dry-run` looks up and
+    reports the counts without writing.
+
+### Changed
+
+- `diffBody` (upsert) compares emails/phones by their value set
+  (case-insensitive, ignoring the `primary`/`label` flags the API echoes) and
+  treats `label_ids` and multi-option custom fields order-insensitively, so
+  re-running an unchanged upsert issues no PATCH.
+- CSV import now rejects duplicate column headers (exit 65) instead of silently
+  keeping only the last cell.
+
 ## [0.15.0] - 2026-06-11
 
 ### Added
