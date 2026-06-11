@@ -5,7 +5,7 @@ description: Full command reference for the pdcli command-line interface.
 
 <!-- AUTO-GENERATED from the oclif manifest by scripts/gen-commands.mjs — do not edit by hand. -->
 
-Reference for `pdcli` v0.14.0 (140 commands). Every command also accepts the global flags `--output table|json|yaml|csv`, `--profile`, `--no-color`, `--verbose`, `--no-retry`, `--timeout`, and `--limit`.
+Reference for `pdcli` v0.15.0 (142 commands). Every command also accepts the global flags `--output table|json|yaml|csv`, `--profile`, `--no-color`, `--verbose`, `--no-retry`, `--timeout`, and `--limit`.
 
 ## Top-level
 
@@ -177,6 +177,27 @@ Examples:
 
 ```bash
 pdcli version
+```
+
+### `pdcli watch`
+
+Anomaly poller: run the hygiene checks and emit only findings that are NEW since the last run, advancing a per-profile state. Exits 8 when new findings arm the gate (default: must-severity) so cron can branch — `pdcli watch || notify`. --peek reads without advancing state.
+
+```
+pdcli watch [flags]
+```
+
+- `--checks <value>` — Comma-separated subset of checks (stale-deals, no-next-activity, past-close-date, missing-fields, ancient-deals, missing-close-time, duplicate-persons, uncontactable-persons, duplicate-orgs, overdue-activities, currency-missing)
+- `--severity <must|should|all>` — Which severities arm the exit-8 gate
+- `--peek` — Emit and gate without advancing the stored state
+
+Examples:
+
+```bash
+pdcli watch
+pdcli watch --checks stale-deals,past-close-date
+pdcli watch --severity all --output json
+pdcli watch --peek
 ```
 
 ## pdcli activity
@@ -2452,6 +2473,29 @@ Examples:
 ```bash
 pdcli stage list
 pdcli stage list --pipeline 1 --output json
+```
+
+## pdcli sync
+
+### `pdcli sync warehouse`
+
+Incremental NDJSON export for a data warehouse: appends only records changed since the last run, per-entity, with high-water marks in manifest.json. First run seeds a full export. NOTE: pull-based CDC sees creates/updates only — hard deletes are not captured; reconcile against a periodic full `backup`.
+
+```
+pdcli sync warehouse [flags]
+```
+
+- `--dir <value>` — Output directory for the NDJSON files + manifest
+- `--since <value>` — Override the start for all entities (RFC3339 or Nd/Nm)
+- `--full` — Ignore watermarks and rebuild from scratch (truncates files)
+- `-y, --yes` — Skip the --full truncation confirmation
+
+Examples:
+
+```bash
+pdcli sync warehouse --dir ./warehouse
+pdcli sync warehouse --dir ./warehouse --since 7d
+pdcli sync warehouse --dir ./warehouse --full
 ```
 
 ## pdcli task

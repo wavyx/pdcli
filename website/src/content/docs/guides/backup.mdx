@@ -122,3 +122,28 @@ and labels using each snapshot's own captured `*Fields.json` (still no network);
 `--raw` to keep the raw hashes. Resources present in only one snapshot are reported
 separately rather than shown as wholesale added/removed. `--output json` emits the full
 `{ summary, skipped, changes }` object for diffing in CI.
+
+## Incremental export: `sync warehouse`
+
+Where `backup` writes a full snapshot every run, `sync warehouse` appends only what changed
+since the last run — an **incremental NDJSON feed** for loading into a data warehouse:
+
+```bash
+pdcli sync warehouse --dir ./warehouse        # first run seeds a full export
+pdcli sync warehouse --dir ./warehouse        # later runs append only deltas
+pdcli sync warehouse --dir ./warehouse --full # rebuild from scratch
+```
+
+Each of the five incremental entities (deals, persons, organizations, activities, products)
+appends to `<entity>.ndjson` (one JSON object per line) and advances its **own** high-water
+mark in `manifest.json`. The watermark moves to the newest `update_time` seen **+ 1 second**
+(the API's `updated_since` is inclusive, so this avoids re-emitting the boundary record), and
+only after the append succeeds — an interrupted run replays rather than skips. `--since`
+overrides the start for every entity.
+
+:::caution[Hard deletes are not captured]
+Pull-based change capture sees creates and updates only. A record hard-deleted in Pipedrive
+simply stops appearing — the NDJSON log keeps its last-known row. Treat the output as an
+append log keyed by `(entity, id)` and dedupe / last-write-wins on load, and reconcile
+deletions periodically against a full `backup` key-set.
+:::

@@ -4,6 +4,30 @@ All notable changes to `pdcli` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/).
 
+## [0.15.0] - 2026-06-11
+
+### Added
+
+- Continuous automation primitives:
+  - `watch` — anomaly poller built on the hygiene checks: emits only the
+    findings that are **NEW since the last run** (a per-profile state),
+    and exits **8** when new findings arm the gate (default: must-severity)
+    so cron can branch — `pdcli watch || notify`. `--peek` reads without
+    advancing state; `--checks` narrows the checks; `--severity must|should|all`
+    arms the gate. A finding that clears and later re-trips fires again.
+  - `sync warehouse` — **incremental** NDJSON export for a data warehouse.
+    Appends only records changed since the last run, per entity, with
+    independent high-water marks in `manifest.json`; the first run seeds a
+    full export and `--full` rebuilds from scratch. `--since` overrides the
+    start. Pull-based CDC captures creates/updates only — hard deletes are
+    not surfaced (reconcile against a periodic full `backup`).
+
+### Changed
+
+- Hoisted the shared `--since` parser (`resolveSince`) into
+  `src/lib/period.js` so `changes` and `sync warehouse` share one
+  implementation. No behavior change.
+
 ## [0.14.0] - 2026-06-11
 
 ### Added
