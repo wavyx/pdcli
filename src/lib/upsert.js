@@ -3,6 +3,7 @@ import { eq } from './backup-diff.js'
 import { lookupByField } from './lookup.js'
 import { getFields } from './fields.js'
 import { buildWriteBody } from './input.js'
+import { bulkRun } from './bulk.js'
 
 /** Entity → v2 write path. */
 const WRITE_PATH = {
@@ -142,6 +143,62 @@ export async function upsertWithDefs({
   const defs = await getFields(client, entity)
   const body = buildWriteBody({ fields, rawBody, defs })
   return runUpsert({ client, entity, by, value, body, defs, dryRun })
+}
+
+/**
+ * Upsert a batch of prepared bodies — one per CSV row — each matched on the
+ * shared `matchOn` field using that row's own `value`. Runs sequentially
+ * through bulkRun's pacing; a per-row failure (empty match value, ambiguous
+ * match, or API error) is collected, never aborting the batch. The surviving
+ * results are tallied by action so the caller can report created/updated/
+ * unchanged counts.
+ *
+ * @param {object} options
+ * @param {{ get, post, patch }} options.client
+ * @param {'person'|'org'|'deal'} options.entity
+ * @param {string} options.matchOn the match field shared by every row
+ * @param {{ body: object, value: string }[]} options.rows
+ * @param {object[]} options.defs field definitions (for a custom match field)
+ * @param {boolean} [options.dryRun]
+ * @param {number} [options.gapMs] pacing gap forwarded to bulkRun
+ * @param {(done: number, total: number) => void} [options.onProgress]
+ * @returns {Promise<{ succeeded, failed, counts: { created: number,
+ *   updated: number, unchanged: number } }>}
+ */
+export async function bulkUpsertRows({
+  client,
+  entity,
+  matchOn,
+  rows,
+  defs = [],
+  dryRun = false,
+  gapMs,
+  onProgress,
+}) {
+  const summary = await bulkRun(
+    rows,
+    ({ body, value }) => {
+      if (value == null || value === '') {
+        throw new CliError(`empty "${matchOn}" value — cannot match a row`, {
+          exitCode: 65,
+        })
+      }
+      return runUpsert({
+        client,
+        entity,
+        by: matchOn,
+        value,
+        body,
+        defs,
+        dryRun,
+      })
+    },
+    { gapMs, onProgress },
+  )
+
+  const counts = { created: 0, updated: 0, unchanged: 0 }
+  for (const { result } of summary.succeeded) counts[result.action] += 1
+  return { ...summary, counts }
 }
 
 /** One-line human summary of an upsert result for table output. */

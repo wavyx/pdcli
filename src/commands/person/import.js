@@ -6,6 +6,7 @@ import BaseCommand from '../../base-command.js'
 import { parseCsv } from '../../lib/csv-parse.js'
 import { prepareImportBodies } from '../../lib/import.js'
 import { bulkRun } from '../../lib/bulk.js'
+import { bulkUpsertRows } from '../../lib/upsert.js'
 import { getFields } from '../../lib/fields.js'
 import { confirmAction } from '../../lib/confirm.js'
 import { CliError } from '../../lib/errors.js'
@@ -43,6 +44,13 @@ export default class PersonImportCommand extends BaseCommand {
 
   static flags = {
     ...BaseCommand.baseFlags,
+    upsert: Flags.boolean({
+      description: 'Match each row on --match-on, then create or update',
+      default: false,
+    }),
+    'match-on': Flags.string({
+      description: 'Field to match rows on in --upsert mode (e.g. email)',
+    }),
     'dry-run': Flags.boolean({
       description: 'Validate every row without creating anything',
       default: false,
@@ -62,13 +70,38 @@ export default class PersonImportCommand extends BaseCommand {
       throw new CliError('CSV must include a "name" column', { exitCode: 64 })
     }
 
+    let matchIdx
+    if (flags.upsert) {
+      if (!flags['match-on']) {
+        throw new CliError('--upsert requires --match-on <field>', {
+          exitCode: 64,
+        })
+      }
+      matchIdx = headers.findIndex(
+        (h) => h.toLowerCase() === flags['match-on'].toLowerCase(),
+      )
+      if (matchIdx < 0) {
+        throw new CliError(
+          `--match-on "${flags['match-on']}" is not a column in ${args.file}`,
+          { exitCode: 64 },
+        )
+      }
+    }
+
     const needsDefs = headers.some((h) => !(h.toLowerCase() in SPECIAL_COLUMNS))
+    const defs =
+      needsDefs || flags.upsert ? await getFields(this.apiClient, 'person') : []
     const bodies = prepareImportBodies({
       headers,
       rows,
       specialColumns: SPECIAL_COLUMNS,
-      defs: needsDefs ? await getFields(this.apiClient, 'person') : [],
+      defs,
     })
+
+    if (flags.upsert) {
+      await this.upsertRows({ args, flags, rows, bodies, matchIdx, defs })
+      return
+    }
 
     if (flags['dry-run']) {
       this.log(chalk.green(`${bodies.length} rows valid — nothing created`))
@@ -111,6 +144,58 @@ export default class PersonImportCommand extends BaseCommand {
       }
       throw new CliError(
         `${summary.failed.length} of ${bodies.length} rows failed`,
+        { exitCode: 1 },
+      )
+    }
+  }
+
+  /** Idempotent CSV path: match each row on --match-on, then create or PATCH. */
+  async upsertRows({ args, flags, rows, bodies, matchIdx, defs }) {
+    const matchOn = flags['match-on']
+    const items = bodies.map((body, i) => ({ body, value: rows[i][matchIdx] }))
+
+    if (!flags['dry-run']) {
+      const ok = await confirmAction(
+        `Upsert ${items.length} persons from ${args.file} (match on ${matchOn})?`,
+        flags.yes,
+      )
+      if (!ok) {
+        throw new CliError('Aborted', { exitCode: 1 })
+      }
+    }
+
+    const spinner = ora(`Upserting ${items.length} persons...`).start()
+    let summary
+    try {
+      summary = await bulkUpsertRows({
+        client: this.apiClient,
+        entity: 'person',
+        matchOn,
+        rows: items,
+        defs,
+        dryRun: flags['dry-run'],
+        onProgress: (done, total) => {
+          spinner.text = `Upserting persons ${done}/${total}`
+        },
+      })
+    } finally {
+      spinner.stop()
+    }
+
+    const { created, updated, unchanged } = summary.counts
+    const prefix = flags['dry-run'] ? '[dry-run] ' : ''
+    this.log(
+      chalk.green(
+        `${prefix}${created} created, ${updated} updated, ${unchanged} unchanged`,
+      ),
+    )
+
+    if (summary.failed.length > 0) {
+      for (const { item, error } of summary.failed) {
+        this.log(chalk.red(`  ✘ ${matchOn}="${item.value}": ${error}`))
+      }
+      throw new CliError(
+        `${summary.failed.length} of ${items.length} rows failed`,
         { exitCode: 1 },
       )
     }

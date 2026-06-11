@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { diffBody, runUpsert, summarizeUpsert } from '../../src/lib/upsert.js'
+import {
+  diffBody,
+  runUpsert,
+  summarizeUpsert,
+  bulkUpsertRows,
+} from '../../src/lib/upsert.js'
 
 describe('diffBody', () => {
   it('returns only the changed top-level fields', () => {
@@ -296,5 +301,121 @@ describe('summarizeUpsert', () => {
     expect(summarizeUpsert({ action: 'unchanged', id: 7 }, 'person')).toBe(
       'person #7 unchanged',
     )
+  })
+})
+
+/** Fake client whose search results vary by the search `term`. */
+function termFakeClient(byTerm = {}) {
+  const calls = { post: [], patch: [], terms: [] }
+  return {
+    calls,
+    async get(path, opts) {
+      calls.terms.push(opts.query.term)
+      const items = byTerm[opts.query.term] ?? []
+      return {
+        data: { items: items.map((item) => ({ item })) },
+        additional_data: { next_cursor: null },
+      }
+    },
+    async post(path, opts) {
+      calls.post.push({ path, body: opts.body })
+      return { data: { id: 99, ...opts.body } }
+    },
+    async patch(path, opts) {
+      calls.patch.push({ path, body: opts.body })
+      return { data: { ...opts.body } }
+    },
+  }
+}
+
+describe('bulkUpsertRows', () => {
+  it('creates new rows, patches existing ones, and tallies actions', async () => {
+    const client = termFakeClient({
+      'a@x.com': [{ id: 7, emails: [{ value: 'a@x.com' }], owner_id: 1 }],
+      'b@x.com': [],
+    })
+    const r = await bulkUpsertRows({
+      client,
+      entity: 'person',
+      matchOn: 'email',
+      rows: [
+        { body: { owner_id: 42 }, value: 'a@x.com' },
+        { body: { name: 'Bob' }, value: 'b@x.com' },
+      ],
+      defs: [],
+      gapMs: 0,
+    })
+    expect(r.counts).toEqual({ created: 1, updated: 1, unchanged: 0 })
+    expect(client.calls.patch).toHaveLength(1)
+    expect(client.calls.post).toHaveLength(1)
+  })
+
+  it('counts an already-matching row as unchanged', async () => {
+    const client = termFakeClient({
+      'a@x.com': [{ id: 7, emails: [{ value: 'a@x.com' }], owner_id: 1 }],
+    })
+    const r = await bulkUpsertRows({
+      client,
+      entity: 'person',
+      matchOn: 'email',
+      rows: [{ body: { owner_id: 1 }, value: 'a@x.com' }],
+      defs: [],
+      gapMs: 0,
+    })
+    expect(r.counts).toEqual({ created: 0, updated: 0, unchanged: 1 })
+    expect(client.calls.patch).toHaveLength(0)
+  })
+
+  it('collects an empty match value as a failed row', async () => {
+    const client = termFakeClient({})
+    const r = await bulkUpsertRows({
+      client,
+      entity: 'person',
+      matchOn: 'email',
+      rows: [{ body: {}, value: '' }],
+      defs: [],
+      gapMs: 0,
+    })
+    expect(r.failed).toHaveLength(1)
+    expect(r.failed[0].error).toMatch(/empty|match/i)
+    expect(client.calls.post).toHaveLength(0)
+  })
+
+  it('collects an ambiguous match as a failed row without aborting', async () => {
+    const client = termFakeClient({
+      dup: [
+        { id: 1, name: 'dup' },
+        { id: 2, name: 'dup' },
+      ],
+      'ok@x.com': [],
+    })
+    const r = await bulkUpsertRows({
+      client,
+      entity: 'org',
+      matchOn: 'name',
+      rows: [
+        { body: {}, value: 'dup' },
+        { body: { name: 'ok@x.com' }, value: 'ok@x.com' },
+      ],
+      defs: [],
+      gapMs: 0,
+    })
+    expect(r.failed).toHaveLength(1)
+    expect(r.counts.created).toBe(1)
+  })
+
+  it('looks up but never writes under dry-run', async () => {
+    const client = termFakeClient({ 'a@x.com': [] })
+    const r = await bulkUpsertRows({
+      client,
+      entity: 'person',
+      matchOn: 'email',
+      rows: [{ body: {}, value: 'a@x.com' }],
+      defs: [],
+      dryRun: true,
+      gapMs: 0,
+    })
+    expect(r.counts.created).toBe(1)
+    expect(client.calls.post).toHaveLength(0)
   })
 })
