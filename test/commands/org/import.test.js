@@ -184,3 +184,192 @@ describe('org import unnamed failures', () => {
     )
   })
 })
+
+describe('org import --upsert', () => {
+  beforeEach(() => {
+    nock.cleanAll()
+    clearFieldsCache()
+    mockConfirmAction.mockReset()
+    mockConfirmAction.mockResolvedValue(true)
+    mockReadFileSync.mockReset()
+    mockResolveCredentials.mockResolvedValue({
+      mode: 'token',
+      companyDomain: 'acme',
+      token: 'tok',
+      source: 'profile',
+    })
+  })
+
+  afterEach(() => nock.cleanAll())
+
+  function mockFields() {
+    mockApi()
+      .get('/api/v2/organizationFields')
+      .reply(200, { success: true, data: [] })
+  }
+
+  it('creates new rows and patches matched ones, reporting counts', async () => {
+    mockFields()
+    mockReadFileSync.mockReturnValue('name,owner_id\nAcme,42\nGlobex,5\n')
+    mockApi()
+      .get('/api/v2/organizations/search')
+      .query((q) => q.term === 'Acme')
+      .reply(200, {
+        success: true,
+        data: { items: [{ item: { id: 7 } }] },
+        additional_data: { next_cursor: null },
+      })
+    mockApi()
+      .get('/api/v2/organizations/7')
+      .reply(200, {
+        success: true,
+        data: { id: 7, name: 'Acme', owner_id: 1 },
+      })
+    mockApi()
+      .get('/api/v2/organizations/search')
+      .query((q) => q.term === 'Globex')
+      .reply(200, {
+        success: true,
+        data: { items: [] },
+        additional_data: { next_cursor: null },
+      })
+    mockApi()
+      .patch('/api/v2/organizations/7')
+      .reply(200, { success: true, data: { id: 7 } })
+    mockApi()
+      .post('/api/v2/organizations')
+      .reply(201, { success: true, data: { id: 8 } })
+
+    const stdout = await runCmd(OrgImportCommand, [
+      'o.csv',
+      '--upsert',
+      '--match-on',
+      'name',
+      '--yes',
+    ])
+    expect(stdout).toContain('1 created')
+    expect(stdout).toContain('1 updated')
+  })
+
+  it('requires --match-on', async () => {
+    mockReadFileSync.mockReturnValue('name\nAcme\n')
+    nock.disableNetConnect()
+    try {
+      await expect(
+        OrgImportCommand.run(['o.csv', '--upsert', '--yes']),
+      ).rejects.toThrow(/match-on/i)
+    } finally {
+      nock.enableNetConnect()
+    }
+  })
+
+  it('rejects a --match-on column that is not in the CSV', async () => {
+    mockReadFileSync.mockReturnValue('name\nAcme\n')
+    nock.disableNetConnect()
+    try {
+      await expect(
+        OrgImportCommand.run([
+          'o.csv',
+          '--upsert',
+          '--match-on',
+          'industry',
+          '--yes',
+        ]),
+      ).rejects.toThrow(/column/i)
+    } finally {
+      nock.enableNetConnect()
+    }
+  })
+
+  it('--dry-run looks up but writes nothing', async () => {
+    mockFields()
+    mockReadFileSync.mockReturnValue('name\nAcme\n')
+    mockApi()
+      .get('/api/v2/organizations/search')
+      .query((q) => q.term === 'Acme')
+      .reply(200, {
+        success: true,
+        data: { items: [] },
+        additional_data: { next_cursor: null },
+      })
+
+    const stdout = await runCmd(OrgImportCommand, [
+      'o.csv',
+      '--upsert',
+      '--match-on',
+      'name',
+      '--dry-run',
+    ])
+    expect(stdout).toContain('[dry-run]')
+    expect(stdout).toContain('1 created')
+    expect(mockConfirmAction).not.toHaveBeenCalled()
+  })
+
+  it('exits 65 when an ambiguous row is the only failure', async () => {
+    mockFields()
+    mockReadFileSync.mockReturnValue('name\ndup\n')
+    mockApi()
+      .get('/api/v2/organizations/search')
+      .query((q) => q.term === 'dup')
+      .reply(200, {
+        success: true,
+        data: { items: [{ item: { id: 1 } }, { item: { id: 2 } }] },
+        additional_data: { next_cursor: null },
+      })
+    mockApi()
+      .get('/api/v2/organizations/1')
+      .reply(200, { success: true, data: { id: 1, name: 'dup' } })
+    mockApi()
+      .get('/api/v2/organizations/2')
+      .reply(200, { success: true, data: { id: 2, name: 'dup' } })
+
+    const err = await OrgImportCommand.run([
+      'o.csv',
+      '--upsert',
+      '--match-on',
+      'name',
+      '--yes',
+    ]).catch((e) => e)
+    expect(err.message).toMatch(/1 of 1/i)
+    expect(err.exitCode ?? err.oclif?.exit).toBe(65)
+  })
+
+  it('exits 1 when a row fails on a non-validation API error', async () => {
+    mockFields()
+    mockReadFileSync.mockReturnValue('name,owner_id\nAcme,42\n')
+    mockApi()
+      .get('/api/v2/organizations/search')
+      .query((q) => q.term === 'Acme')
+      .reply(200, {
+        success: true,
+        data: { items: [{ item: { id: 7 } }] },
+        additional_data: { next_cursor: null },
+      })
+    mockApi()
+      .get('/api/v2/organizations/7')
+      .reply(200, { success: true, data: { id: 7, name: 'Acme', owner_id: 1 } })
+    mockApi()
+      .patch('/api/v2/organizations/7')
+      .reply(401, { success: false, error: 'unauthorized' })
+
+    const err = await OrgImportCommand.run([
+      'o.csv',
+      '--upsert',
+      '--match-on',
+      'name',
+      '--no-retry',
+      '--yes',
+    ]).catch((e) => e)
+    expect(err.message).toMatch(/1 of 1/i)
+    expect(err.exitCode ?? err.oclif?.exit).toBe(1)
+  })
+
+  it('aborts when the upsert confirmation is declined', async () => {
+    mockFields()
+    mockReadFileSync.mockReturnValue('name\nAcme\n')
+    mockConfirmAction.mockResolvedValue(false)
+    await expect(
+      OrgImportCommand.run(['o.csv', '--upsert', '--match-on', 'name']),
+    ).rejects.toThrow(/abort/i)
+  })
+})

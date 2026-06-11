@@ -207,3 +207,210 @@ describe('person import custom-field headers and unnamed failures', () => {
     )
   })
 })
+
+describe('person import --upsert', () => {
+  beforeEach(() => {
+    nock.cleanAll()
+    mockConfirmAction.mockReset()
+    mockConfirmAction.mockResolvedValue(true)
+    mockReadFileSync.mockReset()
+    mockResolveCredentials.mockResolvedValue({
+      mode: 'token',
+      companyDomain: 'acme',
+      token: 'tok',
+      source: 'profile',
+    })
+  })
+
+  afterEach(() => nock.cleanAll())
+
+  async function withEmptyFields(fn) {
+    const { clearFieldsCache } = await import('../../../src/lib/fields.js')
+    clearFieldsCache()
+    mockApi()
+      .get('/api/v2/personFields')
+      .reply(200, { success: true, data: [] })
+    return fn()
+  }
+
+  it('creates new rows and patches matched ones, reporting counts', async () => {
+    await withEmptyFields(async () => {
+      mockReadFileSync.mockReturnValue(
+        'name,email,owner_id\nJane,a@x.com,42\nBob,b@x.com,5\n',
+      )
+      mockApi()
+        .get('/api/v2/persons/search')
+        .query((q) => q.term === 'a@x.com')
+        .reply(200, {
+          success: true,
+          data: { items: [{ item: { id: 7 } }] },
+          additional_data: { next_cursor: null },
+        })
+      mockApi()
+        .get('/api/v2/persons/7')
+        .reply(200, {
+          success: true,
+          data: { id: 7, emails: [{ value: 'a@x.com' }], owner_id: 1 },
+        })
+      mockApi()
+        .get('/api/v2/persons/search')
+        .query((q) => q.term === 'b@x.com')
+        .reply(200, {
+          success: true,
+          data: { items: [] },
+          additional_data: { next_cursor: null },
+        })
+      mockApi()
+        .patch('/api/v2/persons/7')
+        .reply(200, { success: true, data: { id: 7 } })
+      mockApi()
+        .post('/api/v2/persons')
+        .reply(201, { success: true, data: { id: 8 } })
+
+      const stdout = await runCmd(PersonImportCommand, [
+        'p.csv',
+        '--upsert',
+        '--match-on',
+        'email',
+        '--yes',
+      ])
+      expect(stdout).toContain('1 created')
+      expect(stdout).toContain('1 updated')
+    })
+  })
+
+  it('requires --match-on', async () => {
+    mockReadFileSync.mockReturnValue('name,email\nJane,a@x.com\n')
+    nock.disableNetConnect()
+    try {
+      await expect(
+        PersonImportCommand.run(['p.csv', '--upsert', '--yes']),
+      ).rejects.toThrow(/match-on/i)
+    } finally {
+      nock.enableNetConnect()
+    }
+  })
+
+  it('rejects a --match-on column that is not in the CSV', async () => {
+    mockReadFileSync.mockReturnValue('name,email\nJane,a@x.com\n')
+    nock.disableNetConnect()
+    try {
+      await expect(
+        PersonImportCommand.run([
+          'p.csv',
+          '--upsert',
+          '--match-on',
+          'phone',
+          '--yes',
+        ]),
+      ).rejects.toThrow(/column/i)
+    } finally {
+      nock.enableNetConnect()
+    }
+  })
+
+  it('--dry-run looks up but writes nothing', async () => {
+    await withEmptyFields(async () => {
+      mockReadFileSync.mockReturnValue('name,email\nJane,a@x.com\n')
+      mockApi()
+        .get('/api/v2/persons/search')
+        .query((q) => q.term === 'a@x.com')
+        .reply(200, {
+          success: true,
+          data: { items: [] },
+          additional_data: { next_cursor: null },
+        })
+
+      const stdout = await runCmd(PersonImportCommand, [
+        'p.csv',
+        '--upsert',
+        '--match-on',
+        'email',
+        '--dry-run',
+      ])
+      expect(stdout).toContain('[dry-run]')
+      expect(stdout).toContain('1 created')
+      expect(mockConfirmAction).not.toHaveBeenCalled()
+    })
+  })
+
+  it('exits 65 when an ambiguous row is the only failure', async () => {
+    await withEmptyFields(async () => {
+      mockReadFileSync.mockReturnValue('name,email\nJane,dup@x.com\n')
+      mockApi()
+        .get('/api/v2/persons/search')
+        .query((q) => q.term === 'dup@x.com')
+        .reply(200, {
+          success: true,
+          data: { items: [{ item: { id: 1 } }, { item: { id: 2 } }] },
+          additional_data: { next_cursor: null },
+        })
+      mockApi()
+        .get('/api/v2/persons/1')
+        .reply(200, {
+          success: true,
+          data: { id: 1, emails: [{ value: 'dup@x.com' }] },
+        })
+      mockApi()
+        .get('/api/v2/persons/2')
+        .reply(200, {
+          success: true,
+          data: { id: 2, emails: [{ value: 'dup@x.com' }] },
+        })
+
+      const err = await PersonImportCommand.run([
+        'p.csv',
+        '--upsert',
+        '--match-on',
+        'email',
+        '--yes',
+      ]).catch((e) => e)
+      expect(err.message).toMatch(/1 of 1/i)
+      expect(err.exitCode ?? err.oclif?.exit).toBe(65)
+    })
+  })
+
+  it('exits 1 when a row fails on a non-validation API error', async () => {
+    await withEmptyFields(async () => {
+      mockReadFileSync.mockReturnValue('name,email,owner_id\nJane,a@x.com,42\n')
+      mockApi()
+        .get('/api/v2/persons/search')
+        .query((q) => q.term === 'a@x.com')
+        .reply(200, {
+          success: true,
+          data: { items: [{ item: { id: 7 } }] },
+          additional_data: { next_cursor: null },
+        })
+      mockApi()
+        .get('/api/v2/persons/7')
+        .reply(200, {
+          success: true,
+          data: { id: 7, emails: [{ value: 'a@x.com' }], owner_id: 1 },
+        })
+      mockApi()
+        .patch('/api/v2/persons/7')
+        .reply(401, { success: false, error: 'unauthorized' })
+
+      const err = await PersonImportCommand.run([
+        'p.csv',
+        '--upsert',
+        '--match-on',
+        'email',
+        '--no-retry',
+        '--yes',
+      ]).catch((e) => e)
+      expect(err.message).toMatch(/1 of 1/i)
+      expect(err.exitCode ?? err.oclif?.exit).toBe(1)
+    })
+  })
+
+  it('aborts when the upsert confirmation is declined', async () => {
+    await withEmptyFields(async () => {
+      mockReadFileSync.mockReturnValue('name,email\nJane,a@x.com\n')
+      mockConfirmAction.mockResolvedValue(false)
+      await expect(
+        PersonImportCommand.run(['p.csv', '--upsert', '--match-on', 'email']),
+      ).rejects.toThrow(/abort/i)
+    })
+  })
+})

@@ -23,6 +23,17 @@ export function prepareImportBodies({
     Object.entries(specialColumns).map(([k, v]) => [k.toLowerCase(), v]),
   )
 
+  // Duplicate headers silently overwrite each other (last cell wins) — reject
+  // them up front rather than losing a column's data without warning.
+  const seen = new Set()
+  for (const header of headers) {
+    const lower = header.toLowerCase()
+    if (seen.has(lower)) {
+      throw new CliError(`Duplicate CSV column "${header}"`, { exitCode: 65 })
+    }
+    seen.add(lower)
+  }
+
   return rows.map((row, index) => {
     const typed = {}
     const fields = []

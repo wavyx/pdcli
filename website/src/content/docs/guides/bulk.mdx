@@ -101,6 +101,8 @@ each deal succeeds or fails on its own.
 
 `person import <file>` and `org import <file>` bulk-create records from a CSV. The first
 row is the header; **a `name` column is required** (case-insensitive), or it's exit 64.
+Duplicate column headers are rejected (exit 65) rather than silently keeping only the last
+cell.
 
 Each header maps to a field. Recognized special columns build standard values directly;
 every other header is resolved through the entity's field definitions — by human name,
@@ -145,3 +147,77 @@ Imported 23/24 persons
   ✘ John Roe: Pipedrive API 422: email already in use
 Error: 1 of 24 rows failed
 ```
+
+## Idempotent upsert (match-or-create)
+
+`person upsert`, `org upsert`, and `deal upsert` make a write **safe to re-run**: match an
+existing record, then **create** it if absent or **PATCH only the fields that changed** if
+exactly one matches. Re-running the same command a second time is a no-op.
+
+```bash
+pdcli person upsert a@x.com --by email --field "Tier=Gold"
+pdcli deal upsert "Acme expansion" --by title --body '{"value":5000}'
+pdcli org upsert "D-42" --by "External ID" --field "Status=Active"
+```
+
+The match value is the positional argument; `--by` names the field to match on — a built-in
+key or a **searchable** custom field (`address`, `varchar`, `text`, `double`, `monetary`,
+`phone`):
+
+| Entity | Built-in `--by` keys  |
+| ------ | --------------------- |
+| person | `email`, `name`, `phone` |
+| org    | `name`                |
+| deal   | `title`               |
+
+### Why it refuses instead of guessing
+
+Pipedrive's `exact_match` search is **not** a unique-key lookup — it's case-insensitive, and
+a custom-field search scans every custom field at once. So pdcli re-verifies each candidate
+client-side and counts the survivors:
+
+- **0 matches** → create (the match value is injected into the new record).
+- **1 match** → PATCH only the differing fields; if nothing differs, it reports `unchanged`
+  and issues no write.
+- **more than 1** → **refuse with exit 65**, listing the colliding IDs. It never picks one.
+
+```text
+Error: --by email="a@x.com" matches 2 person records (ids: 7, 12) — refusing to guess. Narrow the match value.
+```
+
+`--dry-run` previews the action without writing. Table output prints a one-line summary
+(`update person #7 (2 fields)`); `--output json` emits the full action result
+(`action`, `id`, `changed`).
+
+### Upserting a whole CSV
+
+`person import` and `org import` gain `--upsert --match-on <field>`: each row is matched on
+its value in the `--match-on` column, then created or PATCHed like the single-record upsert.
+
+```bash
+pdcli person import contacts.csv --upsert --match-on email --dry-run   # preview the counts
+pdcli person import contacts.csv --upsert --match-on email             # apply
+```
+
+`--match-on` is required with `--upsert` and must name a column present in the CSV (else exit
+64). Rows are paced like the other bulk flows; per-row failures — an ambiguous match or an
+empty match cell — are collected without aborting the batch and summarized by action:
+
+```text
+18 created, 5 updated, 1 unchanged
+  ✘ email="dup@x.com": --by email="dup@x.com" matches 2 person records (ids: 7, 12) — refusing to guess. Narrow the match value.
+Error: 1 of 24 rows failed
+```
+
+When every failed row is a data-validation error (ambiguous match, empty match value) the
+command exits **65**; a mix that includes a transport/API error exits **1**.
+
+:::caution
+Matching relies on Pipedrive's **search index, which is eventually consistent** — a
+just-created record is not searchable for a short window. So upserting the _same_ match
+value twice in quick succession (the same key on two CSV rows, or an upsert moments after a
+create) can still create a duplicate, because the second lookup runs before the first write
+is indexed. For repeatable sync, key on a stable external ID and let the index settle
+between runs; a periodic `backup diff` or a search will surface any duplicates that slip
+through.
+:::

@@ -87,6 +87,18 @@ pdcli person import people.csv --dry-run               # CSV headers map to fiel
 pdcli person import people.csv                         # custom fields by name
 ```
 
+## Idempotent writes
+
+Match-or-create, safe to re-run. More than one match **refuses** (exit 65) —
+never guesses which record to write.
+
+```bash
+pdcli person upsert a@x.com --by email --field "Tier=Gold"   # create or PATCH only what changed
+pdcli deal upsert "Acme expansion" --by title --body '{"value":5000}'
+pdcli org upsert "D-42" --by "External ID" --field "Status=Active" --dry-run  # preview
+pdcli person import contacts.csv --upsert --match-on email   # CSV: per-row create-or-update
+```
+
 ## Analytics & housekeeping
 
 ```bash

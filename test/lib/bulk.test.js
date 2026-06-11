@@ -108,6 +108,18 @@ describe('bulkRun', () => {
     expect(result.failed).toEqual([{ item: 2, error: 'boom on 2' }])
   })
 
+  it('preserves a failed item exit code for the caller', async () => {
+    const { CliError } = await import('../../src/lib/errors.js')
+    const result = await bulkRun(
+      [1],
+      async () => {
+        throw new CliError('ambiguous', { exitCode: 65 })
+      },
+      { gapMs: 0 },
+    )
+    expect(result.failed[0].exitCode).toBe(65)
+  })
+
   it('reports progress per item', async () => {
     const progress = []
     await bulkRun([1, 2], async () => ({}), {
