@@ -38,6 +38,21 @@ export function keyOf(checkName, item) {
  * @returns {{ newFindings: { check: string, severity: string, key: string, item: object }[],
  *   nextState: Record<string, string[]> }}
  */
+/**
+ * Best human label for a finding across the heterogeneous check item shapes
+ * (deal/person have title/name, duplicate-persons has email, overdue-activities
+ * has owner_id, fuzzy org-dups have none). For table display only.
+ * @param {object} item
+ * @returns {string}
+ */
+export function summarize(item) {
+  if (item.title != null) return item.title
+  if (item.name != null) return item.name
+  if (item.email != null) return item.email
+  if (item.owner_id != null) return `owner ${item.owner_id}`
+  return '—'
+}
+
 export function computeNewFindings(checkResults, priorState = {}) {
   const nextState = { ...priorState }
   const newFindings = []

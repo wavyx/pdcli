@@ -1,5 +1,17 @@
 import { describe, it, expect } from 'vitest'
-import { keyOf, computeNewFindings } from '../../src/lib/watch.js'
+import { keyOf, computeNewFindings, summarize } from '../../src/lib/watch.js'
+
+describe('summarize', () => {
+  it('prefers title, then name, then email, then owner, then a dash', () => {
+    expect(summarize({ title: 'T', name: 'N' })).toBe('T')
+    expect(summarize({ name: 'N', email: 'e@x' })).toBe('N')
+    expect(summarize({ email: 'e@x' })).toBe('e@x')
+    expect(summarize({ owner_id: 9 })).toBe('owner 9')
+    expect(summarize({ kind: 'fuzzy', names: ['a', 'b'], ids: [1, 2] })).toBe(
+      '—',
+    )
+  })
+})
 
 describe('keyOf', () => {
   it('keys id-bearing checks by record id', () => {
