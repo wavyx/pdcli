@@ -87,8 +87,10 @@ performance, `digest` for the whole Monday packet in one fetch (`--format md|htm
 a cron → Slack/email artifact), `changes` for an incremental cross-entity change feed with a
 self-advancing watermark (no receiver to host, unlike webhooks), `deal context <id>` for a
 one-call denormalized, prompt-ready bundle (deal + person + org + activities + notes +
-products + flags), `backup diff` for a zero-API field-level diff of two snapshots, and
-`--updated-since` on the list commands for incremental polling.
+products + flags), `backup diff` for a zero-API field-level diff of two snapshots, `watch` for
+an exit-code-gated anomaly poller that fires only on findings new since the last run
+(`pdcli watch || notify`), `sync warehouse` for an incremental NDJSON export with per-entity
+high-water marks, and `--updated-since` on the list commands for incremental polling.
 
 ## The host-locked `api` escape hatch
 

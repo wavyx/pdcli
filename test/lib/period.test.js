@@ -3,6 +3,7 @@ import {
   parsePeriod,
   formatApiDatetime,
   closeMonthKey,
+  resolveSince,
 } from '../../src/lib/period.js'
 
 describe('parsePeriod', () => {
@@ -74,5 +75,29 @@ describe('closeMonthKey', () => {
     expect(closeMonthKey('0000-00-00')).toBeNull()
     expect(closeMonthKey('2026-00-01')).toBeNull()
     expect(closeMonthKey('2026-13-01')).toBeNull()
+  })
+})
+
+describe('resolveSince', () => {
+  const now = new Date('2026-06-10T00:00:00Z')
+
+  it('resolves a trailing period to an RFC3339 seconds string', () => {
+    expect(resolveSince('30d', now)).toBe('2026-05-11T00:00:00Z')
+  })
+
+  it('normalizes an absolute timestamp to seconds precision', () => {
+    expect(resolveSince('2026-05-01T12:34:56.789Z', now)).toBe(
+      '2026-05-01T12:34:56Z',
+    )
+  })
+
+  it('throws exit 64 on an unparseable value', () => {
+    let caught
+    try {
+      resolveSince('someday', now)
+    } catch (err) {
+      caught = err
+    }
+    expect(caught.exitCode).toBe(64)
   })
 })

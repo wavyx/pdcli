@@ -52,3 +52,23 @@ export function closeMonthKey(value) {
   if (year === '0000' || monthNum < 1 || monthNum > 12) return null
   return `${year}-${month}`
 }
+
+/**
+ * Resolve a `--since` value to an RFC3339 seconds string for `updated_since`.
+ * Accepts a trailing period (Nd/Nm) or an absolute timestamp; rejects garbage
+ * with a usage error (exit 64). Shared by `changes` and `sync warehouse`.
+ * @param {string} value
+ * @param {Date} [now]
+ * @returns {string}
+ */
+export function resolveSince(value, now = new Date()) {
+  if (/^\d+[dm]$/.test(value)) return formatApiDatetime(parsePeriod(value, now))
+  const ms = Date.parse(value)
+  if (Number.isNaN(ms)) {
+    throw new CliError(
+      `Invalid --since "${value}" — use an RFC3339 timestamp or Nd/Nm`,
+      { exitCode: 64 },
+    )
+  }
+  return formatApiDatetime(new Date(ms))
+}

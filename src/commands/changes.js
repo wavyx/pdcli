@@ -1,7 +1,7 @@
 import { Flags } from '@oclif/core'
 import BaseCommand from '../base-command.js'
 import { collectPages } from '../lib/pagination.js'
-import { parsePeriod, formatApiDatetime } from '../lib/period.js'
+import { formatApiDatetime, resolveSince } from '../lib/period.js'
 import { buildChangeFeed } from '../lib/changes.js'
 import {
   loadConfig,
@@ -19,22 +19,6 @@ const ENTITY_PATHS = {
   organizations: '/api/v2/organizations',
   activities: '/api/v2/activities',
   products: '/api/v2/products',
-}
-
-/**
- * Resolve a --since value to an RFC3339 `updated_since` string. Accepts a
- * trailing period (Nd/Nm) or an absolute timestamp; rejects garbage (exit 64).
- */
-function resolveSince(value, now) {
-  if (/^\d+[dm]$/.test(value)) return formatApiDatetime(parsePeriod(value, now))
-  const ms = Date.parse(value)
-  if (Number.isNaN(ms)) {
-    throw new CliError(
-      `Invalid --since "${value}" — use an RFC3339 timestamp or Nd/Nm`,
-      { exitCode: 64 },
-    )
-  }
-  return formatApiDatetime(new Date(ms))
 }
 
 export default class ChangesCommand extends BaseCommand {
