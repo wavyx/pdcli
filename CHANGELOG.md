@@ -4,6 +4,29 @@ All notable changes to `pdcli` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/).
 
+## [0.14.0] - 2026-06-11
+
+### Added
+
+- Agent & CI primitives — built for cron jobs and AI agents:
+  - `changes` — incremental change feed across deals, persons,
+    organizations, activities and products with a **self-advancing
+    per-profile watermark**: each run resumes where the last left off and
+    advances to the newest change, tagging every row `created` vs
+    `updated`. `--since <ts|Nd>` sets/overrides the start; `--peek` reads
+    without advancing. Turnkey for `*/5 * * * * pdcli changes | …`.
+  - `deal context <id>` — one-call denormalized bundle (deal + person +
+    org + activities + notes + products + participants) with custom
+    fields resolved to names and derived risk flags (missing contact,
+    stale, past close, no next activity). It does the joins v2's API
+    won't (there is no `related_objects`). `--no-activities/-notes/
+-products/-participants` trim the cost.
+  - `backup diff <A> <B>` — field-level diff between two backup snapshots,
+    computed entirely locally with **zero API calls**. Reports added /
+    removed / modified records and per-field changes, resolving custom
+    field names from each snapshot's own captured schema (`--raw` keeps
+    hash keys). `backup` is now a topic.
+
 ## [0.13.0] - 2026-06-10
 
 ### Added

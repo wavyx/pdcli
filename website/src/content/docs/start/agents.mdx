@@ -84,8 +84,11 @@ metrics (`metrics aging`/`slippage`/`conversion-matrix`) plus `audit stage-skips
 stage-skip compliance — all mined from per-deal changelogs — `metrics forecast` for a
 per-currency commit/best-case/weighted close-month forecast, `rep scorecard` for per-owner
 performance, `digest` for the whole Monday packet in one fetch (`--format md|html --out` for
-a cron → Slack/email artifact), and `--updated-since` on the list commands for incremental
-polling.
+a cron → Slack/email artifact), `changes` for an incremental cross-entity change feed with a
+self-advancing watermark (no receiver to host, unlike webhooks), `deal context <id>` for a
+one-call denormalized, prompt-ready bundle (deal + person + org + activities + notes +
+products + flags), `backup diff` for a zero-API field-level diff of two snapshots, and
+`--updated-since` on the list commands for incremental polling.
 
 ## The host-locked `api` escape hatch
 
