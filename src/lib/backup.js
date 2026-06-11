@@ -37,7 +37,7 @@ export const BACKUP_RESOURCES = [
 
 const MANIFEST = 'manifest.json'
 
-function readManifest(dir) {
+export function readManifest(dir) {
   const file = join(dir, MANIFEST)
   if (!existsSync(file)) return { completed: [], counts: {} }
   try {
@@ -45,6 +45,29 @@ function readManifest(dir) {
   } catch {
     return { completed: [], counts: {} }
   }
+}
+
+/**
+ * Load a backup directory entirely from disk — manifest plus every present
+ * `<resource>.json` — with ZERO API calls. The basis for `backup diff`.
+ * A missing resource file is simply absent from `resources`; a corrupt one is
+ * skipped (not fatal) so a partial/interrupted backup still loads.
+ * @param {string} dir
+ * @returns {{ manifest: object, resources: Record<string, object[]> }}
+ */
+export function loadBackup(dir) {
+  const manifest = readManifest(dir)
+  const resources = {}
+  for (const resource of BACKUP_RESOURCES) {
+    const file = join(dir, `${resource.name}.json`)
+    if (!existsSync(file)) continue
+    try {
+      resources[resource.name] = JSON.parse(readFileSync(file, 'utf8'))
+    } catch {
+      // Corrupt file → treat the resource as absent rather than crashing.
+    }
+  }
+  return { manifest, resources }
 }
 
 function writeManifest(dir, manifest) {
