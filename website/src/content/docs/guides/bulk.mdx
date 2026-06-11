@@ -211,3 +211,13 @@ Error: 1 of 24 rows failed
 
 When every failed row is a data-validation error (ambiguous match, empty match value) the
 command exits **65**; a mix that includes a transport/API error exits **1**.
+
+:::caution
+Matching relies on Pipedrive's **search index, which is eventually consistent** — a
+just-created record is not searchable for a short window. So upserting the _same_ match
+value twice in quick succession (the same key on two CSV rows, or an upsert moments after a
+create) can still create a duplicate, because the second lookup runs before the first write
+is indexed. For repeatable sync, key on a stable external ID and let the index settle
+between runs; a periodic `backup diff` or a search will surface any duplicates that slip
+through.
+:::
