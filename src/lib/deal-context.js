@@ -12,15 +12,17 @@ const STALE_DAYS = 14
  *   - staleOpen:        open and not updated in over 14 days
  *   - pastClose:        open and past its expected close date
  *   - noCloseDate:      open with no expected close date
- *   - noOpenActivities: no not-done activity in the bundle
+ *   - noOpenActivities: no not-done activity in the bundle — but `null` when the
+ *     activities slice was skipped (--no-activities), so an unfetched slice is
+ *     never mistaken for "no open activities"
  *   - activity/note/product/participant counts
  *
  * @param {{ deal: object, person?: object|null, org?: object|null,
  *   activities?: object[], notes?: object[], products?: object[],
  *   participants?: object[] }} parts
- * @param {{ now: Date }} options
+ * @param {{ now: Date, activitiesFetched?: boolean }} options
  */
-export function assembleContext(parts, { now }) {
+export function assembleContext(parts, { now, activitiesFetched = true }) {
   const {
     deal,
     person = null,
@@ -45,7 +47,9 @@ export function assembleContext(parts, { now }) {
       deal.expected_close_date != null &&
       deal.expected_close_date < today,
     noCloseDate: open && deal.expected_close_date == null,
-    noOpenActivities: !activities.some((a) => !a.done),
+    noOpenActivities: activitiesFetched
+      ? !activities.some((a) => !a.done)
+      : null,
     activityCount: activities.length,
     noteCount: notes.length,
     productCount: products.length,

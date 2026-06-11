@@ -153,7 +153,92 @@ describe('diffBackups', () => {
       oldValue: 'EMEA',
       newValue: 'APAC',
     })
-    expect(skipped).toContainEqual({ resource: 'dealFields', presentIn: 'A' })
+    // *Fields are resolution metadata — never reported as a diffed/skipped resource.
+    expect(skipped.map((s) => s.resource)).not.toContain('dealFields')
+  })
+
+  it('never diffs the *Fields schema files as data, even when they differ', () => {
+    const a = {
+      resources: {
+        deals: [{ id: 1, custom_fields: { abc: 5 } }],
+        dealFields: [
+          {
+            field_code: 'abc',
+            field_name: 'Region',
+            options: [{ id: 5, label: 'EMEA' }],
+          },
+        ],
+      },
+    }
+    const b = {
+      resources: {
+        deals: [{ id: 1, custom_fields: { abc: 5 } }],
+        // a brand-new field definition added to the schema
+        dealFields: [
+          {
+            field_code: 'abc',
+            field_name: 'Region',
+            options: [{ id: 5, label: 'EMEA' }],
+          },
+          { field_code: 'xyz', field_name: 'Tier', options: [] },
+        ],
+      },
+    }
+    const { changes, skipped } = diffBackups(a, b)
+    expect(changes.every((c) => c.resource !== 'dealFields')).toBe(true)
+    expect(skipped.map((s) => s.resource)).not.toContain('dealFields')
+  })
+
+  it('resolves each side with its OWN snapshot schema (surfaces an option relabel)', () => {
+    const a = {
+      resources: {
+        deals: [{ id: 1, custom_fields: { abc: 5 } }],
+        dealFields: [
+          {
+            field_code: 'abc',
+            field_name: 'Region',
+            options: [{ id: 5, label: 'EMEA' }],
+          },
+        ],
+      },
+    }
+    const b = {
+      resources: {
+        deals: [{ id: 1, custom_fields: { abc: 5 } }], // same stored id 5
+        dealFields: [
+          {
+            field_code: 'abc',
+            field_name: 'Region',
+            options: [{ id: 5, label: 'WEST' }],
+          },
+        ],
+      },
+    }
+    const { changes } = diffBackups(a, b)
+    // Old resolved with A's schema, new with B's → the human-visible value changed.
+    expect(
+      changes.find((c) => c.field === 'custom_fields.Region'),
+    ).toMatchObject({ oldValue: 'EMEA', newValue: 'WEST' })
+  })
+
+  it('reports an A-only resource and diffs array-valued fields', () => {
+    const a = {
+      resources: { deals: [{ id: 1, tags: [1, 2] }], leads: [{ id: 'x' }] },
+    }
+    const b = { resources: { deals: [{ id: 1, tags: [1, 3] }] } }
+    const { changes, skipped } = diffBackups(a, b)
+    expect(skipped).toContainEqual({ resource: 'leads', presentIn: 'A' })
+    expect(changes.find((c) => c.field === 'tags')).toMatchObject({
+      oldValue: [1, 2],
+      newValue: [1, 3],
+    })
+  })
+
+  it('treats reordered object keys as equal (no false-positive modified row)', () => {
+    const a = { resources: { deals: [{ id: 1, meta: { x: 1, y: 2 } }] } }
+    const b = { resources: { deals: [{ id: 1, meta: { y: 2, x: 1 } }] } }
+    const { changes } = diffBackups(a, b)
+    expect(changes.find((c) => c.field === 'meta')).toBeUndefined()
   })
 
   it('handles a missing field schema and an explicitly-undefined resource array', () => {

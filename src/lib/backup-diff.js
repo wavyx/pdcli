@@ -9,9 +9,29 @@ const FIELDS_FOR = {
   activities: 'activityFields',
 }
 
-/** Stable equality for scalar/array/object field values. */
+/**
+ * The *Fields.json files are resolution metadata, not diffable data — their
+ * records are keyed by `field_code`, not `id`, so they must NOT go through the
+ * id-based record diff (they'd all collapse to a single "undefined" bucket).
+ */
+const SCHEMA_RESOURCES = new Set(Object.values(FIELDS_FOR))
+
+/** Recursively sort object keys so equality is key-order insensitive. */
+function canon(value) {
+  if (Array.isArray(value)) return value.map(canon)
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((k) => [k, canon(value[k])]),
+    )
+  }
+  return value
+}
+
+/** Stable equality for scalar/array/object field values (key-order safe). */
 function eq(a, b) {
-  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
+  return JSON.stringify(canon(a ?? null)) === JSON.stringify(canon(b ?? null))
 }
 
 /**
@@ -74,6 +94,9 @@ export function diffBackups(a, b, { resolveNames = true } = {}) {
   const modifiedRecords = new Set()
 
   for (const resource of [...allNames].sort()) {
+    // Schema files are metadata for resolution, not id-keyed data — never diff.
+    if (SCHEMA_RESOURCES.has(resource)) continue
+
     const inA = resource in aResources
     const inB = resource in bResources
     if (!inA || !inB) {
@@ -81,13 +104,17 @@ export function diffBackups(a, b, { resolveNames = true } = {}) {
       continue
     }
 
-    // Resolver from the captured field schema (newer wins, older fallback).
+    // Each side is resolved with ITS OWN snapshot's schema (falling back to the
+    // other only when absent), so a field renamed/relabelled between A and B
+    // shows the right name on each side rather than the newer one for both.
     const fieldsName = FIELDS_FOR[resource]
-    const resolver =
+    const resolverFor = (own, other) =>
       resolveNames && fieldsName
-        ? makeResolver(bResources[fieldsName] ?? aResources[fieldsName] ?? [])
+        ? makeResolver(own[fieldsName] ?? other[fieldsName] ?? [])
         : null
-    const prep = (record) =>
+    const resolverA = resolverFor(aResources, bResources)
+    const resolverB = resolverFor(bResources, aResources)
+    const prep = (record, resolver) =>
       flatten(resolver ? resolver.resolveCustomFields(record) : record)
 
     const aById = indexById(aResources[resource])
@@ -105,8 +132,8 @@ export function diffBackups(a, b, { resolveNames = true } = {}) {
         changes.push(row(resource, id, 'added'))
         continue
       }
-      const fa = prep(aRec)
-      const fb = prep(bRec)
+      const fa = prep(aRec, resolverA)
+      const fb = prep(bRec, resolverB)
       const fields = new Set([...fa.keys(), ...fb.keys()])
       for (const field of fields) {
         const oldValue = fa.get(field)

@@ -90,6 +90,17 @@ describe('assembleContext', () => {
     expect(bundle.flags.noOpenActivities).toBe(true)
   })
 
+  it('reports noOpenActivities as null when the activities slice was skipped', () => {
+    const bundle = assembleContext(
+      {
+        deal: { id: 5, status: 'open', person_id: 1 },
+        activities: [], // skipped slices arrive empty…
+      },
+      { now: NOW, activitiesFetched: false }, // …but were not actually fetched
+    )
+    expect(bundle.flags.noOpenActivities).toBeNull()
+  })
+
   it('does not flag stale/past-close on a closed (won) deal', () => {
     const bundle = assembleContext(
       {

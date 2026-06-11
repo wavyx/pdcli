@@ -125,7 +125,7 @@ export default class DealContextCommand extends BaseCommand {
         products,
         participants,
       },
-      { now },
+      { now, activitiesFetched: !flags['no-activities'] },
     )
 
     if (this.resolveFormat() !== 'table') {

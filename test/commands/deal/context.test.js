@@ -15,6 +15,11 @@ const { default: DealContextCommand } =
 import { runCmd, mockApi } from '../../helpers.js'
 import { clearFieldsCache } from '../../../src/lib/fields.js'
 
+const DAY = 86_400_000
+const daysAgo = (n) => new Date(Date.now() - n * DAY).toISOString()
+const dateAhead = (n) =>
+  new Date(Date.now() + n * DAY).toISOString().slice(0, 10)
+
 const DEAL = {
   id: 42,
   title: 'Acme expansion',
@@ -23,8 +28,8 @@ const DEAL = {
   currency: 'USD',
   person_id: 10,
   org_id: 20,
-  update_time: '2026-06-09T00:00:00Z',
-  expected_close_date: '2026-07-01',
+  update_time: daysAgo(1), // fresh
+  expected_close_date: dateAhead(20), // future
   custom_fields: { hash1: 5 },
 }
 
@@ -111,6 +116,9 @@ describe('deal context', () => {
     expect(b.products).toHaveLength(1)
     expect(b.flags).toMatchObject({
       missingContact: false,
+      staleOpen: false,
+      pastClose: false,
+      noCloseDate: false,
       noOpenActivities: false,
       activityCount: 1,
       noteCount: 1,
@@ -169,6 +177,8 @@ describe('deal context', () => {
     expect(b.activities).toEqual([])
     expect(b.notes).toEqual([])
     expect(b.flags.activityCount).toBe(0)
+    // activities were not fetched → the flag must be null, not a false "no open"
+    expect(b.flags.noOpenActivities).toBeNull()
   })
 
   it('renders a sparse deal (no value/contact) and lists risk flags in the table', async () => {

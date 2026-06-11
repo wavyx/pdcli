@@ -110,8 +110,92 @@ describe('changes', () => {
     } finally {
       spy.mockRestore()
     }
-    expect(watermark).toBe(formatApiDatetime(new Date(DEALS[0].update_time)))
+    // Advances to ONE SECOND past the newest change (updated_since is inclusive).
+    const expected = formatApiDatetime(
+      new Date(new Date(DEALS[0].update_time).getTime() + 1000),
+    )
+    expect(watermark).toBe(expected)
     expect(writes.join('')).toMatch(/watermark/i)
+  })
+
+  it('does not replay the boundary record on the next run (watermark excludes it)', async () => {
+    mockEntities()
+    await runCmd(ChangesCommand, ['--since', '30d', '--output', 'json'])
+    const advanced = watermark
+    // Second run resumes from the stored watermark; capture what it queries.
+    let sentSince
+    mockApi()
+      .get('/api/v2/deals')
+      .query((q) => {
+        sentSince = q.updated_since
+        return true
+      })
+      .reply(200, { success: true, data: [] })
+    for (const name of ['persons', 'organizations', 'activities', 'products']) {
+      mockApi()
+        .get(`/api/v2/${name}`)
+        .query(() => true)
+        .reply(200, { success: true, data: [] })
+    }
+    await runCmd(ChangesCommand, ['--output', 'json'])
+    expect(sentSince).toBe(formatApiDatetime(new Date(advanced)))
+    // The query boundary is strictly AFTER the newest record already emitted.
+    expect(new Date(sentSince) > new Date(DEALS[0].update_time)).toBe(true)
+  })
+
+  it('does not advance the watermark if rendering fails (replay, not skip)', async () => {
+    watermark = '2026-01-01T00:00:00Z'
+    mockEntities()
+    // A malformed --jq makes outputResults throw before the advance runs.
+    await ChangesCommand.run(['--jq', '.[', '--output', 'json']).catch((e) => e)
+    expect(watermark).toBe('2026-01-01T00:00:00Z')
+  })
+
+  it('leaves the watermark unchanged when one entity errors', async () => {
+    watermark = '2026-01-01T00:00:00Z'
+    mockApi()
+      .get('/api/v2/deals')
+      .query(() => true)
+      .reply(200, { success: true, data: [] })
+    mockApi()
+      .get('/api/v2/persons')
+      .query(() => true)
+      .reply(200, { success: true, data: [] })
+    // organizations hard-fails (401 → no retry); the run must reject.
+    mockApi()
+      .get('/api/v2/organizations')
+      .query(() => true)
+      .reply(401, { success: false })
+    mockApi()
+      .get('/api/v2/activities')
+      .query(() => true)
+      .reply(200, { success: true, data: [] })
+    mockApi()
+      .get('/api/v2/products')
+      .query(() => true)
+      .reply(200, { success: true, data: [] })
+    const err = await ChangesCommand.run(['--no-retry']).catch((e) => e)
+    expect(err).toBeDefined()
+    expect(watermark).toBe('2026-01-01T00:00:00Z')
+  })
+
+  it('caps the feed with --limit and resumes from the cut', async () => {
+    mockEntities()
+    const stdout = await runCmd(ChangesCommand, [
+      '--since',
+      '30d',
+      '--limit',
+      '1',
+      '--output',
+      'json',
+    ])
+    const rows = JSON.parse(stdout)
+    expect(rows).toHaveLength(1)
+    // Watermark advances only past the single emitted (oldest) row, not the newest.
+    const firstEmitted = rows[0].updateTime
+    expect(watermark).toBe(
+      formatApiDatetime(new Date(new Date(firstEmitted).getTime() + 1000)),
+    )
   })
 
   it('does not advance the watermark with --peek', async () => {
@@ -188,6 +272,24 @@ describe('changes', () => {
     const stdout = await runCmd(ChangesCommand, ['--output', 'json'])
     expect(JSON.parse(stdout)).toEqual([])
     expect(watermark).toBe('2026-01-01T00:00:00Z')
+  })
+
+  it('advances correctly when two changes share the newest update_time', async () => {
+    const ts = daysAgo(1)
+    mockEntities({
+      deals: [
+        { id: 1, title: 'A', add_time: daysAgo(2), update_time: ts },
+        { id: 2, title: 'B', add_time: daysAgo(2), update_time: ts },
+      ],
+      persons: [],
+      organizations: [],
+      activities: [],
+      products: [],
+    })
+    await runCmd(ChangesCommand, ['--since', '30d', '--output', 'json'])
+    expect(watermark).toBe(
+      formatApiDatetime(new Date(new Date(ts).getTime() + 1000)),
+    )
   })
 
   it('renders a table with entity and change columns', async () => {

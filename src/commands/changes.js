@@ -41,7 +41,8 @@ export default class ChangesCommand extends BaseCommand {
   static description =
     'Incremental change feed across deals/persons/orgs/activities/products. ' +
     'Self-advancing watermark: each run resumes where the last left off and ' +
-    'advances it to the newest change (use --peek to read without advancing).'
+    'advances it past the newest change only after a successful emit, so a ' +
+    'failed run replays rather than skips (use --peek to read without advancing).'
 
   static examples = [
     '<%= config.bin %> changes --since 7d',
@@ -94,25 +95,39 @@ export default class ChangesCommand extends BaseCommand {
       }),
     )
 
-    const { rows, maxUpdate } = buildChangeFeed(byEntity, since)
+    const { rows: allRows } = buildChangeFeed(byEntity, since)
+    // --limit caps rows per run; the watermark resumes at the cut so the rest
+    // arrive next run (no skip). Rows are sorted ascending by update_time.
+    const rows = flags.limit != null ? allRows.slice(0, flags.limit) : allRows
 
-    if (!flags.peek && maxUpdate != null) {
-      const next = formatApiDatetime(maxUpdate)
-      setProfileConfig(activeProfile, WATERMARK_KEY, next)
-      process.stderr.write(`Advanced watermark → ${next}\n`)
+    // Emit BEFORE advancing: if rendering throws, the window replays next run
+    // rather than being silently skipped.
+    const columns =
+      this.resolveFormat() === 'table'
+        ? {
+            entity: { header: 'Entity' },
+            change: { header: 'Change' },
+            id: { header: 'ID' },
+            title: { header: 'Title', get: (r) => r.title ?? '' },
+            updateTime: { header: 'Updated', get: (r) => r.updateTime ?? '' },
+          }
+        : {}
+    await this.outputResults(rows, columns)
+
+    if (!flags.peek) {
+      // Advance to ONE SECOND past the newest EMITTED change. updated_since is
+      // inclusive (>=), so advancing to the exact max would re-emit the
+      // boundary record every run; +1s (v2 update_time is seconds) excludes it.
+      const emittedMax = rows.reduce((max, r) => {
+        if (r.updateTime == null) return max
+        const d = new Date(r.updateTime)
+        return max == null || d > max ? d : max
+      }, null)
+      if (emittedMax != null) {
+        const next = formatApiDatetime(new Date(emittedMax.getTime() + 1000))
+        setProfileConfig(activeProfile, WATERMARK_KEY, next)
+        process.stderr.write(`Advanced watermark → ${next}\n`)
+      }
     }
-
-    if (this.resolveFormat() !== 'table') {
-      await this.outputResults(rows, {})
-      return
-    }
-
-    await this.outputResults(rows, {
-      entity: { header: 'Entity' },
-      change: { header: 'Change' },
-      id: { header: 'ID' },
-      title: { header: 'Title', get: (r) => r.title ?? '' },
-      updateTime: { header: 'Updated', get: (r) => r.updateTime ?? '' },
-    })
   }
 }
