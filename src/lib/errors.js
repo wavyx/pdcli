@@ -28,8 +28,9 @@ export class RateLimitError extends CliError {
 }
 
 export class ServiceUnavailableError extends CliError {
-  constructor() {
-    super('Pipedrive API is unavailable', { exitCode: 69 })
+  /** @param {string} [message] @param {{cause?: Error}} [options] */
+  constructor(message = 'Pipedrive API is unavailable', { cause } = {}) {
+    super(message, { exitCode: 69, cause })
   }
 }
 

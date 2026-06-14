@@ -137,10 +137,26 @@ export async function refreshAccessToken({
   clientSecret,
 }) {
   debug('refreshing access token')
-  return tokenRequest(
-    { grant_type: 'refresh_token', refresh_token: refreshToken },
-    { clientId, clientSecret },
-  )
+  try {
+    return await tokenRequest(
+      { grant_type: 'refresh_token', refresh_token: refreshToken },
+      { clientId, clientSecret },
+    )
+  } catch (err) {
+    // A rejected refresh (expired/revoked refresh token → 400 invalid_grant,
+    // or 401 invalid_client) is an auth problem, not bad data — surface it as
+    // 77 with re-auth guidance so an agent keyed to 77 re-authenticates.
+    if (
+      err instanceof ApiError &&
+      (err.statusCode === 400 || err.statusCode === 401)
+    ) {
+      throw new CliError(
+        `OAuth token refresh failed (${err.message}). Run: pdcli auth login`,
+        { exitCode: 77, cause: err },
+      )
+    }
+    throw err
+  }
 }
 
 async function tokenRequest(params, { clientId, clientSecret }) {

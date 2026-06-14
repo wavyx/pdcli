@@ -105,9 +105,9 @@ describe('lead convert', () => {
       })
 
     LeadConvertCommand.sleepFn = vi.fn().mockResolvedValue(undefined)
-    await expect(LeadConvertCommand.run([LEAD, '--wait'])).rejects.toThrow(
-      /failed/i,
-    )
+    const err = await LeadConvertCommand.run([LEAD, '--wait']).catch((e) => e)
+    expect(err.message).toMatch(/failed/i)
+    expect(err.exitCode ?? err.oclif?.exit).toBe(65)
   })
 
   it('--wait throws when the conversion is rejected', async () => {
@@ -121,9 +121,9 @@ describe('lead convert', () => {
       })
 
     LeadConvertCommand.sleepFn = vi.fn().mockResolvedValue(undefined)
-    await expect(LeadConvertCommand.run([LEAD, '--wait'])).rejects.toThrow(
-      /reject/i,
-    )
+    const err = await LeadConvertCommand.run([LEAD, '--wait']).catch((e) => e)
+    expect(err.message).toMatch(/reject/i)
+    expect(err.exitCode ?? err.oclif?.exit).toBe(65)
   })
 
   it('--wait times out after --timeout-secs without a terminal status', async () => {

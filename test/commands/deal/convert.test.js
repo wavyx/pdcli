@@ -128,9 +128,12 @@ describe('deal convert', () => {
       })
 
     DealConvertCommand.sleepFn = vi.fn().mockResolvedValue(undefined)
-    await expect(
-      DealConvertCommand.run(['42', '--yes', '--wait']),
-    ).rejects.toThrow(/failed/i)
+    const err = await DealConvertCommand.run(['42', '--yes', '--wait']).catch(
+      (e) => e,
+    )
+    expect(err.message).toMatch(/failed/i)
+    // A server-rejected conversion is bad data (65), NOT an internal bug (70).
+    expect(err.exitCode ?? err.oclif?.exit).toBe(65)
   })
 
   it('--wait throws when rejected', async () => {
@@ -145,9 +148,11 @@ describe('deal convert', () => {
       })
 
     DealConvertCommand.sleepFn = vi.fn().mockResolvedValue(undefined)
-    await expect(
-      DealConvertCommand.run(['42', '--yes', '--wait']),
-    ).rejects.toThrow(/reject/i)
+    const err = await DealConvertCommand.run(['42', '--yes', '--wait']).catch(
+      (e) => e,
+    )
+    expect(err.message).toMatch(/reject/i)
+    expect(err.exitCode ?? err.oclif?.exit).toBe(65)
   })
 
   it('--wait times out after --timeout-secs without a terminal status', async () => {

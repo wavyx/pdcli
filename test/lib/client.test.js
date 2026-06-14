@@ -261,7 +261,7 @@ describe('createClient', () => {
       expect(scope.isDone()).toBe(true)
     }, 30_000)
 
-    it('throws ServiceUnavailableError when 429 retries exhaust the loop', async () => {
+    it('throws RateLimitError (75) when 429 retries exhaust the loop', async () => {
       const retryClient = createClient({
         companyDomain: 'acme',
         token: 'test-token',
@@ -278,9 +278,84 @@ describe('createClient', () => {
         await retryClient.get('/api/v2/throttled')
         expect.unreachable('should have thrown')
       } catch (err) {
-        expect(err.message).toBe('Pipedrive API is unavailable')
-        expect(err.exitCode).toBe(69)
+        // The API answered (it throttled us) — that is rate-limited (75),
+        // not service-unavailable (69). A sleep-and-retry script keys on 75.
+        expect(err).toBeInstanceOf(RateLimitError)
+        expect(err.exitCode).toBe(75)
+        expect(err.retryAfter).toBe(0)
       }
+      expect(scope.isDone()).toBe(true)
+    })
+
+    it('throws ServiceUnavailableError (69) when 5xx retries exhaust (not 429)', async () => {
+      const retryClient = createClient({
+        companyDomain: 'acme',
+        token: 'test-token',
+        retry: true,
+        timeout: 5000,
+      })
+
+      // A 5xx final attempt already throws ApiError(69) inline; this guards the
+      // loop fall-through so it never misclassifies as rate-limited.
+      const scope = nock(API_BASE)
+        .get('/api/v2/down')
+        .times(3)
+        .reply(503, { success: false, error: 'Service Unavailable' })
+
+      const err = await retryClient.get('/api/v2/down').catch((e) => e)
+      expect(err.exitCode).toBe(69)
+      expect(scope.isDone()).toBe(true)
+    }, 30_000)
+  })
+
+  describe('network / transport failures', () => {
+    it('maps a connection failure to ServiceUnavailableError (69), not 70', async () => {
+      nock(API_BASE)
+        .get('/api/v2/unreachable')
+        .replyWithError(
+          Object.assign(new Error('connect ECONNREFUSED'), {
+            code: 'ECONNREFUSED',
+          }),
+        )
+
+      const err = await client.get('/api/v2/unreachable').catch((e) => e)
+      // No exitCode/oclif on a raw fetch reject would default to 70 (internal
+      // bug). Network unreachability is 69 — the documented contract.
+      expect(err.exitCode).toBe(69)
+      expect(err.message).toMatch(/acme\.pipedrive\.com/)
+    })
+
+    it('retries a transient connection failure, then succeeds', async () => {
+      const retryClient = createClient({
+        companyDomain: 'acme',
+        token: 'test-token',
+        retry: true,
+        timeout: 5000,
+      })
+
+      const scope = nock(API_BASE)
+        .get('/api/v2/blip')
+        .replyWithError(
+          Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }),
+        )
+        .get('/api/v2/blip')
+        .reply(200, { success: true, data: { ok: true } })
+
+      const result = await retryClient.get('/api/v2/blip')
+      expect(result.data).toEqual({ ok: true })
+      expect(scope.isDone()).toBe(true)
+    }, 30_000)
+
+    it('refuses to follow a cross-host redirect (never re-sends the token)', async () => {
+      // Default fetch would follow a 30x and re-send x-api-token to the new
+      // host. We must refuse rather than leak the token off the locked domain.
+      const scope = nock(API_BASE)
+        .get('/api/v2/redirect')
+        .reply(302, '', { Location: 'https://evil.example.com/steal' })
+
+      const err = await client.get('/api/v2/redirect').catch((e) => e)
+      expect(err.exitCode).toBe(78)
+      expect(err.message).toMatch(/redirect/i)
       expect(scope.isDone()).toBe(true)
     })
   })

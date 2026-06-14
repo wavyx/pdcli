@@ -92,8 +92,10 @@ export default class DealConvertCommand extends BaseCommand {
         return
       }
       if (state === 'failed' || state === 'rejected') {
+        // A server-side conversion rejection is a bad-data outcome (65), not an
+        // internal pdcli bug — exit 70 is reserved for genuine CLI defects.
         throw new CliError(`Conversion ${state} for deal ${args.id}`, {
-          exitCode: 70,
+          exitCode: 65,
         })
       }
       if (elapsed + POLL_INTERVAL_MS > timeoutMs) {
