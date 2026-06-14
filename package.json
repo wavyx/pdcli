@@ -74,6 +74,36 @@
       "field": {
         "description": "Custom-field management: discovery, name/key resolution, create/update/delete"
       },
+      "file": {
+        "description": "Files (list, get, upload, download, remote-link, update, delete)"
+      },
+      "filter": {
+        "description": "Filters (list, get, delete)"
+      },
+      "goal": {
+        "description": "Goals (list)"
+      },
+      "lead": {
+        "description": "Leads (list, get, create, update, convert, delete) and labels"
+      },
+      "note": {
+        "description": "Notes (list, get, create, update, delete) and comments"
+      },
+      "pipeline": {
+        "description": "Pipelines (list, get, health)"
+      },
+      "product": {
+        "description": "Products (list, get, create, update, delete)"
+      },
+      "project": {
+        "description": "Projects (list, get, create, update, delete)"
+      },
+      "stage": {
+        "description": "Pipeline stages (list, get)"
+      },
+      "webhook": {
+        "description": "Webhooks (list, create, delete)"
+      },
       "metrics": {
         "description": "Sales metrics and KPIs"
       },
@@ -151,8 +181,7 @@
     "js-yaml": "^4.1.1",
     "node-jq": "^6.3.1",
     "open": "^11.0.0",
-    "ora": "9.4.0",
-    "undici": "8.3.0"
+    "ora": "9.4.0"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
@@ -167,7 +196,7 @@
   },
   "scripts": {
     "build": "oclif manifest",
-    "docs:commands": "node scripts/gen-commands.mjs",
+    "docs:commands": "npm run build && node scripts/gen-commands.mjs",
     "docs:demo": "node scripts/gen-demo.mjs",
     "lint": "eslint . && prettier --check .",
     "lint:fix": "eslint --fix . && prettier --write .",

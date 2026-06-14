@@ -12,7 +12,14 @@ const schema = {
 let _conf
 
 export function getConf() {
-  _conf ??= new Conf({ projectName: 'pdcli', schema })
+  // PDCLI_CONFIG_DIR overrides the config directory (used to isolate the store
+  // in tests/CI/sandboxes so a run never touches the user's real profiles);
+  // undefined falls back to conf's default OS config path.
+  _conf ??= new Conf({
+    projectName: 'pdcli',
+    schema,
+    cwd: process.env.PDCLI_CONFIG_DIR,
+  })
   return _conf
 }
 
