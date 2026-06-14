@@ -257,6 +257,40 @@ describe('changes', () => {
     expect(rows[0].id).toBe(1)
   })
 
+  it('does not warn when truncation lands on null-update_time rows', async () => {
+    const T = '2026-06-10T12:00:00Z'
+    mockEntities({
+      deals: [
+        { id: 1, title: 'a', add_time: T, update_time: T },
+        { id: 2, title: 'b', add_time: T }, // null update_time → sorts last
+        { id: 3, title: 'c', add_time: T }, // null update_time → sorts last
+      ],
+      persons: [],
+      organizations: [],
+      activities: [],
+      products: [],
+    })
+
+    const writes = []
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((c) => {
+      writes.push(String(c))
+      return true
+    })
+    const stdout = await runCmd(ChangesCommand, [
+      '--since',
+      '30d',
+      '--limit',
+      '2',
+      '--output',
+      'json',
+    ])
+    spy.mockRestore()
+    expect(JSON.parse(stdout)).toHaveLength(2)
+    // The cut row has no update_time (can't be resumed by updated_since); the
+    // "single second" warning would be misleading, so it must not fire.
+    expect(writes.join('')).not.toMatch(/splits a single/i)
+  })
+
   it('warns (does not silently skip) when one second exceeds --limit', async () => {
     const T = '2026-06-10T12:00:00Z'
     mockEntities({

@@ -246,6 +246,44 @@ describe('runUpsert', () => {
     expect(client.calls.patch[0].body).toEqual({ owner_id: 42 })
   })
 
+  it('writes a multi-value email body in full when matching by email (no over-strip)', async () => {
+    // A raw body that supplies more than the single match value is an explicit
+    // full set — it must be written, not silently dropped by the strip.
+    const client = fakeClient({
+      items: [{ id: 7, emails: [{ value: 'a@x.com' }] }],
+    })
+    const r = await runUpsert({
+      client,
+      entity: 'person',
+      by: 'email',
+      value: 'a@x.com',
+      body: {
+        emails: [{ value: 'a@x.com', primary: true }, { value: 'b@x.com' }],
+      },
+    })
+    expect(r).toMatchObject({ action: 'updated', id: 7 })
+    expect(client.calls.patch[0].body).toEqual({
+      emails: [{ value: 'a@x.com', primary: true }, { value: 'b@x.com' }],
+    })
+  })
+
+  it('does not strip a single email entry that is not the match value', async () => {
+    // A malformed/value-less single entry isn't the injected match value, so it
+    // is left for diffBody rather than stripped as identity.
+    const client = fakeClient({
+      items: [{ id: 7, emails: [{ value: 'a@x.com' }] }],
+    })
+    const r = await runUpsert({
+      client,
+      entity: 'person',
+      by: 'email',
+      value: 'a@x.com',
+      body: { emails: [null] },
+    })
+    expect(r).toMatchObject({ action: 'updated', id: 7 })
+    expect(client.calls.patch[0].body).toHaveProperty('emails')
+  })
+
   it('excludes a custom match field from the update body', async () => {
     const defs = [
       { field_name: 'External ID', field_code: 'ext', field_type: 'varchar' },

@@ -55,21 +55,29 @@ function injectMatch(body, entity, field, value, defs) {
 }
 
 /**
- * Remove the match (identity) field from an UPDATE body. The matched record
- * already carries `value` (that's how we found it), so re-writing it is never
- * the intent — and for emails/phones it would narrow the set to just the match
- * value and silently delete the record's other entries (the v0.18 CRITICAL).
+ * Keep the match (identity) field from narrowing the record on UPDATE. For
+ * emails/phones the CSV path injects a single-element array holding just the
+ * match value; diffBody compares value-SETS, so {match} vs the record's
+ * {match, other} would emit [match] and PATCH `other` away (the v0.18 CRITICAL).
+ * Drop only that auto-injected single value. A multi-entry body is an explicit
+ * full set the caller wants written — leave it for diffBody. Scalar (name/title)
+ * and custom-field matches need no handling here: diffBody already drops them
+ * when equal and emits a genuine rename when not.
  */
-function stripMatchField(body, entity, field, defs) {
+function stripMatchField(body, entity, field, value, defs) {
   const t = matchFieldTarget(entity, field, defs)
-  const out = { ...body }
-  if (t.root) {
+  if (t.root !== 'emails' && t.root !== 'phones') return body
+  const arr = body[t.root]
+  if (
+    Array.isArray(arr) &&
+    arr.length === 1 &&
+    String(arr[0]?.value ?? '').toLowerCase() === String(value).toLowerCase()
+  ) {
+    const out = { ...body }
     delete out[t.root]
-  } else if (t.custom && out.custom_fields) {
-    out.custom_fields = { ...out.custom_fields }
-    delete out.custom_fields[t.custom]
+    return out
   }
-  return out
+  return body
 }
 
 /** True if every element of an array is a primitive (or null). */
@@ -177,9 +185,9 @@ export async function runUpsert({
     return { action: 'created', id: res.data?.id, record: res.data }
   }
 
-  // unique → diff-before-PATCH (excluding the identity field we matched on)
+  // unique → diff-before-PATCH (don't let the matched email/phone narrow the set)
   const changed = diffBody(
-    stripMatchField(body, entity, by, defs),
+    stripMatchField(body, entity, by, value, defs),
     match.record,
   )
   if (Object.keys(changed).length === 0) {

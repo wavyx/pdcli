@@ -12,8 +12,9 @@ import { CliError } from '../lib/errors.js'
 
 const WATERMARK_KEY = 'changes_watermark'
 
-/** Whole-second bucket of an update_time (v2 timestamps are seconds-precision);
- *  null/missing sorts before everything so it's never treated as a boundary. */
+/** Whole-second bucket of an update_time (v2 timestamps are seconds-precision).
+ *  A missing timestamp returns -Infinity; the truncation logic guards against
+ *  treating that as a real cut second (such rows can't be resumed anyway). */
 function secondOf(updateTime) {
   if (updateTime == null) return -Infinity
   return Math.floor(new Date(updateTime).getTime() / 1000)
@@ -100,9 +101,14 @@ export default class ChangesCommand extends BaseCommand {
     const cutSecond = truncated
       ? secondOf(rows[rows.length - 1].updateTime)
       : null
-    // Only a problem when a DROPPED row shares the cut row's second; if the next
-    // dropped row is in a later second, the +1s advance is already skip-free.
-    if (truncated && secondOf(allRows[rows.length].updateTime) === cutSecond) {
+    // Only a problem when a DROPPED row shares the cut row's REAL second; if the
+    // next dropped row is in a later second the +1s advance is already skip-free,
+    // and a null cut second (-Infinity) can't be resumed by updated_since at all.
+    if (
+      truncated &&
+      cutSecond !== -Infinity &&
+      secondOf(allRows[rows.length].updateTime) === cutSecond
+    ) {
       const trimmed = rows.filter((r) => secondOf(r.updateTime) < cutSecond)
       if (trimmed.length > 0) {
         rows = trimmed

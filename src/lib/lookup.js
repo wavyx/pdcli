@@ -119,7 +119,7 @@ export async function lookupByField({
     if (!SEARCHABLE_TYPES.has(def.field_type)) {
       throw new CliError(
         `Field "${field}" (${def.field_type}) is not searchable — --by needs a ` +
-          `built-in key or a searchable custom field (text/number/phone/address)`,
+          `built-in key or a searchable custom field (text/number/phone)`,
         { exitCode: 64 },
       )
     }
