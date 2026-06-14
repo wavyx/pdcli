@@ -203,6 +203,89 @@ describe('runUpsert', () => {
     expect(err.message).toMatch(/7.*8|8.*7/)
   })
 
+  it("never narrows the matched email set on update — keeps the record's other emails", async () => {
+    // CRITICAL: matching by email and re-asserting only the match email must
+    // not PATCH emails:[a] over the record's [a,b] and silently delete b.
+    const client = fakeClient({
+      items: [
+        {
+          id: 7,
+          emails: [{ value: 'a@x.com', primary: true }, { value: 'b@x.com' }],
+        },
+      ],
+    })
+    const r = await runUpsert({
+      client,
+      entity: 'person',
+      by: 'email',
+      value: 'a@x.com',
+      body: { emails: [{ value: 'a@x.com', primary: true }] },
+    })
+    expect(r).toMatchObject({ action: 'unchanged', id: 7 })
+    expect(client.calls.patch).toHaveLength(0)
+  })
+
+  it('patches other fields but excludes the match field from the update body', async () => {
+    const client = fakeClient({
+      items: [
+        {
+          id: 7,
+          emails: [{ value: 'a@x.com' }, { value: 'b@x.com' }],
+          owner_id: 1,
+        },
+      ],
+    })
+    const r = await runUpsert({
+      client,
+      entity: 'person',
+      by: 'email',
+      value: 'a@x.com',
+      body: { emails: [{ value: 'a@x.com', primary: true }], owner_id: 42 },
+    })
+    expect(r).toMatchObject({ action: 'updated', id: 7 })
+    expect(client.calls.patch[0].body).toEqual({ owner_id: 42 })
+  })
+
+  it('excludes a custom match field from the update body', async () => {
+    const defs = [
+      { field_name: 'External ID', field_code: 'ext', field_type: 'varchar' },
+    ]
+    const client = fakeClient({
+      items: [{ id: 7, custom_fields: { ext: 'D-42', other: 'old' } }],
+    })
+    const r = await runUpsert({
+      client,
+      entity: 'deal',
+      by: 'External ID',
+      value: 'D-42',
+      body: { custom_fields: { ext: 'D-42', other: 'new' } },
+      defs,
+    })
+    expect(r).toMatchObject({ action: 'updated', id: 7 })
+    expect(client.calls.patch[0].body).toEqual({
+      custom_fields: { other: 'new' },
+    })
+  })
+
+  it('strips a custom match field even when the update body has no custom_fields', async () => {
+    const defs = [
+      { field_name: 'External ID', field_code: 'ext', field_type: 'varchar' },
+    ]
+    const client = fakeClient({
+      items: [{ id: 7, value: 1, custom_fields: { ext: 'D-42' } }],
+    })
+    const r = await runUpsert({
+      client,
+      entity: 'deal',
+      by: 'External ID',
+      value: 'D-42',
+      body: { value: 2 }, // only a top-level change, no custom_fields
+      defs,
+    })
+    expect(r).toMatchObject({ action: 'updated', id: 7 })
+    expect(client.calls.patch[0].body).toEqual({ value: 2 })
+  })
+
   it('dry-run create writes nothing', async () => {
     const client = fakeClient({ items: [] })
     const r = await runUpsert({

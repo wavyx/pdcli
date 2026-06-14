@@ -7,6 +7,11 @@ import { CliError } from './errors.js'
  * @returns {{ headers: string[], rows: string[][] }}
  */
 export function parseCsv(text) {
+  // Strip a leading UTF-8 BOM (U+FEFF) so the first header is clean — Excel's
+  // "CSV UTF-8" export and many Windows/Sheets tools emit one, which would
+  // otherwise prepend U+FEFF to the first column name and break header matching.
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1)
+
   const records = []
   let record = []
   let field = ''

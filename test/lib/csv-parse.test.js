@@ -55,6 +55,12 @@ describe('parseCsv', () => {
   it('throws 65 on an unterminated quote', () => {
     expect(() => parseCsv('a\n"oops\n')).toThrow(/unterminated/i)
   })
+
+  it('strips a leading UTF-8 BOM so the first header is clean', () => {
+    const { headers, rows } = parseCsv('﻿name,email\nJane,j@a.com\n')
+    expect(headers).toEqual(['name', 'email'])
+    expect(rows).toEqual([['Jane', 'j@a.com']])
+  })
 })
 
 describe('parseCsv without trailing newline', () => {

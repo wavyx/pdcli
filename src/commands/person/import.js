@@ -4,7 +4,7 @@ import chalk from 'chalk'
 import ora from 'ora'
 import BaseCommand from '../../base-command.js'
 import { parseCsv } from '../../lib/csv-parse.js'
-import { prepareImportBodies } from '../../lib/import.js'
+import { prepareImportBodies, intCell } from '../../lib/import.js'
 import { bulkRun } from '../../lib/bulk.js'
 import { bulkUpsertRows } from '../../lib/upsert.js'
 import { getFields } from '../../lib/fields.js'
@@ -22,10 +22,10 @@ const SPECIAL_COLUMNS = {
     typed.phones = [{ value, primary: true }]
   },
   org_id: (typed, value) => {
-    typed.org_id = Number(value)
+    typed.org_id = intCell(value, 'org_id')
   },
   owner_id: (typed, value) => {
-    typed.owner_id = Number(value)
+    typed.owner_id = intCell(value, 'owner_id')
   },
 }
 

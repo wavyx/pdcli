@@ -1,13 +1,18 @@
 import { CliError } from './errors.js'
 
-/** v2 custom-field types that the search endpoints can match on. */
+/**
+ * v2 custom-field types that the search endpoints can match on. NOTE:
+ * `monetary` and `address` are deliberately excluded — v2 returns them as
+ * objects ({ value, currency } / { value, … }) on the full record, so the
+ * scalar comparison below never matches and every upsert would create a
+ * duplicate. Until the object shape is supported on both read and write,
+ * --by on those types is refused (exit 64) rather than silently duplicating.
+ */
 const SEARCHABLE_TYPES = new Set([
-  'address',
   'varchar',
   'varchar_auto',
   'text',
   'double',
-  'monetary',
   'phone',
 ])
 const NUMERIC_TYPES = new Set(['double', 'monetary'])
