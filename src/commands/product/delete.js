@@ -34,6 +34,9 @@ export default class ProductDeleteCommand extends BaseCommand {
     }
 
     await this.apiClient.del(`/api/v2/products/${args.id}`)
-    this.log(chalk.green(`Deleted product ${args.id}`))
+    await this.outputAction(
+      { id: args.id, deleted: true },
+      chalk.green(`Deleted product ${args.id}`),
+    )
   }
 }

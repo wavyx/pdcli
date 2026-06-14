@@ -51,6 +51,9 @@ export default class FieldDeleteCommand extends BaseCommand {
 
     clearFieldsCache()
 
-    this.log(chalk.green(`Deleted field ${args.field} on ${args.entity}`))
+    await this.outputAction(
+      { entity: args.entity, field: args.field, deleted: true },
+      chalk.green(`Deleted field ${args.field} on ${args.entity}`),
+    )
   }
 }

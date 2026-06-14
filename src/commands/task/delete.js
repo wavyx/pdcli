@@ -36,6 +36,9 @@ export default class TaskDeleteCommand extends BaseCommand {
     }
 
     await this.apiClient.del(`/api/v2/tasks/${args.id}`)
-    this.log(chalk.green(`Deleted task ${args.id}`))
+    await this.outputAction(
+      { id: args.id, deleted: true },
+      chalk.green(`Deleted task ${args.id}`),
+    )
   }
 }

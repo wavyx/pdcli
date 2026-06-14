@@ -73,4 +73,20 @@ describe('org delete', () => {
       nock.enableNetConnect()
     }
   })
+
+  it('emits a JSON object with --output json', async () => {
+    mockConfirmAction.mockResolvedValue(true)
+    mockApi()
+      .delete('/api/v2/organizations/7')
+      .reply(200, { success: true, data: { id: 7 } })
+
+    const stdout = await runCmd(OrgDeleteCommand, [
+      '7',
+      '--yes',
+      '--output',
+      'json',
+    ])
+
+    expect(JSON.parse(stdout)).toEqual({ id: 7, deleted: true })
+  })
 })

@@ -34,6 +34,9 @@ export default class PersonDeleteCommand extends BaseCommand {
     }
 
     await this.apiClient.del(`/api/v2/persons/${args.id}`)
-    this.log(chalk.green(`Deleted person ${args.id}`))
+    await this.outputAction(
+      { id: args.id, deleted: true },
+      chalk.green(`Deleted person ${args.id}`),
+    )
   }
 }

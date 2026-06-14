@@ -41,6 +41,9 @@ export default class OrgRelationshipRemoveCommand extends BaseCommand {
     }
 
     await this.apiClient.del(`/api/v1/organizationRelationships/${args.id}`)
-    this.log(chalk.green(`Deleted organization relationship ${args.id}`))
+    await this.outputAction(
+      { id: args.id, removed: true },
+      chalk.green(`Deleted organization relationship ${args.id}`),
+    )
   }
 }

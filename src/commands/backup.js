@@ -42,7 +42,13 @@ export default class BackupCommand extends BaseCommand {
       spinner.stop()
     }
 
-    this.log(
+    await this.outputAction(
+      {
+        exported: summary.exported,
+        total: summary.total,
+        skipped: summary.skipped ?? 0,
+        dir: flags.dir,
+      },
       chalk.green(
         `Backup complete: ${summary.exported}/${summary.total} resources ` +
           `exported to ${chalk.cyan(flags.dir)}` +

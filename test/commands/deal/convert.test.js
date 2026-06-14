@@ -155,6 +155,33 @@ describe('deal convert', () => {
     expect(err.exitCode ?? err.oclif?.exit).toBe(65)
   })
 
+  it('--output json exposes conversion_id and the new lead_id (not prose-only)', async () => {
+    mockConfirmAction.mockResolvedValue(true)
+    mockApi()
+      .post('/api/v2/deals/42/convert/lead', {})
+      .reply(200, { success: true, data: { conversion_id: CONVERSION } })
+      .get(`/api/v2/deals/42/convert/status/${CONVERSION}`)
+      .reply(200, {
+        success: true,
+        data: { conversion_id: CONVERSION, status: 'completed', lead_id: LEAD },
+      })
+
+    DealConvertCommand.sleepFn = vi.fn().mockResolvedValue(undefined)
+    const stdout = await runCmd(DealConvertCommand, [
+      '42',
+      '--yes',
+      '--wait',
+      '--output',
+      'json',
+    ])
+    expect(JSON.parse(stdout)).toEqual({
+      conversion_id: CONVERSION,
+      status: 'completed',
+      deal_id: 42,
+      lead_id: LEAD,
+    })
+  })
+
   it('--wait times out after --timeout-secs without a terminal status', async () => {
     mockConfirmAction.mockResolvedValue(true)
     mockApi()

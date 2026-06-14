@@ -34,6 +34,9 @@ export default class NoteDeleteCommand extends BaseCommand {
     }
 
     await this.apiClient.del(`/api/v1/notes/${args.id}`)
-    this.log(chalk.green(`Deleted note ${args.id}`))
+    await this.outputAction(
+      { id: args.id, deleted: true },
+      chalk.green(`Deleted note ${args.id}`),
+    )
   }
 }

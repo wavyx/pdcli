@@ -43,7 +43,8 @@ export default class DealProductRemoveCommand extends BaseCommand {
     await this.apiClient.del(
       `/api/v2/deals/${args.id}/products/${flags.attachment}`,
     )
-    this.log(
+    await this.outputAction(
+      { id: args.id, attachment_id: flags.attachment, removed: true },
       chalk.green(
         `Removed product attachment ${flags.attachment} from deal ${args.id}`,
       ),

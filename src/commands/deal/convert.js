@@ -67,9 +67,10 @@ export default class DealConvertCommand extends BaseCommand {
     const conversionId = res.data?.conversion_id
 
     if (!flags.wait) {
-      this.log(chalk.green(`Conversion started: ${conversionId}`))
-      this.log(
-        `Check status: ${this.config.bin} api GET ` +
+      await this.outputAction(
+        { conversion_id: conversionId, status: 'started', deal_id: args.id },
+        chalk.green(`Conversion started: ${conversionId}`) +
+          `\nCheck status: ${this.config.bin} api GET ` +
           `/api/v2/deals/${args.id}/convert/status/${conversionId}`,
       )
       return
@@ -84,7 +85,13 @@ export default class DealConvertCommand extends BaseCommand {
       )
       const state = status.data?.status
       if (state === 'completed') {
-        this.log(
+        await this.outputAction(
+          {
+            conversion_id: conversionId,
+            status: 'completed',
+            deal_id: args.id,
+            lead_id: status.data?.lead_id,
+          },
           chalk.green(
             `Conversion completed: deal ${args.id} → lead ${status.data?.lead_id}`,
           ),

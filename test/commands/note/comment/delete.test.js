@@ -84,4 +84,26 @@ describe('note comment delete', () => {
       nock.enableNetConnect()
     }
   })
+
+  it('emits a JSON object with --output json', async () => {
+    mockConfirmAction.mockResolvedValue(true)
+    mockApi()
+      .delete(`/api/v1/notes/5/comments/${UUID}`)
+      .reply(200, { success: true, data: true })
+
+    const stdout = await runCmd(NoteCommentDeleteCommand, [
+      '5',
+      '--comment',
+      UUID,
+      '--yes',
+      '--output',
+      'json',
+    ])
+
+    expect(JSON.parse(stdout)).toEqual({
+      note_id: 5,
+      comment_id: UUID,
+      deleted: true,
+    })
+  })
 })

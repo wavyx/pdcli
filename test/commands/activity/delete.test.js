@@ -73,4 +73,20 @@ describe('activity delete', () => {
       nock.enableNetConnect()
     }
   })
+
+  it('emits a JSON object with --output json', async () => {
+    mockConfirmAction.mockResolvedValue(true)
+    mockApi()
+      .delete('/api/v2/activities/9')
+      .reply(200, { success: true, data: { id: 9 } })
+
+    const stdout = await runCmd(ActivityDeleteCommand, [
+      '9',
+      '--yes',
+      '--output',
+      'json',
+    ])
+
+    expect(JSON.parse(stdout)).toEqual({ id: 9, deleted: true })
+  })
 })

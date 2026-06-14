@@ -44,7 +44,8 @@ export default class DealParticipantRemoveCommand extends BaseCommand {
     await this.apiClient.del(
       `/api/v1/deals/${args.id}/participants/${flags.participant}`,
     )
-    this.log(
+    await this.outputAction(
+      { id: args.id, participant_id: flags.participant, removed: true },
       chalk.green(
         `Removed participant ${flags.participant} from deal ${args.id}`,
       ),

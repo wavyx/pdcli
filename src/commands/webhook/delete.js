@@ -34,6 +34,9 @@ export default class WebhookDeleteCommand extends BaseCommand {
     }
 
     await this.apiClient.del(`/api/v1/webhooks/${args.id}`)
-    this.log(chalk.green(`Deleted webhook ${args.id}`))
+    await this.outputAction(
+      { id: args.id, deleted: true },
+      chalk.green(`Deleted webhook ${args.id}`),
+    )
   }
 }

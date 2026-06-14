@@ -132,7 +132,12 @@ export default class PersonImportCommand extends BaseCommand {
       spinner.stop()
     }
 
-    this.log(
+    await this.outputAction(
+      {
+        imported: summary.succeeded.length,
+        total: bodies.length,
+        failed: summary.failed.length,
+      },
       chalk.green(
         `Imported ${summary.succeeded.length}/${bodies.length} persons`,
       ),
@@ -140,7 +145,7 @@ export default class PersonImportCommand extends BaseCommand {
 
     if (summary.failed.length > 0) {
       for (const { item, error } of summary.failed) {
-        this.log(chalk.red(`  ✘ ${item.name ?? '(unnamed)'}: ${error}`))
+        this.logToStderr(chalk.red(`  ✘ ${item.name ?? '(unnamed)'}: ${error}`))
       }
       throw new CliError(
         `${summary.failed.length} of ${bodies.length} rows failed`,
@@ -184,7 +189,14 @@ export default class PersonImportCommand extends BaseCommand {
 
     const { created, updated, unchanged } = summary.counts
     const prefix = flags['dry-run'] ? '[dry-run] ' : ''
-    this.log(
+    await this.outputAction(
+      {
+        created,
+        updated,
+        unchanged,
+        failed: summary.failed.length,
+        dryRun: flags['dry-run'],
+      },
       chalk.green(
         `${prefix}${created} created, ${updated} updated, ${unchanged} unchanged`,
       ),
@@ -192,7 +204,7 @@ export default class PersonImportCommand extends BaseCommand {
 
     if (summary.failed.length > 0) {
       for (const { item, error } of summary.failed) {
-        this.log(chalk.red(`  ✘ ${matchOn}="${item.value}": ${error}`))
+        this.logToStderr(chalk.red(`  ✘ ${matchOn}="${item.value}": ${error}`))
       }
       // Surface 65 when every failure is a data-validation error (ambiguous
       // match, empty match value); fall back to 1 for mixed/transport errors.

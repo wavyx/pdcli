@@ -44,7 +44,8 @@ export default class NoteCommentDeleteCommand extends BaseCommand {
     await this.apiClient.del(
       `/api/v1/notes/${args.noteId}/comments/${flags.comment}`,
     )
-    this.log(
+    await this.outputAction(
+      { note_id: args.noteId, comment_id: flags.comment, deleted: true },
       chalk.green(`Deleted comment ${flags.comment} from note ${args.noteId}`),
     )
   }

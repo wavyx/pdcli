@@ -106,4 +106,25 @@ describe('field delete', () => {
       nock.enableNetConnect()
     }
   })
+
+  it('emits a JSON object with --output json', async () => {
+    mockConfirmAction.mockResolvedValue(true)
+    mockApi()
+      .delete(`/api/v2/dealFields/${HASH}`)
+      .reply(200, { success: true, data: { field_code: HASH } })
+
+    const stdout = await runCmd(FieldDeleteCommand, [
+      'deal',
+      HASH,
+      '--yes',
+      '--output',
+      'json',
+    ])
+
+    expect(JSON.parse(stdout)).toEqual({
+      entity: 'deal',
+      field: HASH,
+      deleted: true,
+    })
+  })
 })

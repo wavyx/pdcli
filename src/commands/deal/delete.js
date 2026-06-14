@@ -34,6 +34,9 @@ export default class DealDeleteCommand extends BaseCommand {
     }
 
     await this.apiClient.del(`/api/v2/deals/${args.id}`)
-    this.log(chalk.green(`Deleted deal ${args.id}`))
+    await this.outputAction(
+      { id: args.id, deleted: true },
+      chalk.green(`Deleted deal ${args.id}`),
+    )
   }
 }

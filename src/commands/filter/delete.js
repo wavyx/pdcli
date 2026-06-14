@@ -36,6 +36,9 @@ export default class FilterDeleteCommand extends BaseCommand {
     }
 
     await this.apiClient.del(`/api/v1/filters/${args.id}`)
-    this.log(chalk.green(`Deleted filter ${args.id}`))
+    await this.outputAction(
+      { id: args.id, deleted: true },
+      chalk.green(`Deleted filter ${args.id}`),
+    )
   }
 }
