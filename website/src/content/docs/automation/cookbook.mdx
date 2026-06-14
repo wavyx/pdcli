@@ -49,10 +49,12 @@ Add `--exact` for an exact match.
 `search` routes by how many item types you ask for:
 
 - **A single routable type** — `--item-types deal`, `person`, `organization`, or `product` —
-  hits that entity's dedicated v2 search endpoint (e.g. `/api/v2/persons/search`). That's a
-  narrower OAuth scope and cheaper: **20 rate-limit tokens vs. 40**.
+  hits that entity's dedicated v2 search endpoint (e.g. `/api/v2/persons/search`), which
+  needs only that entity's OAuth scope and accepts entity-specific server-side filters. Its
+  `--limit` is capped at 100 (the endpoint rejects more).
 - **Anything else** — no `--item-types`, multiple types, or a non-routable type like `lead`,
-  `file`, or `project` — stays on the generic `itemSearch` (40 tokens).
+  `file`, or `project` — stays on the generic `itemSearch`. Both search endpoints cost the
+  same 20 rate-limit tokens.
 
 When the scope is a single **deal** search, three filters narrow it server-side: `--status`
 (`open`/`won`/`lost`), `--person` (a person ID), and `--org` (an organization ID). These are

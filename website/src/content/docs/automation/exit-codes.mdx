@@ -12,27 +12,29 @@ command shares the same ladder.
 | Code | Meaning | Pipedrive trigger | What a script should do |
 | ---- | ------- | ----------------- | ----------------------- |
 | `0` | Success | 2xx | Continue. |
-| `1` | Generic error | — | Inspect the message; safe to surface and stop. `audit --strict` returns 1 on must-severity findings. |
-| `64` | Invalid input value | — | A value pdcli validated and rejected (e.g. an invalid `--period`, an unknown `--checks` name, several pipelines with no `--pipeline`, a CSV missing its name column). Fix the invocation — retrying won't help. Note: an unknown flag or missing argument is caught by the parser and exits `70`. |
-| `65` | Data / validation | `400`, `422` | The request body was rejected. Fix the payload (bad field value, missing required field). Don't retry unchanged. |
-| `69` | Service unavailable | `5xx` | Pipedrive is down or erroring. pdcli already retried 5xx with backoff; safe to retry later. |
-| `70` | Internal CLI bug | — | An unexpected error inside pdcli. File an issue; retrying won't help. |
-| `75` | Rate limited | `429` | Token budget exhausted. With retries on, pdcli only surfaces this under `--no-retry`. Back off and retry after the reset window. |
-| `77` | Auth / permission | `401`, `403` | Token is invalid, expired, or lacks scope. Re-authenticate (`pdcli auth login`). Don't loop. A `403` after repeated `429`s is a rate-limit hard stop — wait for the reset, don't retry. |
-| `78` | Config / account | `402`, missing domain/token, host-lock violation, no keychain | The CLI or account is misconfigured: no company domain, no keychain to write to, a `pdcli api` URL outside your host, or a `402` (plan lacks the feature). Fix config or the account — don't retry. |
+| `1` | Generic error | — | Inspect the message; safe to surface and stop. `audit --strict` returns 1 on must-severity findings; a partial bulk/import failure returns 1 when some rows failed for non-data reasons. |
+| `64` | Usage / bad input | — | A bad invocation: an unknown flag or a missing/invalid argument (caught by the parser), or a value pdcli validated and rejected (invalid `--period`, unknown `--checks` name, several pipelines with no `--pipeline`, a CSV missing its name column, `--ids` over 100). Fix the invocation — retrying won't help. |
+| `65` | Data / validation | `400`, `422` | The request body or input data was rejected: a bad field value, a non-numeric id cell in a CSV, an ambiguous upsert match, malformed `--body` JSON, or a conversion the API rejected. Fix the payload; don't retry unchanged. |
+| `69` | Service unavailable | `5xx`, network | Pipedrive is down/erroring, **or the host is unreachable** (DNS failure, connection refused, or a `--timeout`). pdcli already retried with backoff; safe to retry later. |
+| `70` | Internal CLI bug | — | An unexpected error inside pdcli — and nothing else (network, usage, and API failures all map elsewhere). File an issue; retrying won't help. |
+| `75` | Rate limited | `429` | Token budget exhausted. pdcli retries 429s with backoff; if they never clear it surfaces `75` (not `69`), and `--no-retry` surfaces the first one. Back off and retry after the reset window. |
+| `77` | Auth / permission | `401`, `403` | Token is invalid, expired, or lacks scope — including a **failed OAuth refresh** (`invalid_grant`). Re-authenticate (`pdcli auth login`). Don't loop. A `403` after repeated `429`s is a rate-limit hard stop — wait for the reset, don't retry. |
+| `78` | Config / account | `402`, missing domain/token, host-lock violation, no keychain | The CLI or account is misconfigured: no company domain, no keychain to write to, a `pdcli api` URL outside your host, a redirect off your host, or a `402` (plan lacks the feature). Fix config or the account — don't retry. |
+| `8` | Findings present (`watch` only) | — | `pdcli watch` exits `8` when it surfaces new anomalies, so `pdcli watch \|\| notify` fires only on findings. Not part of the general ladder — specific to `watch`. |
 
-The exact mapping lives in `src/lib/errors.js` (`exitCodeForStatus`): `400/422 → 65`,
-`401/403 → 77`, `402 → 78`, `429 → 75`, `5xx → 69`. Anything without an HTTP status falls
-back to `1`, and an unexpected throw inside the CLI exits `70`.
+The HTTP-status mapping lives in `src/lib/errors.js` (`exitCodeForStatus`): `400/422 → 65`,
+`401/403 → 77`, `402 → 78`, `429 → 75`, `5xx → 69`. On top of that: an oclif parse error
+(unknown flag, missing/invalid argument) exits `64`; an unreachable host or timeout exits
+`69`; and only a genuinely unexpected throw exits `70`.
 
 ## Error output
 
-In **table mode** the message goes to stderr in human form; `--verbose` adds the request
-path, status code, and `error_info` from Pipedrive's error envelope.
-
-In **JSON mode** (an explicit `--output json`, or `default_output json` set in the
-profile) the error is written to **stderr** as a single JSON object — stdout stays
-clean so a successful-looking pipe can't swallow a failure:
+The error format **mirrors the success output format** (the same `--output` /
+`default_output` / TTY rule). Whenever output is **not** an interactive table — an explicit
+`--output json|yaml|csv`, a non-table `default_output` in the profile, **or stdout piped** —
+the error is written to **stderr** as a single JSON object, so a machine consumer that gets
+JSON on success always gets a parseable failure. stdout stays clean so a successful-looking
+pipe can't swallow a failure:
 
 ```json
 {
@@ -47,7 +49,8 @@ clean so a successful-looking pipe can't swallow a failure:
 
 `error` is the error class name. `statusCode`, `path`, and `errorInfo` appear only for API
 errors (they're omitted for usage/config errors). Under `--verbose` the full Pipedrive
-`body` is added too.
+`body` is added too. Only an **interactive table** context prints the message to stderr in
+human form; `--verbose` there adds the request path, status code, and `error_info`.
 
 ## Branching on the code
 
@@ -55,6 +58,7 @@ errors (they're omitted for usage/config errors). Under `--verbose` the full Pip
 pdcli deal get 42 --output json > deal.json
 case $? in
   0)  echo "ok" ;;
+  64) echo "bad invocation — fix flags/args" ; exit 1 ;;
   65) echo "bad request — not retrying" ; exit 1 ;;
   75|69) echo "transient — retry later" ; exit 1 ;;
   77) echo "re-auth needed" ; pdcli auth status ; exit 1 ;;
@@ -63,8 +67,8 @@ case $? in
 esac
 ```
 
-A few non-zero codes you'll hit that aren't in the table above: `pdcli` prints `127` (via the
-command-not-found hook) when you invoke a command name that doesn't exist.
+`pdcli` also prints `127` (via the command-not-found hook) when you invoke a command name
+that doesn't exist.
 
 See also: [Troubleshooting](/pdcli/reference/troubleshooting/) for what to do per failure,
 and [How pdcli talks to Pipedrive](/pdcli/concepts/api-model/) for the retry/backoff rules.

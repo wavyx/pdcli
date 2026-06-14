@@ -112,9 +112,9 @@ Pass the previous run's timestamp on each schedule tick and you sync deltas inst
 full set. (`product list` supports `--updated-since` only — products have no
 `--updated-until`.)
 
-If the **daily** request budget runs out, pdcli fails fast: a `429` carrying
+If the **daily** token budget runs out, pdcli fails fast: a `429` carrying
 `x-daily-ratelimit-token-remaining: 0` is not retried (backoff would stall until the daily reset at midnight server time),
-so the command exits `75` immediately with a clear `Daily API request budget exhausted`
+so the command exits `75` immediately with a clear `Daily API token budget exhausted`
 message. Add `--verbose` to log the remaining daily budget after each request, so a job can
 warn before it hits the wall.
 
