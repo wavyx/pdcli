@@ -63,6 +63,32 @@ describe('fetchChangelog', () => {
 
     expect(client.calls[0].query).toMatchObject({ limit: 500 })
   })
+
+  it('stops collecting once the limit is reached instead of walking every page', async () => {
+    // Three full pages are available, but a limit of 2 must bound the work:
+    // collection should stop after the cap, leaving later pages unyielded.
+    let yielded = 0
+    const client = {
+      calls: [],
+      async *pageV2(path, query = {}) {
+        this.calls.push({ path, query })
+        for (let page = 0; page < 3; page++) {
+          for (const row of [
+            { field_key: 'stage_id', old_value: String(page), new_value: 'x' },
+            { field_key: 'status', old_value: String(page), new_value: 'y' },
+          ]) {
+            yielded++
+            yield row
+          }
+        }
+      },
+    }
+
+    const rows = await fetchChangelog(client, 7, { limit: 2 })
+
+    expect(rows).toHaveLength(2)
+    expect(yielded).toBe(2)
+  })
 })
 
 describe('mineMany', () => {

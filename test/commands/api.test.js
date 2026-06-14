@@ -65,6 +65,42 @@ describe('api', () => {
     expect(JSON.parse(stdout).data.id).toBe(9)
   })
 
+  it('rejects malformed --body JSON with exit 65 (not an internal 70)', async () => {
+    const err = await ApiCommand.run([
+      'POST',
+      '/api/v2/deals',
+      '--body',
+      '{not json',
+    ]).catch((e) => e)
+    expect(err.exitCode ?? err.oclif?.exit).toBe(65)
+    expect(err.message).toMatch(/JSON/i)
+  })
+
+  it('reads the request body from piped stdin', async () => {
+    const { Readable } = await import('node:stream')
+    const origStdin = process.stdin
+    const mockStdin = Readable.from([Buffer.from('{"title":"Piped"}\n')])
+    mockStdin.isTTY = false
+    Object.defineProperty(process, 'stdin', {
+      value: mockStdin,
+      writable: true,
+      configurable: true,
+    })
+    try {
+      mockApi()
+        .post('/api/v2/deals', { title: 'Piped' })
+        .reply(201, { success: true, data: { id: 7 } })
+      const stdout = await runCmd(ApiCommand, ['POST', '/api/v2/deals'])
+      expect(JSON.parse(stdout).data.id).toBe(7)
+    } finally {
+      Object.defineProperty(process, 'stdin', {
+        value: origStdin,
+        writable: true,
+        configurable: true,
+      })
+    }
+  })
+
   it('refuses off-host absolute URLs (host-lock)', async () => {
     nock.disableNetConnect()
     try {

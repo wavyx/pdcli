@@ -1,6 +1,7 @@
 import { Args, Flags } from '@oclif/core'
 import BaseCommand from '../base-command.js'
 import { resolveBody } from '../lib/body.js'
+import { CliError } from '../lib/errors.js'
 
 export default class ApiCommand extends BaseCommand {
   static description =
@@ -46,9 +47,19 @@ export default class ApiCommand extends BaseCommand {
     const method = methodMap[args.method]
     const opts = {}
 
-    if (flags.body && !['GET', 'DELETE'].includes(args.method)) {
+    // Resolve the body for any method that carries one — from --body, @file,
+    // or piped stdin (resolveBody handles all three; it errors when a body is
+    // required but none is given). Previously this was gated on `flags.body`,
+    // so the documented "pipe stdin" path was unreachable.
+    if (!['GET', 'DELETE'].includes(args.method)) {
       const bodyText = await resolveBody(flags)
-      opts.body = JSON.parse(bodyText)
+      try {
+        opts.body = JSON.parse(bodyText)
+      } catch (err) {
+        throw new CliError(`--body is not valid JSON: ${err.message}`, {
+          exitCode: 65,
+        })
+      }
     }
 
     const data = await this.apiClient[method](args.path, opts)

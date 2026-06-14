@@ -81,6 +81,23 @@ export class ApiError extends CliError {
 }
 
 /**
+ * Recover the --output / -o value from raw argv. On an oclif PARSE failure
+ * this.flags is never populated, so handleError would otherwise lose an
+ * explicit --output and fall back to TTY/stored resolution — meaning a usage
+ * error in a TTY ignored `--output json`. Reads cmd.argv (the raw args), which
+ * is set on the command instance before parsing.
+ * @param {string[]} [argv]
+ * @returns {string | undefined}
+ */
+function outputFromArgv(argv = []) {
+  for (let i = 0; i < argv.length; i++) {
+    const m = /^(?:--output|-o)(?:=(.+))?$/.exec(argv[i])
+    if (m) return m[1] ?? argv[i + 1]
+  }
+  return undefined
+}
+
+/**
  * @param {Error} err
  * @param {import('@oclif/core').Command} cmd
  */
@@ -103,7 +120,10 @@ export function handleError(err, cmd) {
       ? cmd.storedDefaultOutput()
       : undefined
   const format =
-    flags.output ?? stored ?? (process.stdout.isTTY ? 'table' : 'json')
+    flags.output ??
+    outputFromArgv(cmd.argv) ??
+    stored ??
+    (process.stdout.isTTY ? 'table' : 'json')
 
   if (format !== 'table') {
     const payload = {

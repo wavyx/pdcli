@@ -75,6 +75,42 @@ describe('resolveTargets', () => {
       resolveTargets({ ids: '1,abc' }, client(), '/api/v2/deals'),
     ).rejects.toMatchObject({ exitCode: 64 })
   })
+
+  it('ignores a trailing comma in --ids (no phantom id 0)', async () => {
+    const ids = await resolveTargets({ ids: '1,2,' }, client(), '/api/v2/deals')
+    expect(ids).toEqual([1, 2])
+  })
+
+  it('ignores blank interior lines from piped stdin (no phantom id 0)', async () => {
+    const stdin = Readable.from([Buffer.from('4\n\n5\n')])
+    stdin.isTTY = false
+    const ids = await resolveTargets({ stdin }, client(), '/api/v2/deals')
+    expect(ids).toEqual([4, 5])
+  })
+
+  it('throws 64 when piped stdin is empty (no targets)', async () => {
+    const stdin = Readable.from([Buffer.from('')])
+    stdin.isTTY = false
+    await expect(
+      resolveTargets({ stdin }, client(), '/api/v2/deals'),
+    ).rejects.toMatchObject({ exitCode: 64 })
+  })
+
+  it('throws 65 when piped stdin is malformed JSON', async () => {
+    const stdin = Readable.from([Buffer.from('[1, 2,')])
+    stdin.isTTY = false
+    await expect(
+      resolveTargets({ stdin }, client(), '/api/v2/deals'),
+    ).rejects.toMatchObject({ exitCode: 65 })
+  })
+
+  it('throws 65 when a JSON entry lacks an integer id', async () => {
+    const stdin = Readable.from([Buffer.from('[{"name": "no id here"}]')])
+    stdin.isTTY = false
+    await expect(
+      resolveTargets({ stdin }, client(), '/api/v2/deals'),
+    ).rejects.toMatchObject({ exitCode: 65 })
+  })
 })
 
 describe('bulkRun', () => {

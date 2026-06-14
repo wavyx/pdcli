@@ -88,14 +88,15 @@ describe('product list', () => {
   })
 
   it('does not expose an --updated-until flag (unsupported by v2 products)', async () => {
-    await expect(
-      runCmd(ProductListCommand, [
-        '--updated-until',
-        '2025-02-01T10:20:00Z',
-        '--output',
-        'json',
-      ]),
-    ).rejects.toThrow(/Nonexistent flag/)
+    // With --output json the unknown-flag parse error surfaces as the JSON
+    // error envelope (exit 64), not a human message — assert the usage code.
+    const err = await runCmd(ProductListCommand, [
+      '--updated-until',
+      '2025-02-01T10:20:00Z',
+      '--output',
+      'json',
+    ]).catch((e) => e)
+    expect(err.exitCode ?? err.oclif?.exit).toBe(64)
   })
 
   it('rejects more than 100 ids with exit code 64', async () => {

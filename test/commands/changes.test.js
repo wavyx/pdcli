@@ -198,6 +198,97 @@ describe('changes', () => {
     )
   })
 
+  it('does not skip rows sharing the cut second when --limit truncates mid-second', async () => {
+    const T1 = '2026-06-10T12:00:00Z'
+    const T2 = '2026-06-10T12:00:05Z'
+    mockEntities({
+      deals: [
+        { id: 1, title: 'a', add_time: T1, update_time: T1 },
+        { id: 2, title: 'b', add_time: T2, update_time: T2 },
+        { id: 3, title: 'c', add_time: T2, update_time: T2 },
+      ],
+      persons: [],
+      organizations: [],
+      activities: [],
+      products: [],
+    })
+
+    const stdout = await runCmd(ChangesCommand, [
+      '--since',
+      '30d',
+      '--limit',
+      '2',
+      '--output',
+      'json',
+    ])
+    const rows = JSON.parse(stdout)
+    // The two T2 rows would be split by --limit 2; rather than skip one, only
+    // the T1 row is emitted and the T2 pair replays next run.
+    expect(rows).toHaveLength(1)
+    expect(rows[0].id).toBe(1)
+    expect(watermark).toBe(
+      formatApiDatetime(new Date(new Date(T1).getTime() + 1000)),
+    )
+  })
+
+  it('tolerates a dropped row with no update_time at the cut (no false trim)', async () => {
+    const T1 = '2026-06-10T12:00:00Z'
+    mockEntities({
+      deals: [
+        { id: 1, title: 'a', add_time: T1, update_time: T1 },
+        { id: 2, title: 'b', add_time: T1 }, // no update_time → sorts last
+      ],
+      persons: [],
+      organizations: [],
+      activities: [],
+      products: [],
+    })
+
+    const stdout = await runCmd(ChangesCommand, [
+      '--since',
+      '30d',
+      '--limit',
+      '1',
+      '--output',
+      'json',
+    ])
+    const rows = JSON.parse(stdout)
+    expect(rows).toHaveLength(1)
+    expect(rows[0].id).toBe(1)
+  })
+
+  it('warns (does not silently skip) when one second exceeds --limit', async () => {
+    const T = '2026-06-10T12:00:00Z'
+    mockEntities({
+      deals: [
+        { id: 1, title: 'a', add_time: T, update_time: T },
+        { id: 2, title: 'b', add_time: T, update_time: T },
+        { id: 3, title: 'c', add_time: T, update_time: T },
+      ],
+      persons: [],
+      organizations: [],
+      activities: [],
+      products: [],
+    })
+
+    const writes = []
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((c) => {
+      writes.push(String(c))
+      return true
+    })
+    const stdout = await runCmd(ChangesCommand, [
+      '--since',
+      '30d',
+      '--limit',
+      '2',
+      '--output',
+      'json',
+    ])
+    spy.mockRestore()
+    expect(JSON.parse(stdout)).toHaveLength(2)
+    expect(writes.join('')).toMatch(/splits a single update-time second/i)
+  })
+
   it('does not advance the watermark with --peek', async () => {
     watermark = '2026-01-01T00:00:00Z'
     mockEntities()

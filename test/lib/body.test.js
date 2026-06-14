@@ -21,10 +21,12 @@ describe('resolveBody', () => {
     expect(result).toBe('file contents here')
   })
 
-  it('throws CliError when no body and stdin is TTY', async () => {
+  it('throws a usage error (exit 64) when no body and stdin is TTY', async () => {
     const origIsTTY = process.stdin.isTTY
     process.stdin.isTTY = true
-    await expect(resolveBody({})).rejects.toThrow('--body is required')
+    const err = await resolveBody({}).catch((e) => e)
+    expect(err.message).toMatch(/--body is required/)
+    expect(err.exitCode).toBe(64)
     process.stdin.isTTY = origIsTTY
   })
 

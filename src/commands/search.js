@@ -11,8 +11,8 @@ const columns = {
   },
 }
 
-// Item types that have a dedicated v2 scoped-search endpoint (narrower OAuth
-// scope, narrower scope + 500-row pages vs itemSearch). Singular type → scoped endpoint path.
+// Item types that have a dedicated v2 scoped-search endpoint (a wrapper of
+// itemSearch with a narrower OAuth scope). Singular type → scoped endpoint path.
 const SCOPED_PATHS = {
   deal: '/api/v2/deals/search',
   person: '/api/v2/persons/search',
@@ -99,7 +99,9 @@ export default class SearchCommand extends BaseCommand {
           status: scopedType === 'deal' ? flags.status : undefined,
           person_id: scopedType === 'deal' ? flags.person : undefined,
           organization_id: scopedType === 'deal' ? flags.org : undefined,
-          limit: flags.limit,
+          // The per-entity /search endpoints cap limit at 100 (the live API
+          // 400s on more, despite the 500 list cap — see src/lib/lookup.js).
+          limit: flags.limit != null ? Math.min(flags.limit, 100) : undefined,
         },
       })
     } else {

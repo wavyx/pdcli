@@ -71,6 +71,15 @@ export default class DigestCommand extends BaseCommand {
         { exitCode: 64 },
       )
     }
+    // --format renders md|html and returns before the machine-format path, so an
+    // explicit --output would be silently ignored. Reject it (only when set, not
+    // when defaulted) rather than printing the artifact and dropping the format.
+    if (flags.format && flags.output) {
+      throw new CliError(
+        '--output does not apply with --format; use one or the other',
+        { exitCode: 64 },
+      )
+    }
 
     const { id: pipelineId, name: pipelineName } =
       await resolvePipelineWithName(this.apiClient, flags.pipeline)

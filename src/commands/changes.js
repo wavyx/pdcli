@@ -12,6 +12,13 @@ import { CliError } from '../lib/errors.js'
 
 const WATERMARK_KEY = 'changes_watermark'
 
+/** Whole-second bucket of an update_time (v2 timestamps are seconds-precision);
+ *  null/missing sorts before everything so it's never treated as a boundary. */
+function secondOf(updateTime) {
+  if (updateTime == null) return -Infinity
+  return Math.floor(new Date(updateTime).getTime() / 1000)
+}
+
 /** The five v2 entities that support `updated_since` + update_time ordering. */
 const ENTITY_PATHS = {
   deals: '/api/v2/deals',
@@ -82,7 +89,33 @@ export default class ChangesCommand extends BaseCommand {
     const { rows: allRows } = buildChangeFeed(byEntity, since)
     // --limit caps rows per run; the watermark resumes at the cut so the rest
     // arrive next run (no skip). Rows are sorted ascending by update_time.
-    const rows = flags.limit != null ? allRows.slice(0, flags.limit) : allRows
+    let rows = flags.limit != null ? allRows.slice(0, flags.limit) : allRows
+
+    // update_time has SECONDS precision and the watermark advances to (max + 1s)
+    // below. If --limit cuts mid-second, that +1s would jump past unemitted rows
+    // sharing the cut second — silently lost. So on truncation, drop the trailing
+    // rows that share the last emitted row's second; they replay next run and the
+    // +1s advance (now landing on an earlier second) skips nothing.
+    const truncated = flags.limit != null && allRows.length > rows.length
+    const cutSecond = truncated
+      ? secondOf(rows[rows.length - 1].updateTime)
+      : null
+    // Only a problem when a DROPPED row shares the cut row's second; if the next
+    // dropped row is in a later second, the +1s advance is already skip-free.
+    if (truncated && secondOf(allRows[rows.length].updateTime) === cutSecond) {
+      const trimmed = rows.filter((r) => secondOf(r.updateTime) < cutSecond)
+      if (trimmed.length > 0) {
+        rows = trimmed
+      } else {
+        // A single second holds more rows than --limit; we cannot bound at the
+        // limit without either looping forever or skipping. Emit this second and
+        // advance past it, but say so — a loud warning beats silent feed loss.
+        process.stderr.write(
+          `Warning: --limit ${flags.limit} splits a single update-time second; ` +
+            `rows in that second beyond the limit are skipped. Raise --limit to avoid this.\n`,
+        )
+      }
+    }
 
     // Emit BEFORE advancing: if rendering throws, the window replays next run
     // rather than being silently skipped.

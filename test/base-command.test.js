@@ -613,6 +613,46 @@ describe('resolveFormat with default_output', () => {
     expect(payload.message).toMatch(/nonexistent flag/i)
   })
 
+  it('honors explicit --output json on a TTY parse error (recovers from argv)', async () => {
+    mockLoadConfig.mockReturnValue({ activeProfile: 'default' })
+    class ParseCmd extends BaseCommand {
+      static skipAuth = true
+      async run() {}
+    }
+    const origIsTTY = process.stdout.isTTY
+    process.stdout.isTTY = true // interactive, but --output json is explicit
+    const writes = []
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((c) => {
+      writes.push(String(c))
+      return true
+    })
+    await ParseCmd.run(['--output', 'json', '--no-such-flag']).catch(() => {})
+    spy.mockRestore()
+    process.stdout.isTTY = origIsTTY
+    const payload = JSON.parse(writes.join(''))
+    expect(payload.exitCode).toBe(64)
+  })
+
+  it('recovers --output=yaml form from argv on a parse error', async () => {
+    mockLoadConfig.mockReturnValue({ activeProfile: 'default' })
+    class ParseCmd extends BaseCommand {
+      static skipAuth = true
+      async run() {}
+    }
+    const origIsTTY = process.stdout.isTTY
+    process.stdout.isTTY = true
+    const writes = []
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((c) => {
+      writes.push(String(c))
+      return true
+    })
+    await ParseCmd.run(['--output=yaml', '--no-such-flag']).catch(() => {})
+    spy.mockRestore()
+    process.stdout.isTTY = origIsTTY
+    // yaml error envelope is the JSON envelope (no yaml error serializer)
+    expect(writes.join('')).toMatch(/"exitCode": 64/)
+  })
+
   it('emits JSON errors when piped, even with no flag or stored default', async () => {
     mockLoadConfig.mockReturnValue({ activeProfile: 'default' })
     class FailCmd extends BaseCommand {
