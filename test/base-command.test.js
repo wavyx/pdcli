@@ -360,6 +360,103 @@ describe('BaseCommand output formats and filters', () => {
     expect(stdout).toContain('f@a.com')
     expect(stdout).not.toContain('Field User')
   })
+
+  it('--fields projects keys for json output (not silently ignored)', async () => {
+    nock(API_BASE)
+      .get('/api/v2/users/me')
+      .reply(200, {
+        success: true,
+        data: { id: 1, name: 'Field User', email: 'f@a.com' },
+      })
+
+    const stdout = await captureLogs(ApiCmd, [
+      '--fields',
+      'id,email',
+      '--output',
+      'json',
+    ])
+    expect(JSON.parse(stdout)).toEqual({ id: 1, email: 'f@a.com' })
+  })
+
+  it('--fields projects keys across an array for json output', async () => {
+    class ListCmd extends BaseCommand {
+      static skipAuth = true
+      async run() {
+        await this.parse(ListCmd)
+        await this.outputResults(
+          [
+            { id: 1, name: 'A', email: 'a@x.com' },
+            { id: 2, name: 'B', email: 'b@x.com' },
+          ],
+          { id: { header: 'ID' }, name: { header: 'Name' } },
+        )
+      }
+    }
+    const stdout = await captureLogs(ListCmd, [
+      '--fields',
+      'id,email',
+      '--output',
+      'json',
+    ])
+    expect(JSON.parse(stdout)).toEqual([
+      { id: 1, email: 'a@x.com' },
+      { id: 2, email: 'b@x.com' },
+    ])
+  })
+
+  it('--fields projects keys for yaml output', async () => {
+    nock(API_BASE)
+      .get('/api/v2/users/me')
+      .reply(200, {
+        success: true,
+        data: { id: 1, name: 'Field User', email: 'f@a.com' },
+      })
+
+    const stdout = await captureLogs(ApiCmd, [
+      '--fields',
+      'id,email',
+      '--output',
+      'yaml',
+    ])
+    expect(stdout).toContain('email: f@a.com')
+    expect(stdout).not.toContain('Field User')
+  })
+})
+
+describe('outputAction (mutation output)', () => {
+  class ActionCmd extends BaseCommand {
+    static skipAuth = true
+    async run() {
+      await this.parse(ActionCmd)
+      await this.outputAction({ deleted: 42 }, 'Deleted deal 42')
+    }
+  }
+
+  beforeEach(() => {
+    nock.cleanAll()
+    mockLoadConfig.mockReturnValue({ activeProfile: 'default' })
+  })
+
+  it('prints the human one-liner in interactive table mode', async () => {
+    process.stdout.isTTY = true
+    const stdout = await captureLogs(ActionCmd, [])
+    expect(stdout).toBe('Deleted deal 42')
+  })
+
+  it('emits the machine object as JSON when piped/--output json', async () => {
+    const stdout = await captureLogs(ActionCmd, ['--output', 'json'])
+    expect(JSON.parse(stdout)).toEqual({ deleted: 42 })
+  })
+
+  it('honors --jq on the machine object', async () => {
+    const stdout = await captureLogs(ActionCmd, [
+      '--output',
+      'json',
+      '--jq',
+      '.deleted',
+    ])
+    expect(stdout.trim()).toBe('42')
+  })
 })
 
 describe('--jq with array data', () => {
@@ -514,6 +611,46 @@ describe('resolveFormat with default_output', () => {
     const payload = JSON.parse(writes.join(''))
     expect(payload.exitCode).toBe(64)
     expect(payload.message).toMatch(/nonexistent flag/i)
+  })
+
+  it('honors explicit --output json on a TTY parse error (recovers from argv)', async () => {
+    mockLoadConfig.mockReturnValue({ activeProfile: 'default' })
+    class ParseCmd extends BaseCommand {
+      static skipAuth = true
+      async run() {}
+    }
+    const origIsTTY = process.stdout.isTTY
+    process.stdout.isTTY = true // interactive, but --output json is explicit
+    const writes = []
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((c) => {
+      writes.push(String(c))
+      return true
+    })
+    await ParseCmd.run(['--output', 'json', '--no-such-flag']).catch(() => {})
+    spy.mockRestore()
+    process.stdout.isTTY = origIsTTY
+    const payload = JSON.parse(writes.join(''))
+    expect(payload.exitCode).toBe(64)
+  })
+
+  it('recovers --output=yaml form from argv on a parse error', async () => {
+    mockLoadConfig.mockReturnValue({ activeProfile: 'default' })
+    class ParseCmd extends BaseCommand {
+      static skipAuth = true
+      async run() {}
+    }
+    const origIsTTY = process.stdout.isTTY
+    process.stdout.isTTY = true
+    const writes = []
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((c) => {
+      writes.push(String(c))
+      return true
+    })
+    await ParseCmd.run(['--output=yaml', '--no-such-flag']).catch(() => {})
+    spy.mockRestore()
+    process.stdout.isTTY = origIsTTY
+    // yaml error envelope is the JSON envelope (no yaml error serializer)
+    expect(writes.join('')).toMatch(/"exitCode": 64/)
   })
 
   it('emits JSON errors when piped, even with no flag or stored default', async () => {

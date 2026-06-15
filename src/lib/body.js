@@ -22,5 +22,10 @@ export async function resolveBody(flags) {
     return Buffer.concat(chunks).toString('utf8').trim()
   }
 
-  throw new CliError('--body is required', { exitCode: 2 })
+  throw new CliError(
+    '--body is required (pass a value, @file, or pipe stdin)',
+    {
+      exitCode: 64,
+    },
+  )
 }

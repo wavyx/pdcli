@@ -36,6 +36,9 @@ export default class FileDeleteCommand extends BaseCommand {
     }
 
     await this.apiClient.del(`/api/v1/files/${args.id}`)
-    this.log(chalk.green(`Deleted file ${args.id}`))
+    await this.outputAction(
+      { id: args.id, deleted: true },
+      chalk.green(`Deleted file ${args.id}`),
+    )
   }
 }

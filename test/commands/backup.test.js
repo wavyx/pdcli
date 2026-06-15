@@ -71,6 +71,23 @@ describe('backup', () => {
     expect(stdout).toContain('16 skipped')
   })
 
+  it('emits a JSON summary with --output json (skipped defaults to 0)', async () => {
+    mockRunBackup.mockResolvedValue({ total: 18, exported: 18, counts: {} })
+
+    const stdout = await runCmd(BackupCommand, [
+      '--dir',
+      '/tmp/pd-backup',
+      '--output',
+      'json',
+    ])
+    expect(JSON.parse(stdout)).toEqual({
+      exported: 18,
+      total: 18,
+      skipped: 0,
+      dir: '/tmp/pd-backup',
+    })
+  })
+
   it('defaults the directory to ./pipedrive-backup', async () => {
     mockRunBackup.mockResolvedValue({
       total: 18,

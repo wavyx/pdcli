@@ -4,7 +4,7 @@ import chalk from 'chalk'
 import ora from 'ora'
 import BaseCommand from '../../base-command.js'
 import { parseCsv } from '../../lib/csv-parse.js'
-import { prepareImportBodies } from '../../lib/import.js'
+import { prepareImportBodies, intCell } from '../../lib/import.js'
 import { bulkRun } from '../../lib/bulk.js'
 import { bulkUpsertRows } from '../../lib/upsert.js'
 import { getFields } from '../../lib/fields.js'
@@ -16,7 +16,7 @@ const SPECIAL_COLUMNS = {
     typed.name = value
   },
   owner_id: (typed, value) => {
-    typed.owner_id = Number(value)
+    typed.owner_id = intCell(value, 'owner_id')
   },
 }
 
@@ -123,7 +123,12 @@ export default class OrgImportCommand extends BaseCommand {
       spinner.stop()
     }
 
-    this.log(
+    await this.outputAction(
+      {
+        imported: summary.succeeded.length,
+        total: bodies.length,
+        failed: summary.failed.length,
+      },
       chalk.green(
         `Imported ${summary.succeeded.length}/${bodies.length} organizations`,
       ),
@@ -131,7 +136,7 @@ export default class OrgImportCommand extends BaseCommand {
 
     if (summary.failed.length > 0) {
       for (const { item, error } of summary.failed) {
-        this.log(chalk.red(`  ✘ ${item.name ?? '(unnamed)'}: ${error}`))
+        this.logToStderr(chalk.red(`  ✘ ${item.name ?? '(unnamed)'}: ${error}`))
       }
       throw new CliError(
         `${summary.failed.length} of ${bodies.length} rows failed`,
@@ -175,7 +180,14 @@ export default class OrgImportCommand extends BaseCommand {
 
     const { created, updated, unchanged } = summary.counts
     const prefix = flags['dry-run'] ? '[dry-run] ' : ''
-    this.log(
+    await this.outputAction(
+      {
+        created,
+        updated,
+        unchanged,
+        failed: summary.failed.length,
+        dryRun: flags['dry-run'],
+      },
       chalk.green(
         `${prefix}${created} created, ${updated} updated, ${unchanged} unchanged`,
       ),
@@ -183,7 +195,7 @@ export default class OrgImportCommand extends BaseCommand {
 
     if (summary.failed.length > 0) {
       for (const { item, error } of summary.failed) {
-        this.log(chalk.red(`  ✘ ${matchOn}="${item.value}": ${error}`))
+        this.logToStderr(chalk.red(`  ✘ ${matchOn}="${item.value}": ${error}`))
       }
       // Surface 65 when every failure is a data-validation error (ambiguous
       // match, empty match value); fall back to 1 for mixed/transport errors.

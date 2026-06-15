@@ -110,18 +110,47 @@ describe('refreshAccessToken', () => {
     expect(scope.isDone()).toBe(true)
   })
 
-  it('throws ApiError when the refresh is rejected', async () => {
+  it('maps a 400 invalid_grant refresh to exit 77 with re-auth guidance', async () => {
+    // An expired/revoked refresh token is the most common failure; it must be
+    // an auth problem (77, "run auth login"), not bad data (65), so an agent
+    // keyed to re-auth on 77 recovers.
+    nock(OAUTH_BASE).post('/oauth/token').reply(400, { error: 'invalid_grant' })
+
+    const err = await refreshAccessToken({
+      refreshToken: 'rt',
+      clientId: 'cid',
+      clientSecret: 'csec',
+    }).catch((e) => e)
+    expect(err.exitCode).toBe(77)
+    expect(err.message).toMatch(/invalid_grant/)
+    expect(err.message).toMatch(/auth login/i)
+  })
+
+  it('rethrows a 5xx refresh failure as-is (service-unavailable 69, not auth 77)', async () => {
+    nock(OAUTH_BASE)
+      .post('/oauth/token')
+      .reply(503, { error: 'temporarily_unavailable' })
+
+    const err = await refreshAccessToken({
+      refreshToken: 'rt',
+      clientId: 'cid',
+      clientSecret: 'csec',
+    }).catch((e) => e)
+    expect(err.exitCode).toBe(69)
+  })
+
+  it('maps a 401 invalid_client refresh to exit 77', async () => {
     nock(OAUTH_BASE)
       .post('/oauth/token')
       .reply(401, { error: 'invalid_client' })
 
-    await expect(
-      refreshAccessToken({
-        refreshToken: 'rt',
-        clientId: 'cid',
-        clientSecret: 'csec',
-      }),
-    ).rejects.toThrow(/invalid_client/)
+    const err = await refreshAccessToken({
+      refreshToken: 'rt',
+      clientId: 'cid',
+      clientSecret: 'csec',
+    }).catch((e) => e)
+    expect(err.exitCode).toBe(77)
+    expect(err.message).toMatch(/invalid_client/)
   })
 })
 

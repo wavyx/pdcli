@@ -1,5 +1,14 @@
-import { describe, it, expect, afterEach } from 'vitest'
-import {
+import { describe, it, expect, afterEach, beforeAll, afterAll } from 'vitest'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+// Isolate the conf store to a throwaway dir BEFORE importing config.js, so
+// these tests never read or mutate the developer's real pdcli profiles.
+const TMP_CONFIG_DIR = mkdtempSync(join(tmpdir(), 'pdcli-config-test-'))
+process.env.PDCLI_CONFIG_DIR = TMP_CONFIG_DIR
+
+const {
   getConf,
   getActiveProfile,
   setActiveProfile,
@@ -9,9 +18,20 @@ import {
   getAllProfiles,
   getProfileData,
   deleteProfileConfig,
-} from '../../src/lib/config.js'
+} = await import('../../src/lib/config.js')
 
 describe('config', () => {
+  beforeAll(() => {
+    // Confirm the isolation actually took effect — guard against a regression
+    // that would point the tests back at the real config store.
+    expect(getConf().path).toContain(TMP_CONFIG_DIR)
+  })
+
+  afterAll(() => {
+    delete process.env.PDCLI_CONFIG_DIR
+    rmSync(TMP_CONFIG_DIR, { recursive: true, force: true })
+  })
+
   afterEach(() => {
     // Clean up any test profiles we created
     const conf = getConf()

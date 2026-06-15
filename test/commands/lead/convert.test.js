@@ -105,9 +105,9 @@ describe('lead convert', () => {
       })
 
     LeadConvertCommand.sleepFn = vi.fn().mockResolvedValue(undefined)
-    await expect(LeadConvertCommand.run([LEAD, '--wait'])).rejects.toThrow(
-      /failed/i,
-    )
+    const err = await LeadConvertCommand.run([LEAD, '--wait']).catch((e) => e)
+    expect(err.message).toMatch(/failed/i)
+    expect(err.exitCode ?? err.oclif?.exit).toBe(65)
   })
 
   it('--wait throws when the conversion is rejected', async () => {
@@ -121,9 +121,34 @@ describe('lead convert', () => {
       })
 
     LeadConvertCommand.sleepFn = vi.fn().mockResolvedValue(undefined)
-    await expect(LeadConvertCommand.run([LEAD, '--wait'])).rejects.toThrow(
-      /reject/i,
-    )
+    const err = await LeadConvertCommand.run([LEAD, '--wait']).catch((e) => e)
+    expect(err.message).toMatch(/reject/i)
+    expect(err.exitCode ?? err.oclif?.exit).toBe(65)
+  })
+
+  it('--output json exposes conversion_id and the new deal_id (not prose-only)', async () => {
+    mockApi()
+      .post(`/api/v2/leads/${LEAD}/convert/deal`, {})
+      .reply(200, { success: true, data: { conversion_id: CONVERSION } })
+      .get(`/api/v2/leads/${LEAD}/convert/status/${CONVERSION}`)
+      .reply(200, {
+        success: true,
+        data: { conversion_id: CONVERSION, status: 'completed', deal_id: 33 },
+      })
+
+    LeadConvertCommand.sleepFn = vi.fn().mockResolvedValue(undefined)
+    const stdout = await runCmd(LeadConvertCommand, [
+      LEAD,
+      '--wait',
+      '--output',
+      'json',
+    ])
+    expect(JSON.parse(stdout)).toEqual({
+      conversion_id: CONVERSION,
+      status: 'completed',
+      lead_id: LEAD,
+      deal_id: 33,
+    })
   })
 
   it('--wait times out after --timeout-secs without a terminal status', async () => {

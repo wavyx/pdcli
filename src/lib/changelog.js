@@ -23,6 +23,7 @@ export async function fetchChangelog(client, dealId, { limit } = {}) {
     client.pageV2(`/api/v1/deals/${dealId}/changelog`, {
       limit: limit ?? MAX_PAGE_LIMIT,
     }),
+    limit,
   )
 }
 

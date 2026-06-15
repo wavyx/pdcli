@@ -34,6 +34,9 @@ export default class ProjectDeleteCommand extends BaseCommand {
     }
 
     await this.apiClient.del(`/api/v2/projects/${args.id}`)
-    this.log(chalk.green(`Deleted project ${args.id}`))
+    await this.outputAction(
+      { id: args.id, deleted: true },
+      chalk.green(`Deleted project ${args.id}`),
+    )
   }
 }

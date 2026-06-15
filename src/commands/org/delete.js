@@ -34,6 +34,9 @@ export default class OrgDeleteCommand extends BaseCommand {
     }
 
     await this.apiClient.del(`/api/v2/organizations/${args.id}`)
-    this.log(chalk.green(`Deleted organization ${args.id}`))
+    await this.outputAction(
+      { id: args.id, deleted: true },
+      chalk.green(`Deleted organization ${args.id}`),
+    )
   }
 }

@@ -97,4 +97,26 @@ describe('deal participant remove', () => {
       DealParticipantRemoveCommand.run(['--participant', '3']),
     ).rejects.toThrow()
   })
+
+  it('emits a JSON object with --output json', async () => {
+    mockConfirmAction.mockResolvedValue(true)
+    mockApi()
+      .delete('/api/v1/deals/42/participants/3')
+      .reply(200, { success: true, data: { id: 3 } })
+
+    const stdout = await runCmd(DealParticipantRemoveCommand, [
+      '42',
+      '--participant',
+      '3',
+      '--yes',
+      '--output',
+      'json',
+    ])
+
+    expect(JSON.parse(stdout)).toEqual({
+      id: 42,
+      participant_id: 3,
+      removed: true,
+    })
+  })
 })

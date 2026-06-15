@@ -88,4 +88,22 @@ describe('org follower remove', () => {
       OrgFollowerRemoveCommand.run(['--user', '5']),
     ).rejects.toThrow()
   })
+
+  it('emits a JSON object with --output json', async () => {
+    mockConfirmAction.mockResolvedValue(true)
+    mockApi()
+      .delete('/api/v2/organizations/42/followers/5')
+      .reply(200, { success: true, data: { user_id: 5 } })
+
+    const stdout = await runCmd(OrgFollowerRemoveCommand, [
+      '42',
+      '--user',
+      '5',
+      '--yes',
+      '--output',
+      'json',
+    ])
+
+    expect(JSON.parse(stdout)).toEqual({ id: 42, user_id: 5, removed: true })
+  })
 })

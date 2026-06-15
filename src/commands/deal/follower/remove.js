@@ -39,6 +39,9 @@ export default class DealFollowerRemoveCommand extends BaseCommand {
     }
 
     await this.apiClient.del(`/api/v2/deals/${args.id}/followers/${flags.user}`)
-    this.log(chalk.green(`Removed follower ${flags.user} from deal ${args.id}`))
+    await this.outputAction(
+      { id: args.id, user_id: flags.user, removed: true },
+      chalk.green(`Removed follower ${flags.user} from deal ${args.id}`),
+    )
   }
 }

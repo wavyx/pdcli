@@ -109,6 +109,28 @@ describe('buildWriteBody', () => {
       expect(body.custom_fields).toBeUndefined()
     })
 
+    it('throws 65 for a non-numeric value on a numeric field', () => {
+      expect(() =>
+        buildWriteBody({ fields: ['Score=not-a-number'], defs: DEFS }),
+      ).toThrow(/number/i)
+      try {
+        buildWriteBody({ fields: ['Score=not-a-number'], defs: DEFS })
+      } catch (err) {
+        expect(err.exitCode).toBe(65)
+      }
+    })
+
+    it('names a numeric field by its hash code when it has no field_name', () => {
+      const defs = [{ field_code: HASH2, field_type: 'double' }] // no field_name
+      try {
+        buildWriteBody({ fields: [`${HASH2}=nope`], defs })
+        throw new Error('should have thrown')
+      } catch (err) {
+        expect(err.exitCode).toBe(65)
+        expect(err.message).toContain(HASH2)
+      }
+    })
+
     it('throws 65 for an unknown field name with a hint', () => {
       expect(() => buildWriteBody({ fields: ['Nope=1'], defs: DEFS })).toThrow(
         /field list/,

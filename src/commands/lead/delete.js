@@ -34,6 +34,9 @@ export default class LeadDeleteCommand extends BaseCommand {
     }
 
     await this.apiClient.del(`/api/v1/leads/${args.id}`)
-    this.log(chalk.green(`Deleted lead ${args.id}`))
+    await this.outputAction(
+      { id: args.id, deleted: true },
+      chalk.green(`Deleted lead ${args.id}`),
+    )
   }
 }

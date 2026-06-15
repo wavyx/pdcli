@@ -82,4 +82,20 @@ describe('org relationship remove', () => {
   it('requires the relationship id positional', async () => {
     await expect(OrgRelationshipRemoveCommand.run([])).rejects.toThrow()
   })
+
+  it('emits a JSON object with --output json', async () => {
+    mockConfirmAction.mockResolvedValue(true)
+    mockApi()
+      .delete('/api/v1/organizationRelationships/7')
+      .reply(200, { success: true, data: { id: 7 } })
+
+    const stdout = await runCmd(OrgRelationshipRemoveCommand, [
+      '7',
+      '--yes',
+      '--output',
+      'json',
+    ])
+
+    expect(JSON.parse(stdout)).toEqual({ id: 7, removed: true })
+  })
 })

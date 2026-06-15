@@ -34,6 +34,9 @@ export default class ActivityDeleteCommand extends BaseCommand {
     }
 
     await this.apiClient.del(`/api/v2/activities/${args.id}`)
-    this.log(chalk.green(`Deleted activity ${args.id}`))
+    await this.outputAction(
+      { id: args.id, deleted: true },
+      chalk.green(`Deleted activity ${args.id}`),
+    )
   }
 }

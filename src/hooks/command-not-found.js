@@ -63,7 +63,21 @@ export default async function commandNotFound(options) {
       process.exit(0)
     } catch (err) {
       debug('alias execution failed: %s', err.message)
-      process.exit(err.exitCode ?? 1)
+      // Map the exit code faithfully. Our CliError carries .exitCode; the oclif
+      // ExitError/CLIError that handleError re-throws carry it ONLY on
+      // .oclif.exit (parse errors use 2, which maps to the usage code 64).
+      // Reading .exitCode alone would collapse every aliased failure to 1 and
+      // break the sysexits contract (auth 77, rate-limit 75, watch's gate 8).
+      const code =
+        err.exitCode ?? (err.oclif?.exit === 2 ? 64 : err.oclif?.exit) ?? 1
+      // A CLIError from cmd.error() holds the human message but relies on
+      // oclif's top-level handler to print it — which this hook bypasses, so
+      // surface it ourselves. An ExitError (code 'EEXIT', thrown by cmd.exit
+      // after the JSON envelope is already on stderr) has nothing to add.
+      if (err.code !== 'EEXIT' && err.message) {
+        process.stderr.write(`${chalk.red('Error:')} ${err.message}\n`)
+      }
+      process.exit(code)
     } finally {
       if (isRoot) aliasChain.clear()
     }

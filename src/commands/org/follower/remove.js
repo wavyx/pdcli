@@ -41,7 +41,8 @@ export default class OrgFollowerRemoveCommand extends BaseCommand {
     await this.apiClient.del(
       `/api/v2/organizations/${args.id}/followers/${flags.user}`,
     )
-    this.log(
+    await this.outputAction(
+      { id: args.id, user_id: flags.user, removed: true },
       chalk.green(
         `Removed follower ${flags.user} from organization ${args.id}`,
       ),

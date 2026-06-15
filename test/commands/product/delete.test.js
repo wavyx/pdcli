@@ -73,4 +73,20 @@ describe('product delete', () => {
       nock.enableNetConnect()
     }
   })
+
+  it('emits a JSON object with --output json', async () => {
+    mockConfirmAction.mockResolvedValue(true)
+    mockApi()
+      .delete('/api/v2/products/42')
+      .reply(200, { success: true, data: { id: 42 } })
+
+    const stdout = await runCmd(ProductDeleteCommand, [
+      '42',
+      '--yes',
+      '--output',
+      'json',
+    ])
+
+    expect(JSON.parse(stdout)).toEqual({ id: 42, deleted: true })
+  })
 })

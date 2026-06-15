@@ -75,4 +75,20 @@ describe('lead delete', () => {
       nock.enableNetConnect()
     }
   })
+
+  it('emits a JSON object with --output json', async () => {
+    mockConfirmAction.mockResolvedValue(true)
+    mockApi()
+      .delete(`/api/v1/leads/${ID}`)
+      .reply(200, { success: true, data: { id: ID } })
+
+    const stdout = await runCmd(LeadDeleteCommand, [
+      ID,
+      '--yes',
+      '--output',
+      'json',
+    ])
+
+    expect(JSON.parse(stdout)).toEqual({ id: ID, deleted: true })
+  })
 })

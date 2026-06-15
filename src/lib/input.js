@@ -90,7 +90,16 @@ function coerceValue(def, rawValue) {
     return rawValue.split(',').map((label) => resolveOption(def, label.trim()))
   }
   if (NUMERIC_TYPES.has(def.field_type)) {
-    return Number(rawValue)
+    const n = Number(rawValue)
+    // A non-numeric value coerces to NaN, which JSON.stringify serializes as
+    // null — silently writing an empty value. Refuse it as a data error.
+    if (!Number.isFinite(n)) {
+      throw new CliError(
+        `"${rawValue}" is not a valid number for field "${def.field_name ?? def.field_code}"`,
+        { exitCode: 65 },
+      )
+    }
+    return n
   }
   return rawValue
 }

@@ -89,4 +89,26 @@ describe('deal product remove', () => {
       DealProductRemoveCommand.run(['--attachment', '3']),
     ).rejects.toThrow()
   })
+
+  it('emits a JSON object with --output json', async () => {
+    mockConfirmAction.mockResolvedValue(true)
+    mockApi()
+      .delete('/api/v2/deals/42/products/3')
+      .reply(200, { success: true, data: { id: 3 } })
+
+    const stdout = await runCmd(DealProductRemoveCommand, [
+      '42',
+      '--attachment',
+      '3',
+      '--yes',
+      '--output',
+      'json',
+    ])
+
+    expect(JSON.parse(stdout)).toEqual({
+      id: 42,
+      attachment_id: 3,
+      removed: true,
+    })
+  })
 })

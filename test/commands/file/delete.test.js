@@ -76,4 +76,20 @@ describe('file delete', () => {
       nock.enableNetConnect()
     }
   })
+
+  it('emits a JSON object with --output json', async () => {
+    mockConfirmAction.mockResolvedValue(true)
+    mockApi()
+      .delete('/api/v1/files/5')
+      .reply(200, { success: true, data: { id: 5 } })
+
+    const stdout = await runCmd(FileDeleteCommand, [
+      '5',
+      '--yes',
+      '--output',
+      'json',
+    ])
+
+    expect(JSON.parse(stdout)).toEqual({ id: 5, deleted: true })
+  })
 })

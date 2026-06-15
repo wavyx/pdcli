@@ -192,14 +192,44 @@ export default class BaseCommand extends Command {
     }
 
     let filteredColumns = columns
-    if (this.flags.fields && columns) {
+    let outData = data
+    if (this.flags.fields) {
       const requested = this.flags.fields.split(',').map((f) => f.trim())
       filteredColumns = Object.fromEntries(
         Object.entries(columns).filter(([key]) => requested.includes(key)),
       )
+      // table/csv project through `columns`; json/yaml serialize the data
+      // as-is, so project the records themselves (by key) — otherwise --fields
+      // is silently ignored for exactly the machine consumers it serves.
+      // `Object(row)` keeps the pick null/primitive-safe without a branch.
+      const format = this.resolveFormat()
+      if (format === 'json' || format === 'yaml') {
+        const pick = (row) =>
+          Object.fromEntries(
+            requested.filter((k) => k in Object(row)).map((k) => [k, row[k]]),
+          )
+        outData = Array.isArray(data) ? data.map(pick) : pick(data)
+      }
     }
 
-    formatOutput(data, filteredColumns, this.resolveFormat(), this)
+    formatOutput(outData, filteredColumns, this.resolveFormat(), this)
+  }
+
+  /**
+   * Report the result of a mutating action. In interactive table mode it
+   * prints the human one-liner; in any machine format (explicit --output, a
+   * json/yaml/csv profile default, or piped) it emits `machineObject` through
+   * outputResults so `--output json | jq`, --fields and --jq all work — a
+   * delete/convert/import is no longer prose-only on stdout.
+   * @param {object} machineObject the structured result (e.g. { deleted: id })
+   * @param {string} humanMessage the interactive one-liner
+   */
+  async outputAction(machineObject, humanMessage) {
+    if (this.resolveFormat() === 'table') {
+      this.log(humanMessage)
+      return
+    }
+    await this.outputResults(machineObject, {})
   }
 
   async catch(err) {

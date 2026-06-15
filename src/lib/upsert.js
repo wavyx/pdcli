@@ -15,35 +15,69 @@ const WRITE_PATH = {
 const NUMERIC_TYPES = new Set(['double', 'monetary'])
 
 /**
+ * Resolve which body key the match field `field` writes to: a root key
+ * (emails/phones/name/title) or a `custom_fields` hash code. Shared by
+ * injectMatch (create) and stripMatchField (update) so the two never drift.
+ * @returns {{ root?: string, custom?: string, def?: object }}
+ */
+function matchFieldTarget(entity, field, defs) {
+  const key = field.toLowerCase()
+  if (entity === 'person' && key === 'email') return { root: 'emails' }
+  if (entity === 'person' && key === 'phone') return { root: 'phones' }
+  if ((entity === 'person' || entity === 'org') && key === 'name') {
+    return { root: 'name' }
+  }
+  if (entity === 'deal' && key === 'title') return { root: 'title' }
+  const def = defs.find(
+    (d) => d.field_name?.toLowerCase() === key || d.field_code === field,
+  )
+  return { custom: def?.field_code, def }
+}
+
+/**
  * Inject the match field+value into a CREATE body (so a created record actually
  * carries the value it was matched on). `??=` so an explicit body value wins.
  */
 function injectMatch(body, entity, field, value, defs) {
-  const key = field.toLowerCase()
-  if (entity === 'person' && key === 'email') {
+  const t = matchFieldTarget(entity, field, defs)
+  if (t.root === 'emails') {
     body.emails ??= [{ value, primary: true }]
-    return
-  }
-  if (entity === 'person' && key === 'phone') {
+  } else if (t.root === 'phones') {
     body.phones ??= [{ value, primary: true }]
-    return
+  } else if (t.root) {
+    body[t.root] ??= value
+  } else {
+    body.custom_fields ??= {}
+    body.custom_fields[t.custom] ??= NUMERIC_TYPES.has(t.def.field_type)
+      ? Number(value)
+      : value
   }
-  if ((entity === 'person' || entity === 'org') && key === 'name') {
-    body.name ??= value
-    return
+}
+
+/**
+ * Keep the match (identity) field from narrowing the record on UPDATE. For
+ * emails/phones the CSV path injects a single-element array holding just the
+ * match value; diffBody compares value-SETS, so {match} vs the record's
+ * {match, other} would emit [match] and PATCH `other` away (the v0.18 CRITICAL).
+ * Drop only that auto-injected single value. A multi-entry body is an explicit
+ * full set the caller wants written — leave it for diffBody. Scalar (name/title)
+ * and custom-field matches need no handling here: diffBody already drops them
+ * when equal and emits a genuine rename when not.
+ */
+function stripMatchField(body, entity, field, value, defs) {
+  const t = matchFieldTarget(entity, field, defs)
+  if (t.root !== 'emails' && t.root !== 'phones') return body
+  const arr = body[t.root]
+  if (
+    Array.isArray(arr) &&
+    arr.length === 1 &&
+    String(arr[0]?.value ?? '').toLowerCase() === String(value).toLowerCase()
+  ) {
+    const out = { ...body }
+    delete out[t.root]
+    return out
   }
-  if (entity === 'deal' && key === 'title') {
-    body.title ??= value
-    return
-  }
-  // custom field
-  const def = defs.find(
-    (d) => d.field_name?.toLowerCase() === key || d.field_code === field,
-  )
-  body.custom_fields ??= {}
-  body.custom_fields[def.field_code] ??= NUMERIC_TYPES.has(def.field_type)
-    ? Number(value)
-    : value
+  return body
 }
 
 /** True if every element of an array is a primitive (or null). */
@@ -151,8 +185,11 @@ export async function runUpsert({
     return { action: 'created', id: res.data?.id, record: res.data }
   }
 
-  // unique → diff-before-PATCH
-  const changed = diffBody(body, match.record)
+  // unique → diff-before-PATCH (don't let the matched email/phone narrow the set)
+  const changed = diffBody(
+    stripMatchField(body, entity, by, value, defs),
+    match.record,
+  )
   if (Object.keys(changed).length === 0) {
     return { action: 'unchanged', id: match.id }
   }

@@ -21,7 +21,7 @@ export async function resolveTargets(
   listPath,
 ) {
   if (ids) {
-    return ids.split(',').map(parseId)
+    return requireTargets(splitNonEmpty(ids, ',').map(parseId))
   }
 
   if (filter != null) {
@@ -33,7 +33,7 @@ export async function resolveTargets(
     })) {
       targets.push(item.id)
     }
-    return targets
+    return requireTargets(targets)
   }
 
   if (!stdin.isTTY) {
@@ -41,12 +41,18 @@ export async function resolveTargets(
     for await (const chunk of stdin) chunks.push(chunk)
     const text = Buffer.concat(chunks).toString('utf8').trim()
     if (text.startsWith('[')) {
-      const parsed = JSON.parse(text)
-      return parsed.map((entry) =>
-        typeof entry === 'object' ? entry.id : parseId(String(entry)),
-      )
+      let parsed
+      try {
+        parsed = JSON.parse(text)
+      } catch (cause) {
+        throw new CliError('Piped stdin is not valid JSON', {
+          exitCode: 65,
+          cause,
+        })
+      }
+      return requireTargets(parsed.map(parseEntry))
     }
-    return text.split('\n').map(parseId)
+    return requireTargets(splitNonEmpty(text, '\n').map(parseId))
   }
 
   throw new CliError(
@@ -55,12 +61,46 @@ export async function resolveTargets(
   )
 }
 
+/** Split on a separator, dropping empty / whitespace-only segments. */
+function splitNonEmpty(text, separator) {
+  return text
+    .split(separator)
+    .map((segment) => segment.trim())
+    .filter((segment) => segment !== '')
+}
+
+/** Fail with a no-targets usage error when nothing resolved. */
+function requireTargets(targets) {
+  if (targets.length === 0) {
+    throw new CliError(
+      'No targets — pass --ids, --filter, or pipe ids on stdin',
+      { exitCode: 64 },
+    )
+  }
+  return targets
+}
+
+/** Resolve one JSON-array entry (a bare id, or an object with an id). */
+function parseEntry(entry) {
+  const raw = typeof entry === 'object' && entry !== null ? entry.id : entry
+  const id = Number(raw)
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new CliError(
+      `Invalid id ${JSON.stringify(raw)} — expected a positive integer`,
+      { exitCode: 65 },
+    )
+  }
+  return id
+}
+
 function parseId(raw) {
-  const id = Number(raw.trim())
-  if (!Number.isInteger(id)) {
-    throw new CliError(`Invalid id "${raw.trim()}" — expected an integer`, {
-      exitCode: 64,
-    })
+  const trimmed = raw.trim()
+  const id = Number(trimmed)
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new CliError(
+      `Invalid id "${trimmed}" — expected a positive integer`,
+      { exitCode: 64 },
+    )
   }
   return id
 }

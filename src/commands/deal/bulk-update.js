@@ -112,15 +112,22 @@ export default class DealBulkUpdateCommand extends BaseCommand {
       spinner.stop()
     }
 
-    this.log(
+    await this.outputAction(
+      {
+        updated: summary.succeeded.length,
+        total: targets.length,
+        failed: summary.failed.length,
+      },
       chalk.green(
         `Updated ${summary.succeeded.length}/${targets.length} deals`,
       ),
     )
 
     if (summary.failed.length > 0) {
+      // Per-row failure detail is diagnostic — to stderr so a piped stdout
+      // stays a clean parseable summary.
       for (const { item, error } of summary.failed) {
-        this.log(chalk.red(`  ✘ deal ${item}: ${error}`))
+        this.logToStderr(chalk.red(`  ✘ deal ${item}: ${error}`))
       }
       throw new CliError(
         `${summary.failed.length} of ${targets.length} updates failed`,

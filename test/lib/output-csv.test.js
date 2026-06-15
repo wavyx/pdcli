@@ -56,4 +56,25 @@ describe('formatCsv', () => {
     const result = formatCsv([{ emailAddress: 'x@y.com' }], cols)
     expect(result).toBe('Mail\nx@y.com')
   })
+
+  it('derives columns from object keys when none are given (no silent blank output)', () => {
+    const result = formatCsv(
+      [
+        { id: 1, title: 'x' },
+        { id: 2, title: 'y' },
+      ],
+      {},
+    )
+    expect(result).toBe('id,title\n1,x\n2,y')
+  })
+
+  it('unions keys across rows when deriving columns', () => {
+    const result = formatCsv([{ id: 1 }, { id: 2, extra: 'z' }], {})
+    expect(result).toBe('id,extra\n1,\n2,z')
+  })
+
+  it('JSON-encodes nested object/array values in derived columns', () => {
+    const result = formatCsv([{ id: 1, custom_fields: { k: 5 } }], {})
+    expect(result).toBe('id,custom_fields\n1,"{""k"":5}"')
+  })
 })

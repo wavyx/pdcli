@@ -361,6 +361,31 @@ describe('digest', () => {
     expect(err.message).toMatch(/--format/)
   })
 
+  it('errors with exit 64 when an explicit --output is combined with --format', async () => {
+    // An explicit --output routes the error through the JSON envelope, so the
+    // thrown EEXIT carries only the code; assert the message on the envelope.
+    const writes = []
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((c) => {
+      writes.push(String(c))
+      return true
+    })
+    let err
+    try {
+      err = await DigestCommand.run([
+        '--pipeline',
+        '1',
+        '--format',
+        'md',
+        '--output',
+        'json',
+      ]).catch((e) => e)
+    } finally {
+      spy.mockRestore()
+    }
+    expect(err.exitCode ?? err.oclif?.exit).toBe(64)
+    expect(writes.join('')).toMatch(/--format/)
+  })
+
   it('routes --jq through the whole packet even with --output table', async () => {
     mockCore()
     mockGoal()

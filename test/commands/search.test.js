@@ -226,6 +226,25 @@ describe('search scoped routing', () => {
     expect(JSON.parse(stdout)).toEqual([])
   })
 
+  it('clamps --limit above 100 to 100 on the scoped endpoint (live API 400s above 100)', async () => {
+    mockApi()
+      .get('/api/v2/deals/search')
+      .query({ term: 'acme', limit: '100' })
+      .reply(200, { success: true, data: { items: [] } })
+
+    const stdout = await runCmd(SearchCommand, [
+      'acme',
+      '--item-types',
+      'deal',
+      '--limit',
+      '500',
+      '--output',
+      'json',
+    ])
+
+    expect(JSON.parse(stdout)).toEqual([])
+  })
+
   it('passes deal-only filters (status/person/org) to /api/v2/deals/search', async () => {
     mockApi()
       .get('/api/v2/deals/search')

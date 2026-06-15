@@ -362,6 +362,22 @@ describe('lookupByField', () => {
     expect(err.message).toMatch(/not searchable/i)
   })
 
+  it.each(['monetary', 'address'])(
+    'rejects matching on a %s custom field (object shape never matches) with exit 64',
+    async (field_type) => {
+      const defs = [{ field_name: 'Budget', field_code: 'bd', field_type }]
+      const err = await lookupByField({
+        client: fakeClient({}),
+        entity: 'deal',
+        defs,
+        field: 'Budget',
+        value: '500',
+      }).catch((e) => e)
+      expect(err.exitCode).toBe(64)
+      expect(err.message).toMatch(/not searchable/i)
+    },
+  )
+
   it('rejects an unknown field with exit 64', async () => {
     const err = await lookupByField({
       client: fakeClient({}),

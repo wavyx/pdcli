@@ -138,6 +138,57 @@ describe('command-not-found hook', () => {
     expect(exitCalls[0]).toBe(1)
   })
 
+  it('maps a real oclif CLIError exit code (cmd.error) instead of collapsing to 1', async () => {
+    process.stdout.isTTY = false // oclif screen.js reads getWindowSize on a TTY
+    getAlias.mockReturnValue('deal list')
+    const { Errors } = await import('@oclif/core')
+    // What handleError throws in table mode: a CLIError carrying the code on
+    // .oclif.exit (NOT .exitCode) and the human message — which oclif's
+    // top-level handler would print but the hook bypasses.
+    const runCommand = vi
+      .fn()
+      .mockRejectedValue(new Errors.CLIError('not authenticated', { exit: 77 }))
+    const findCommand = vi.fn((id) => (id === 'deal:list' ? {} : null))
+
+    await expect(
+      hook({ id: 'wd', argv: [], config: { runCommand, findCommand } }),
+    ).rejects.toBeInstanceOf(ExitSignal)
+
+    expect(exitCalls[0]).toBe(77)
+    const writes = stderrSpy.mock.calls.map((c) => c[0]).join('')
+    expect(writes).toContain('not authenticated')
+  })
+
+  it('maps a real oclif parse error (ExitError exit 2) to usage exit 64', async () => {
+    process.stdout.isTTY = false
+    getAlias.mockReturnValue('deal list')
+    const { Errors } = await import('@oclif/core')
+    const runCommand = vi.fn().mockRejectedValue(new Errors.ExitError(2))
+    const findCommand = vi.fn((id) => (id === 'deal:list' ? {} : null))
+
+    await expect(
+      hook({ id: 'wd', argv: [], config: { runCommand, findCommand } }),
+    ).rejects.toBeInstanceOf(ExitSignal)
+
+    expect(exitCalls[0]).toBe(64)
+  })
+
+  it('preserves a non-2 ExitError code (watch exit 8) without printing EEXIT', async () => {
+    process.stdout.isTTY = false
+    getAlias.mockReturnValue('watch')
+    const { Errors } = await import('@oclif/core')
+    const runCommand = vi.fn().mockRejectedValue(new Errors.ExitError(8))
+    const findCommand = vi.fn(() => null)
+
+    await expect(
+      hook({ id: 'w', argv: [], config: { runCommand, findCommand } }),
+    ).rejects.toBeInstanceOf(ExitSignal)
+
+    expect(exitCalls[0]).toBe(8)
+    const writes = stderrSpy.mock.calls.map((c) => c[0]).join('')
+    expect(writes).not.toMatch(/EEXIT/)
+  })
+
   it('writes error to stderr and exits 127 when no alias matches', async () => {
     getAlias.mockReturnValue(undefined)
     const runCommand = vi.fn()

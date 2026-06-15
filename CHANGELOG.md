@@ -4,6 +4,77 @@ All notable changes to `pdcli` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/).
 
+## [0.18.0] - 2026-06-14
+
+Second contract-hardening pass from a full quality audit, closing the
+exit-code, machine-output, and data-safety gaps that a 1.0 freeze would lock
+in. Most items are bug fixes; the BREAKING notes are exit-code/output changes a
+script could observe.
+
+### Fixed — data safety (the headline)
+
+- **CSV `--upsert` no longer deletes a matched record's other emails/phones.**
+  The match (identity) field is now excluded from the update diff, so matching
+  a person by one email never PATCHes their email list down to that single
+  value. Same for phones.
+- **Upsert matching on a monetary/address custom field is refused (exit 64)**
+  instead of silently never matching and creating a duplicate on every run
+  (v2 returns those fields as objects the scalar compare can't match).
+- **Excel "CSV UTF-8" imports work**: a leading UTF-8 BOM is stripped instead
+  of corrupting the first column name into a "missing name column" error.
+- A non-integer `org_id`/`owner_id` CSV cell is rejected (exit 65) instead of
+  serializing as `null` and silently unlinking the relation; a non-numeric
+  value for a numeric custom field is likewise rejected.
+- **`changes --limit` no longer silently skips rows** sharing the cut row's
+  update-time second; they replay next run (it warns, never silently loses,
+  when a single second exceeds the limit).
+- **`--output csv` no longer emits a silently-blank header+rows** when a command
+  has no preset columns — it derives columns from the data (so `changes
+--output csv` can't advance its watermark over never-written rows).
+
+### Security
+
+- The HTTP transport no longer follows redirects (`redirect: 'manual'`) and
+  refuses any 3xx (exit 78), so the API token is never re-sent to a redirect
+  target off your host-locked company domain.
+
+### Changed
+
+- **BREAKING — exit codes corrected to the ladder.** Network unreachable / DNS
+  failure / `--timeout` now exit **69** (was 70); exhausted 429 retries exit
+  **75** (was 69); a failed/rejected `deal`/`lead convert` exits **65** (was
+  70); a failed OAuth refresh (`invalid_grant`) exits **77** (was 65);
+  malformed `pdcli api --body` JSON exits **65** (was 70). Exit **70** is now
+  truly internal-bug-only.
+- **BREAKING — aliased commands keep their real exit code.** An alias for a
+  command that fails now propagates the command's exit code (e.g. `watch`'s
+  exit 8, auth 77, usage 64) instead of collapsing every failure to 1, and
+  prints the error message it previously swallowed.
+- **Mutations honor `--output`.** Every delete/remove, both converts,
+  `deal bulk-update`, `person`/`org import`, and `backup` now emit a structured
+  JSON/yaml/csv object (honoring `--jq`/`--fields`) instead of prose on stdout;
+  the converts expose the new record id (`deal_id`/`lead_id`) in JSON. Human
+  one-liners remain in interactive table mode.
+- `--fields` now projects keys for `json`/`yaml` output, not only table/csv.
+
+### Fixed — other
+
+- `pdcli api` reads a body piped on stdin (the documented behavior was
+  unreachable); a usage/parse error in a TTY now honors an explicit
+  `--output json`.
+- `search --item-types <one> --limit` is clamped to 100 (the scoped endpoint
+  rejects more) instead of surfacing a confusing API 400.
+- `deal history --limit` caps how much it fetches instead of walking the whole
+  changelog; bulk-target parsing rejects blank/zero/`undefined` ids and
+  malformed piped JSON; `digest` rejects `--format` combined with `--output`.
+
+### Chore
+
+- `npm run docs:commands` builds the manifest first (worked from a dirty tree
+  only); removed the unused `undici` dependency; added the 10 missing
+  `--help` topic descriptions; config tests isolate the store (`PDCLI_CONFIG_DIR`)
+  so they never touch your real profiles.
+
 ## [0.17.0] - 2026-06-11
 
 Contract-hardening release — the last changes to the machine-facing surface

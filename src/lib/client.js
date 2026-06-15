@@ -163,17 +163,53 @@ export function createClient({
     const maxAttempts = retry ? 3 : 1
     let attempts = 0
     let sawRateLimit = false
+    let lastRateLimitWait = DEFAULT_RETRY_AFTER_S
     let refreshed = false
 
     while (attempts < maxAttempts) {
       attempts++
 
-      const res = await fetch(url, {
-        method,
-        headers: { ...authHeaders(), ...extraHeaders },
-        body: makeBody ? makeBody() : undefined,
-        signal: AbortSignal.timeout(timeout),
-      })
+      let res
+      try {
+        res = await fetch(url, {
+          method,
+          headers: { ...authHeaders(), ...extraHeaders },
+          body: makeBody ? makeBody() : undefined,
+          signal: AbortSignal.timeout(timeout),
+          // Never auto-follow redirects: the default fetch would re-send the
+          // x-api-token header to the redirect target, leaking it off the
+          // host-locked domain (Node only strips `authorization` cross-origin,
+          // not custom headers). We detect the opaqueredirect below and refuse.
+          redirect: 'manual',
+        })
+      } catch (cause) {
+        // fetch rejects on DNS failure / connection refused (TypeError
+        // 'fetch failed') and on AbortSignal.timeout (a TimeoutError/AbortError
+        // DOMException). These are reachability problems → service-unavailable
+        // (69), NOT an internal CLI bug (70). Retry like a 5xx; on the last
+        // attempt surface the cause.
+        if (attempts < maxAttempts) {
+          const delay = Math.min(1000 * 2 ** attempts, 30_000) + jitter()
+          debug('fetch failed (%s), retrying in %dms', cause.name, delay)
+          await sleep(delay)
+          continue
+        }
+        throw new ServiceUnavailableError(
+          `Cannot reach ${baseOrigin}: ${cause.message}`,
+          { cause },
+        )
+      }
+
+      // redirect:'manual' surfaces a 30x as a readable response that we never
+      // follow. Refuse it — auto-following would re-send the token to the
+      // redirect target, leaking it off the host-locked domain.
+      if (res.status >= 300 && res.status < 400) {
+        throw new CliError(
+          `Refusing to follow a redirect off your Pipedrive company host ` +
+            `(${baseOrigin}) — the API token is never re-sent to another host`,
+          { exitCode: 78 },
+        )
+      }
 
       debug('%s %s → %d', method, path, res.status)
 
@@ -200,6 +236,7 @@ export function createClient({
         )
         if (!retry) throw new RateLimitError(wait)
         sawRateLimit = true
+        lastRateLimitWait = wait
         debug('rate limited, waiting %ds', wait)
         await sleep(wait * 1000)
         continue
@@ -265,7 +302,11 @@ export function createClient({
       return text ? JSON.parse(text) : null
     }
 
-    throw new ServiceUnavailableError()
+    // The only path that exhausts the loop is the 429 retry (every other
+    // terminal status returns or throws inside the loop: 5xx and network
+    // failures throw on their final attempt, success returns). A reachable API
+    // that kept throttling us is rate-limited (75), not unavailable (69).
+    throw new RateLimitError(lastRateLimitWait)
   }
 
   /**
