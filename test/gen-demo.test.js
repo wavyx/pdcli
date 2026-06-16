@@ -22,11 +22,12 @@ describe('escapeXml', () => {
 })
 
 describe('SCRIPT', () => {
-  it('reuses the homepage hero scenes — pipeline health then deal update', () => {
+  it('runs the hero scenes — pipeline health, a won update, then an audit', () => {
     expect(Array.isArray(SCRIPT)).toBe(true)
-    expect(SCRIPT).toHaveLength(2)
+    expect(SCRIPT).toHaveLength(3)
     expect(SCRIPT[0].cmd).toBe('pdcli pipeline health')
     expect(SCRIPT[1].cmd).toBe('pdcli deal update 4821 --status won')
+    expect(SCRIPT[2].cmd).toBe('pdcli audit')
     // Each scene carries its rendered output lines (each a {t, cls} record).
     for (const scene of SCRIPT) {
       expect(typeof scene.cmd).toBe('string')
@@ -93,10 +94,11 @@ describe('buildDemoSvg', () => {
     expect(urls).toEqual(['http://www.w3.org/2000/svg'])
   })
 
-  it('renders both commands from the script', () => {
+  it('renders every command from the script', () => {
     const svg = buildDemoSvg()
     expect(svg).toContain('pdcli pipeline health')
     expect(svg).toContain('pdcli deal update 4821 --status won')
+    expect(svg).toContain('pdcli audit')
   })
 
   it('escapes the escaping helper output and emits no raw stray entities', () => {

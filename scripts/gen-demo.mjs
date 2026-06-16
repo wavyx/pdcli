@@ -48,6 +48,17 @@ export const SCRIPT = [
     cmd: 'pdcli deal update 4821 --status won',
     out: [{ t: '✓ Acme renewal → Won · activity logged', cls: 'ok' }],
   },
+  {
+    cmd: 'pdcli audit',
+    out: [
+      { t: '┌ DATA HYGIENE ──────────── 11 checks ┐', cls: 'dim' },
+      { t: '● 3 duplicate deals', cls: 'warn' },
+      { t: '● 5 deals stale > 30 days', cls: 'warn' },
+      { t: '○ 8 missing a next step', cls: 'dim' },
+      { t: '─────────────────────────────────────', cls: 'dim' },
+      { t: '3 must-fix · audit --strict gates CI', cls: 'ok' },
+    ],
+  },
 ]
 
 // Layout constants (px). Monospace metrics keep the typing reveal aligned.
@@ -156,7 +167,7 @@ export function buildDemoSvg() {
 
   const scenes = SCRIPT.map((s, i) => renderScene(s, i)).join('')
 
-  return `<svg xmlns="${SVG_NS}" width="${WIDTH}" height="${height}" viewBox="0 0 ${WIDTH} ${height}" role="img" aria-label="Animated demo of pdcli running pipeline health and a winning deal update">
+  return `<svg xmlns="${SVG_NS}" width="${WIDTH}" height="${height}" viewBox="0 0 ${WIDTH} ${height}" role="img" aria-label="Animated demo of pdcli: pipeline health, a winning deal update, and a data-hygiene audit">
 <style>
 text { font-family: ${FONT_STACK}; font-size: ${FONT_SIZE}px; white-space: pre; }
 .bar { fill: #6b7d72; font-size: 13px; }
@@ -164,6 +175,7 @@ text { font-family: ${FONT_STACK}; font-size: ${FONT_SIZE}px; white-space: pre; 
 .cmd { fill: #e6efe9; }
 .fg { fill: #cdddd3; }
 .dim { fill: #6b7d72; }
+.warn { fill: #e5c07b; }
 .ok { fill: #4ade80; }
 .cur { fill: #4ade80; }
 </style>
