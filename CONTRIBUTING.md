@@ -89,14 +89,10 @@ Some files are produced by scripts; edit the generator, not the output:
 
 - `docs/commands.md` and the website command reference — `npm run docs:commands`
   (run after `npm run build`, which writes the oclif manifest).
-- `docs/demo.webp` (the animated README terminal) — `npm run docs:demo`, which
-  runs [VHS](https://github.com/charmbracelet/vhs) on `docs/demo.tape`. Requires
-  `vhs` and an ffmpeg built with **libwebp** (Homebrew's core ffmpeg lacks it):
-  `brew tap homebrew-ffmpeg/ffmpeg && brew install homebrew-ffmpeg/ffmpeg/ffmpeg --with-webp`.
-  Also needs an authenticated pdcli profile (use a sandbox). For a polished,
-  reproducible recording, first run `./scripts/seed-demo.sh` — it builds a clean
-  "pdcli demo" pipeline (sane deal values, a duplicate person, a stale deal so
-  `audit` has findings) and points the tape at it.
+- `docs/demo.svg` (the animated README terminal) — `npm run docs:demo`. It's a
+  self-contained, deterministic SMIL SVG (no fonts/scripts/network) drawn from
+  the curated `SCRIPT` scenes in `scripts/gen-demo.mjs`; edit the generator, not
+  the SVG.
 
 `oclif.manifest.json` is generated and git-ignored; never commit it.
 
