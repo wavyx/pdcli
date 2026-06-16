@@ -1,8 +1,12 @@
 # pdcli
 
+[![npm version](https://img.shields.io/npm/v/@wavyx/pdcli)](https://www.npmjs.com/package/@wavyx/pdcli)
 [![CI](https://github.com/wavyx/pdcli/actions/workflows/ci.yml/badge.svg)](https://github.com/wavyx/pdcli/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/wavyx/pdcli/branch/main/graph/badge.svg)](https://codecov.io/gh/wavyx/pdcli)
-[![npm](https://img.shields.io/npm/v/%40wavyx%2Fpdcli)](https://www.npmjs.com/package/@wavyx/pdcli)
+[![npm downloads](https://img.shields.io/npm/dm/@wavyx/pdcli)](https://www.npmjs.com/package/@wavyx/pdcli)
+[![Node.js](https://img.shields.io/node/v/@wavyx/pdcli)](https://nodejs.org)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-wavyx.github.io%2Fpdcli-1292EE)](https://wavyx.github.io/pdcli/)
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/wavyx/pdcli/main/docs/demo.svg" alt="pdcli demo — running pipeline health and a winning deal update" width="720">
@@ -10,13 +14,24 @@
 
 Command-line interface for [Pipedrive](https://www.pipedrive.com/) — fast, scriptable, built for terminals, CI pipelines, and AI agents.
 
+Covers the **v2 CRM core** (deals, persons, organizations, activities, products,
+pipelines, projects) and the **v1 domains** (leads, notes, files, filters,
+webhooks, goals) — plus time-intelligence analytics, idempotent match-or-create
+sync, and a full account **backup**. JSON output, deterministic exit codes, and a
+host-locked raw `api` escape hatch make it a clean way to drive Pipedrive from CI
+and **AI agents** (Claude Code, Codex, and similar) — no SDK glue required.
+
+📖 **Documentation:** <https://wavyx.github.io/pdcli/>
+
 > Not affiliated with or endorsed by Pipedrive.
 
 ## Install
 
 ```bash
-npm install -g @wavyx/pdcli
+npm install -g @wavyx/pdcli   # Node.js 20+
 ```
+
+The binary is `pdcli`.
 
 ## Authenticate
 
@@ -135,9 +150,52 @@ pdcli doctor                             # diagnose auth/keychain/connectivity
 
 - `--output table|json|yaml|csv` everywhere; table in a TTY, JSON when piped.
 - Deterministic [sysexits](https://man.freebsd.org/cgi/man.cgi?query=sysexits) exit codes for scripting.
-- **Docs: [wavyx.github.io/pdcli](https://wavyx.github.io/pdcli)** — guides, cookbook, AI-agent quickstart, [`llms.txt`](https://wavyx.github.io/pdcli/llms.txt).
-- Full reference: [docs/commands.md](docs/commands.md) (generated from the CLI manifest).
+
+## Commands
+
+| Topic                      | Commands                                                                                                                                               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pdcli auth`               | `login`, `logout`, `status` — token or OAuth, stored in the OS keychain                                                                                |
+| `pdcli deal`               | `list`, `get`, `create`, `update`, `delete`, `upsert`, `convert`, `history`, `context`, `summary`, `bulk-update`, `follower`, `participant`, `product` |
+| `pdcli person`             | `list`, `get`, `create`, `update`, `delete`, `upsert`, `import`, `merge`, `follower`                                                                   |
+| `pdcli org`                | `list`, `get`, `create`, `update`, `delete`, `upsert`, `import`, `merge`, `follower`, `relationship`                                                   |
+| `pdcli activity`           | `list`, `get`, `create`, `update`, `delete`, `type`                                                                                                    |
+| `pdcli lead`               | `list`, `get`, `create`, `update`, `delete`, `convert`, `label`                                                                                        |
+| `pdcli note`               | `list`, `get`, `create`, `update`, `delete`, `comment`                                                                                                 |
+| `pdcli product`            | `list`, `get`, `create`, `update`, `delete`                                                                                                            |
+| `pdcli pipeline` / `stage` | `list`, `get`; `pipeline health` per-stage value/weighted/stale                                                                                        |
+| `pdcli project` / `task`   | `list`, `get`, `create`, `update`, `delete`                                                                                                            |
+| `pdcli field`              | `list`, `get`, `create`, `update`, `delete`, `option` — manage the custom-field schema                                                                 |
+| `pdcli file`               | `list`, `get`, `upload`, `download`, `remote-link`, `update`, `delete`                                                                                 |
+| `pdcli filter` / `webhook` | `filter list`/`get`/`delete`; `webhook list`/`create`/`delete`                                                                                         |
+| `pdcli goal` / `user`      | `goal list`; `user me`/`list`/`find` — resolve owner IDs to names                                                                                      |
+| `pdcli search`             | global item search across entities                                                                                                                     |
+| `pdcli metrics`            | `velocity`, `coverage`, `forecast`, `aging`, `slippage`, `conversion-matrix` — time-intelligence from changelogs                                       |
+| `pdcli funnel` / `rep`     | `funnel` stage-to-stage conversion (`--exact` mines transitions); `rep scorecard` per-owner                                                            |
+| `pdcli audit`              | data-hygiene checks (`--strict` exits 1 for CI); `audit stage-skips`                                                                                   |
+| `pdcli digest`             | the whole Monday packet in one fetch (`--format md\|html --out` for cron → Slack/email)                                                                |
+| `pdcli changes`            | incremental cross-entity change feed with a self-advancing watermark                                                                                   |
+| `pdcli watch`              | exit-code-gated anomaly poller — exits `8` on new findings (`pdcli watch \|\| notify`)                                                                 |
+| `pdcli sync`               | `warehouse` — incremental NDJSON export with per-entity high-water marks                                                                               |
+| `pdcli backup`             | full account dump (`--resume`); `backup diff` for a zero-API field-level diff of two snapshots                                                         |
+| `pdcli api`                | raw escape hatch: `pdcli api GET /api/v2/deals` — host-locked to your company domain                                                                   |
+| `pdcli profile` / `config` | `profile list`/`use`/`current`; `config get`/`set`/`list`/`unset`                                                                                      |
+| `pdcli alias`              | `set`, `list`, `unset` — custom command shortcuts                                                                                                      |
+| `pdcli doctor` / `version` | diagnose auth/keychain/connectivity; version info                                                                                                      |
+
+Run `pdcli --help` or `pdcli <topic> --help` for details. Every list/get command
+supports `--output table|json|yaml|csv`, `--jq`, and `--fields`.
+
+## Documentation
+
+- [Guides, cookbook & AI-agent quickstart](https://wavyx.github.io/pdcli/)
+- [`llms.txt`](https://wavyx.github.io/pdcli/llms.txt) — the docs as plain text for agents
+- [Command reference](docs/commands.md) — generated from the CLI manifest
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Security issues: see [SECURITY.md](SECURITY.md).
 
 ## License
 
-MIT
+[MIT](LICENSE) © Eric Rodriguez
