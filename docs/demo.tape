@@ -34,15 +34,23 @@ Show
 
 # --- scenes (read-only) ------------------------------------------------------
 # This account has 2 pipelines, so pipeline-scoped reports need --pipeline.
-# funnel + field list are value-independent, so they look clean regardless of
-# the deal values in the account (swap freely, or seed a demo pipeline).
+# Each scene clears first (Hide/clear/Show) so output starts at the top — keeps
+# tall tables readable and one scene from bleeding into the next. Keep each
+# scene's output SHORT enough to fit the Height above (a full `field list` would
+# overflow and the frame catches it mid-scroll).
 Type "pdcli pipeline health --pipeline 1" Sleep 400ms Enter
-Sleep 2.8s
+Sleep 3s
 
+Hide
+Type "clear" Enter
+Show
 Type "pdcli funnel --pipeline 1" Sleep 400ms Enter
-Sleep 2.8s
+Sleep 3s
 
-Type "pdcli field list deal" Sleep 400ms Enter
+Hide
+Type "clear" Enter
+Show
+Type "pdcli person upsert jane.demo@example.com --by email --dry-run" Sleep 400ms Enter
 Sleep 3s
 
 # hold the final frame so the loop doesn't appear cut off
