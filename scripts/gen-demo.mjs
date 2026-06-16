@@ -55,7 +55,11 @@ const FONT_SIZE = 15
 const WIDTH = 880 // roomy terminal width so no output line crowds the edge
 const PAD = 26
 const BAR_H = 44
-const CH = 9.0 // advance width of one monospace glyph at FONT_SIZE
+// Glyph advance used to size the typing clip + caret. Deliberately a slight
+// OVER-estimate of a 15px monospace advance: the clip must be at least as wide
+// as the real text or it crops the command (e.g. "health" → "heal"). Erring
+// wide just floats the caret a hair past the text on narrow fonts — harmless.
+const CH = 10.0
 const LINE_H = 26
 const PROMPT = '❯ '
 const FONT_STACK =
