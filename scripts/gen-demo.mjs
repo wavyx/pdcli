@@ -66,11 +66,10 @@ const FONT_SIZE = 15
 const WIDTH = 880 // roomy terminal width so no output line crowds the edge
 const PAD = 26
 const BAR_H = 44
-// Glyph advance used to size the typing clip + caret. Deliberately a slight
-// OVER-estimate of a 15px monospace advance: the clip must be at least as wide
-// as the real text or it crops the command (e.g. "health" → "heal"). Erring
-// wide just floats the caret a hair past the text on narrow fonts — harmless.
-const CH = 10.0
+// Glyph advance used to PACE the typing reveal and place the caret. A slight
+// over-estimate of a 15px monospace advance; the rest state doesn't depend on
+// it being exact (the clip snaps fully open once typing finishes — see below).
+const CH = 11.0
 const LINE_H = 26
 const PROMPT = '❯ '
 const FONT_STACK =
@@ -103,7 +102,11 @@ function renderScene(scene, index) {
   // clear the baseline (cmdY), not sit on it.
   const clipTop = cmdY - LINE_H
   const clipH = LINE_H + 10
-  const typing = `<clipPath id="${clipId}"><rect x="${PAD}" y="${clipTop}" height="${clipH}" width="0"><animate attributeName="width" begin="${begin}s" dur="${TYPE}s" from="0" to="${cmdW}" fill="freeze" repeatCount="1"/>${clipReset}</rect></clipPath>`
+  // Grow the clip to ~cmdW while "typing", then SNAP it fully open at TYPE end
+  // so the held command is never cropped — the rest state no longer depends on
+  // CH matching the viewer's exact glyph advance.
+  const revealFull = `<set attributeName="width" to="${WIDTH}" begin="${begin + TYPE}s" fill="freeze"/>`
+  const typing = `<clipPath id="${clipId}"><rect x="${PAD}" y="${clipTop}" height="${clipH}" width="0"><animate attributeName="width" begin="${begin}s" dur="${TYPE}s" from="0" to="${cmdW}" fill="freeze" repeatCount="1"/>${revealFull}${clipReset}</rect></clipPath>`
 
   // The command text, clipped so it appears to type left-to-right.
   const cmdText = `<text x="${PAD + promptW}" y="${cmdY}" class="cmd" clip-path="url(#${clipId})">${escapeXml(cmd)}</text>`
