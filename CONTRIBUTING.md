@@ -92,8 +92,7 @@ Some files are produced by scripts; edit the generator, not the output:
 - `docs/demo.svg` (the animated README terminal) — `npm run docs:demo`. It's a
   self-contained, deterministic SMIL SVG (no fonts/scripts/network) drawn from
   the curated `SCRIPT` scenes in `scripts/gen-demo.mjs`; edit the generator, not
-  the SVG. (A VHS-based real-recording path also exists — `docs/demo.tape` +
-  `scripts/seed-demo.sh` — if you'd rather record live pdcli output.)
+  the SVG.
 
 `oclif.manifest.json` is generated and git-ignored; never commit it.
 

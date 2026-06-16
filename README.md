@@ -9,7 +9,7 @@
 [![Docs](https://img.shields.io/badge/docs-wavyx.github.io%2Fpdcli-1292EE)](https://wavyx.github.io/pdcli/)
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/wavyx/pdcli/main/docs/demo.svg" alt="pdcli demo — pipeline health and a winning deal update" width="820">
+  <img src="https://raw.githubusercontent.com/wavyx/pdcli/main/docs/demo.svg" alt="pdcli demo — pipeline health, a won deal update, and a data-hygiene audit" width="820">
 </p>
 
 Command-line interface for [Pipedrive](https://www.pipedrive.com/) — fast, scriptable, built for terminals, CI pipelines, and AI agents.
