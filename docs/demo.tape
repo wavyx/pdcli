@@ -8,7 +8,11 @@
 # read-only and show aggregates only (no contact PII). Swap them freely, but
 # avoid mutating commands so the recording is repeatable.
 
-Output docs/demo.webp
+# GIF renders in a GitHub <img> and needs only ffmpeg's built-in encoder.
+# (WebP would be smaller/sharper but Homebrew's ffmpeg ships without libwebp;
+#  MP4/WebM also work if your ffmpeg has the encoder, but GitHub won't autoplay
+#  them inside an <img>.)
+Output docs/demo.gif
 
 Require pdcli
 

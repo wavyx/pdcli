@@ -89,7 +89,7 @@ Some files are produced by scripts; edit the generator, not the output:
 
 - `docs/commands.md` and the website command reference — `npm run docs:commands`
   (run after `npm run build`, which writes the oclif manifest).
-- `docs/demo.webp` (the animated README terminal) — `npm run docs:demo`, which
+- `docs/demo.gif` (the animated README terminal) — `npm run docs:demo`, which
   runs [VHS](https://github.com/charmbracelet/vhs) on `docs/demo.tape`. Requires
   `vhs` installed and an authenticated pdcli profile (point it at a sandbox).
 
