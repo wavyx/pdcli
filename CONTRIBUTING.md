@@ -92,7 +92,7 @@ Some files are produced by scripts; edit the generator, not the output:
 - `docs/demo.webp` (the animated README terminal) — `npm run docs:demo`, which
   runs [VHS](https://github.com/charmbracelet/vhs) on `docs/demo.tape`. Requires
   `vhs` and an ffmpeg built with **libwebp** (Homebrew's core ffmpeg lacks it):
-  `brew tap homebrew-ffmpeg/ffmpeg && brew install homebrew-ffmpeg/ffmpeg/ffmpeg --with-libwebp`.
+  `brew tap homebrew-ffmpeg/ffmpeg && brew install homebrew-ffmpeg/ffmpeg/ffmpeg --with-webp`.
   Also needs an authenticated pdcli profile (use a sandbox).
 
 `oclif.manifest.json` is generated and git-ignored; never commit it.

@@ -10,7 +10,7 @@
 
 # WebP: crisp + ~10x smaller than GIF, renders in a GitHub <img>. Needs an ffmpeg
 # built with libwebp — Homebrew's core ffmpeg lacks it, so install the tap build:
-#   brew tap homebrew-ffmpeg/ffmpeg && brew install homebrew-ffmpeg/ffmpeg/ffmpeg --with-libwebp
+#   brew tap homebrew-ffmpeg/ffmpeg && brew install homebrew-ffmpeg/ffmpeg/ffmpeg --with-webp
 Output docs/demo.webp
 
 Require pdcli
