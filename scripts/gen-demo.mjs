@@ -87,7 +87,12 @@ function renderScene(scene, index) {
   const clipReset = isLast
     ? ''
     : `<set attributeName="width" to="0" begin="${begin + SCENE}s"/>`
-  const typing = `<clipPath id="${clipId}"><rect x="${PAD}" y="${cmdY - LINE_H}" height="${LINE_H}" width="0"><animate attributeName="width" begin="${begin}s" dur="${TYPE}s" from="0" to="${cmdW}" fill="freeze" repeatCount="1"/>${clipReset}</rect></clipPath>`
+  // Clip height runs from above the cap line to BELOW the baseline so glyph
+  // descenders (the tails of p/g/y) aren't sheared off — the rect's bottom must
+  // clear the baseline (cmdY), not sit on it.
+  const clipTop = cmdY - LINE_H
+  const clipH = LINE_H + 10
+  const typing = `<clipPath id="${clipId}"><rect x="${PAD}" y="${clipTop}" height="${clipH}" width="0"><animate attributeName="width" begin="${begin}s" dur="${TYPE}s" from="0" to="${cmdW}" fill="freeze" repeatCount="1"/>${clipReset}</rect></clipPath>`
 
   // The command text, clipped so it appears to type left-to-right.
   const cmdText = `<text x="${PAD + promptW}" y="${cmdY}" class="cmd" clip-path="url(#${clipId})">${escapeXml(cmd)}</text>`
