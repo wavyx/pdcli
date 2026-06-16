@@ -93,7 +93,10 @@ Some files are produced by scripts; edit the generator, not the output:
   runs [VHS](https://github.com/charmbracelet/vhs) on `docs/demo.tape`. Requires
   `vhs` and an ffmpeg built with **libwebp** (Homebrew's core ffmpeg lacks it):
   `brew tap homebrew-ffmpeg/ffmpeg && brew install homebrew-ffmpeg/ffmpeg/ffmpeg --with-webp`.
-  Also needs an authenticated pdcli profile (use a sandbox).
+  Also needs an authenticated pdcli profile (use a sandbox). For a polished,
+  reproducible recording, first run `./scripts/seed-demo.sh` — it builds a clean
+  "pdcli demo" pipeline (sane deal values, a duplicate person, a stale deal so
+  `audit` has findings) and points the tape at it.
 
 `oclif.manifest.json` is generated and git-ignored; never commit it.
 

@@ -50,8 +50,8 @@ Sleep 3s
 Hide
 Type "clear" Enter
 Show
-Type "pdcli person upsert jane.demo@example.com --by email --dry-run" Sleep 400ms Enter
-Sleep 3s
+Type "pdcli audit" Sleep 400ms Enter
+Sleep 3.5s
 
 # hold the final frame so the loop doesn't appear cut off
 Sleep 1.8s
