@@ -197,7 +197,7 @@
   "scripts": {
     "build": "oclif manifest",
     "docs:commands": "npm run build && node scripts/gen-commands.mjs",
-    "docs:demo": "node scripts/gen-demo.mjs",
+    "docs:demo": "vhs docs/demo.tape",
     "lint": "eslint . && prettier --check .",
     "lint:fix": "eslint --fix . && prettier --write .",
     "test": "vitest run",
