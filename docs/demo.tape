@@ -32,14 +32,17 @@ Hide
 Type "clear" Enter
 Show
 
-# --- scenes (read-only, aggregate output) ------------------------------------
-Type "pdcli pipeline health" Sleep 400ms Enter
+# --- scenes (read-only) ------------------------------------------------------
+# This account has 2 pipelines, so pipeline-scoped reports need --pipeline.
+# funnel + field list are value-independent, so they look clean regardless of
+# the deal values in the account (swap freely, or seed a demo pipeline).
+Type "pdcli pipeline health --pipeline 1" Sleep 400ms Enter
 Sleep 2.8s
 
-Type "pdcli deal summary --status open" Sleep 400ms Enter
+Type "pdcli funnel --pipeline 1" Sleep 400ms Enter
 Sleep 2.8s
 
-Type "pdcli metrics coverage --target 500000" Sleep 400ms Enter
+Type "pdcli field list deal" Sleep 400ms Enter
 Sleep 3s
 
 # hold the final frame so the loop doesn't appear cut off
