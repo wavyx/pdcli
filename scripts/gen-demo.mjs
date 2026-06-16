@@ -65,14 +65,16 @@ const PROMPT = '❯ '
 const FONT_STACK =
   "'SFMono-Regular', 'JetBrains Mono', 'Fira Code', Consolas, ui-monospace, monospace"
 
-// Per-scene timing (seconds). Two scenes → ~12s total loop.
+// Per-scene timing (seconds). The demo plays through each scene once, ~6s each.
 const SCENE = 6
 const TYPE = 1.6 // time spent typing the command
-const TOTAL = SCENE * SCRIPT.length // 12s
 
 /** Build one scene as a <g> with SMIL reveal animations. */
 function renderScene(scene, index) {
   const begin = index * SCENE
+  // The demo plays once and rests on the LAST scene (robust across renderers —
+  // no looping state to degenerate). So the last scene never resets/hides.
+  const isLast = index === SCRIPT.length - 1
   const cmd = scene.cmd
   const cmdChars = cmd.length
   // Body baseline for the command line, then one row per output line.
@@ -82,14 +84,22 @@ function renderScene(scene, index) {
 
   // Typing reveal: a clip rect whose width grows from 0 to the command width.
   const clipId = `type${index}`
-  const typing = `<clipPath id="${clipId}"><rect x="${PAD}" y="${cmdY - LINE_H}" height="${LINE_H}" width="0"><animate attributeName="width" begin="${begin}s" dur="${TYPE}s" from="0" to="${cmdW}" fill="freeze" repeatCount="1"/><set attributeName="width" to="0" begin="${begin + SCENE}s"/></rect></clipPath>`
+  const clipReset = isLast
+    ? ''
+    : `<set attributeName="width" to="0" begin="${begin + SCENE}s"/>`
+  const typing = `<clipPath id="${clipId}"><rect x="${PAD}" y="${cmdY - LINE_H}" height="${LINE_H}" width="0"><animate attributeName="width" begin="${begin}s" dur="${TYPE}s" from="0" to="${cmdW}" fill="freeze" repeatCount="1"/>${clipReset}</rect></clipPath>`
 
   // The command text, clipped so it appears to type left-to-right.
   const cmdText = `<text x="${PAD + promptW}" y="${cmdY}" class="cmd" clip-path="url(#${clipId})">${escapeXml(cmd)}</text>`
 
   // Caret sits at the end of the typed text, blinking only during this scene.
   const caretX = PAD + promptW + cmdW
-  const caret = `<rect x="${caretX}" y="${cmdY - FONT_SIZE}" width="${CH}" height="${FONT_SIZE + 3}" class="cur" opacity="0"><animate attributeName="opacity" values="0;1" begin="${begin}s" dur="0.01s" fill="freeze"/><animate attributeName="opacity" values="1;0" begin="${begin + SCENE - 0.2}s" dur="0.01s" fill="freeze"/><animate attributeName="opacity" values="1;0;1" begin="${begin + TYPE}s" dur="0.8s" repeatCount="indefinite"/></rect>`
+  // Last scene's caret keeps blinking on the resting frame; earlier scenes
+  // switch off at scene end (their whole group also fades out then).
+  const caretOff = isLast
+    ? ''
+    : `<animate attributeName="opacity" values="1;0" begin="${begin + SCENE - 0.2}s" dur="0.01s" fill="freeze"/>`
+  const caret = `<rect x="${caretX}" y="${cmdY - FONT_SIZE}" width="${CH}" height="${FONT_SIZE + 3}" class="cur" opacity="0"><animate attributeName="opacity" values="0;1" begin="${begin}s" dur="0.01s" fill="freeze"/>${caretOff}<animate attributeName="opacity" values="1;0;1" begin="${begin + TYPE}s" dur="0.8s" repeatCount="indefinite"/></rect>`
 
   // Prompt glyph, always visible while the scene is on screen.
   const prompt = `<text x="${PAD}" y="${cmdY}" class="prompt">${escapeXml(PROMPT)}</text>`
@@ -100,14 +110,25 @@ function renderScene(scene, index) {
     const y = cmdY + (i + 2) * LINE_H
     lines += `<text x="${PAD}" y="${y}" class="${ln.cls}">${escapeXml(ln.t)}</text>`
   })
-  const outGroup = `<g opacity="0">${lines}<animate attributeName="opacity" values="0;1" begin="${begin + TYPE + 0.2}s" dur="0.3s" fill="freeze"/><set attributeName="opacity" to="0" begin="${begin + SCENE}s"/></g>`
+  const outHide = isLast
+    ? ''
+    : `<set attributeName="opacity" to="0" begin="${begin + SCENE}s"/>`
+  const outGroup = `<g opacity="0">${lines}<animate attributeName="opacity" values="0;1" begin="${begin + TYPE + 0.2}s" dur="0.3s" fill="freeze"/>${outHide}</g>`
 
-  // The whole scene is hidden outside its window; it pops on at `begin`,
-  // off at `begin + SCENE`. The first scene starts visible at t=0.
-  const sceneVisible =
-    index === 0
-      ? `<set attributeName="opacity" to="0" begin="${begin + SCENE}s"/><set attributeName="opacity" to="1" begin="${TOTAL}s"/>`
-      : `<set attributeName="opacity" to="1" begin="${begin}s"/><set attributeName="opacity" to="0" begin="${begin + SCENE}s"/>`
+  // Play-once sequence: scene 0 is visible from t=0 and hides when scene 1
+  // begins; the last scene appears at its `begin` and stays (rests). No reshow,
+  // so there's no loop state for a renderer to land on mid-degeneration.
+  let sceneVisible
+  if (isLast) {
+    sceneVisible =
+      index === 0
+        ? ''
+        : `<set attributeName="opacity" to="1" begin="${begin}s"/>`
+  } else if (index === 0) {
+    sceneVisible = `<set attributeName="opacity" to="0" begin="${begin + SCENE}s"/>`
+  } else {
+    sceneVisible = `<set attributeName="opacity" to="1" begin="${begin}s"/><set attributeName="opacity" to="0" begin="${begin + SCENE}s"/>`
+  }
 
   return `<g opacity="${index === 0 ? 1 : 0}">${typing}${prompt}${cmdText}${caret}${outGroup}${sceneVisible}</g>`
 }
@@ -130,10 +151,6 @@ export function buildDemoSvg() {
 
   const scenes = SCRIPT.map((s, i) => renderScene(s, i)).join('')
 
-  // The master timeline: a 1x1 marker whose own animation declares the loop
-  // duration so the whole document repeats every 12s. (dur="12s")
-  const timeline = `<rect x="0" y="0" width="1" height="1" fill="none" opacity="0"><animate attributeName="opacity" values="0;0" dur="${TOTAL}s" repeatCount="indefinite"/></rect>`
-
   return `<svg xmlns="${SVG_NS}" width="${WIDTH}" height="${height}" viewBox="0 0 ${WIDTH} ${height}" role="img" aria-label="Animated demo of pdcli running pipeline health and a winning deal update">
 <style>
 text { font-family: ${FONT_STACK}; font-size: ${FONT_SIZE}px; white-space: pre; }
@@ -151,7 +168,6 @@ text { font-family: ${FONT_STACK}; font-size: ${FONT_SIZE}px; white-space: pre; 
 ${dots}
 ${title}
 ${scenes}
-${timeline}
 </svg>
 `
 }

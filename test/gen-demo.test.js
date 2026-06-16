@@ -75,9 +75,10 @@ describe('buildDemoSvg', () => {
     expect(buildDemoSvg()).toMatch(/monospace/)
   })
 
-  it('animates with SMIL and loops indefinitely (no scripts, no foreignObject)', () => {
+  it('animates with SMIL, no scripts or foreignObject (GitHub <img> safe)', () => {
     const svg = buildDemoSvg()
     expect(svg).toContain('<animate')
+    // The resting caret blinks indefinitely on the final frame.
     expect(svg).toContain('repeatCount="indefinite"')
     // GitHub <img> sandbox forbids these.
     expect(svg).not.toContain('foreignObject')
@@ -115,9 +116,11 @@ describe('buildDemoSvg', () => {
     expect(buildDemoSvg()).toBe(buildDemoSvg())
   })
 
-  it('totals roughly 12 seconds of animation', () => {
+  it('plays once and rests — the last scene reveals at 6s and never hides', () => {
     const svg = buildDemoSvg()
-    // The master timeline duration is encoded as an attribute we can assert on.
-    expect(svg).toContain('dur="12s"')
+    // Scene 2 (the won confirmation) appears at t=6s…
+    expect(svg).toContain('begin="6s"')
+    // …and there is no reshow/loop marker that could degenerate after one pass.
+    expect(svg).not.toContain('dur="12s"')
   })
 })
