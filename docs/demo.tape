@@ -8,11 +8,10 @@
 # read-only and show aggregates only (no contact PII). Swap them freely, but
 # avoid mutating commands so the recording is repeatable.
 
-# GIF renders in a GitHub <img> and needs only ffmpeg's built-in encoder.
-# (WebP would be smaller/sharper but Homebrew's ffmpeg ships without libwebp;
-#  MP4/WebM also work if your ffmpeg has the encoder, but GitHub won't autoplay
-#  them inside an <img>.)
-Output docs/demo.gif
+# WebP: crisp + ~10x smaller than GIF, renders in a GitHub <img>. Needs an ffmpeg
+# built with libwebp — Homebrew's core ffmpeg lacks it, so install the tap build:
+#   brew tap homebrew-ffmpeg/ffmpeg && brew install homebrew-ffmpeg/ffmpeg/ffmpeg --with-libwebp
+Output docs/demo.webp
 
 Require pdcli
 
