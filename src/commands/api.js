@@ -24,7 +24,9 @@ export default class ApiCommand extends BaseCommand {
       aliases: ['all'],
       description:
         'Follow pagination and collect every page into one array (GET only; ' +
-        'pager inferred from the /api/v1/ or /api/v2/ path)',
+        'pager inferred from the /api/v1/ or /api/v2/ path). Note: --jq then ' +
+        'sees the bare concatenated item array (filter with `.[]`), whereas ' +
+        'without --paginate it sees the full envelope (`.data[]`).',
     }),
   }
 
@@ -97,10 +99,21 @@ export default class ApiCommand extends BaseCommand {
       throw new CliError('--paginate is only valid with GET', { exitCode: 64 })
     }
 
+    // (--limit is validated to >= 1 at parse time via the shared flag's min.)
+
     // Peel any querystring off the path into a seed query object — the pagers
     // append cursor/start themselves. A dummy base makes relative paths parse.
+    // Repeated keys (e.g. ?ids=1&ids=2) accumulate into an array so nothing is
+    // dropped; the client comma-joins array values back onto the request.
     const url = new URL(path, 'http://pdcli.invalid')
-    const query = Object.fromEntries(url.searchParams)
+    const query = {}
+    for (const [k, v] of url.searchParams) {
+      if (k in query) {
+        query[k] = Array.isArray(query[k]) ? [...query[k], v] : [query[k], v]
+      } else {
+        query[k] = v
+      }
+    }
     const cleanPath = url.pathname
 
     let pager
@@ -114,7 +127,23 @@ export default class ApiCommand extends BaseCommand {
       )
     }
 
-    const items = await collectPages(pager(cleanPath, query), this.flags.limit)
+    // The pagers `yield*` the envelope's `data`, which throws a TypeError when
+    // a single-record endpoint (e.g. /api/v2/deals/5) returns `data` as an
+    // object instead of an array. Translate that into a clear usage error
+    // rather than letting it surface as an internal exit 70.
+    let items
+    try {
+      items = await collectPages(pager(cleanPath, query), this.flags.limit)
+    } catch (err) {
+      if (err instanceof TypeError) {
+        throw new CliError(
+          '--paginate expects a list endpoint; GET without --paginate for a ' +
+            'single record',
+          { exitCode: 64 },
+        )
+      }
+      throw err
+    }
 
     if (this.flags.jq || this.flags.output) {
       await this.outputResults(items, {})

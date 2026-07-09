@@ -5,9 +5,51 @@ import { loadConfig } from './lib/config.js'
 import { resolveCredentials, refreshAccessToken } from './lib/auth.js'
 import { setOAuthTokens } from './lib/keychain.js'
 import { createClient } from './lib/client.js'
-import { handleError } from './lib/errors.js'
+import { handleError, CliError } from './lib/errors.js'
 
 const debug = createDebug('pd:fields')
+
+/** Default upper bound on a single jq invocation before we treat it as hung. */
+const JQ_TIMEOUT_MS = 15_000
+
+/**
+ * Run a jq filter, guarding against a missing/broken jq binary. npm >= 11 blocks
+ * node-jq's preinstall, so a globally installed pdcli can ship without the jq
+ * binary at node_modules/node-jq/bin/jq. node-jq's run() then does NOT reject on
+ * the spawn ENOENT — it hangs forever. Bound it: race the run against a timeout
+ * and translate any rejection OR timeout into a clear, deterministic error
+ * (EX_UNAVAILABLE 69) so `--jq` fails fast instead of hanging. The timeout is
+ * overridable via PDCLI_JQ_TIMEOUT_MS (ms) for slow machines / tests.
+ * @param {string} filter jq expression
+ * @param {string} input JSON string
+ * @returns {Promise<string>}
+ */
+async function runJq(filter, input) {
+  const timeoutMs = Number(process.env.PDCLI_JQ_TIMEOUT_MS) || JQ_TIMEOUT_MS
+  const { run } = await import('node-jq')
+  let timer
+  const timeout = new Promise((_resolve, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`jq did not respond within ${timeoutMs}ms`)),
+      timeoutMs,
+    )
+    timer.unref?.() // never keep the event loop alive just for this guard
+  })
+  try {
+    return await Promise.race([
+      run(filter, input, { input: 'string', output: 'pretty' }),
+      timeout,
+    ])
+  } catch (cause) {
+    throw new CliError(
+      'jq is unavailable — the jq binary may be missing or failed to run. ' +
+        'Try: npm rebuild node-jq, or install jq.',
+      { exitCode: 69, cause },
+    )
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
 export default class BaseCommand extends Command {
   static baseFlags = {
@@ -57,6 +99,7 @@ export default class BaseCommand extends Command {
     limit: Flags.integer({
       description: 'Maximum number of items to return (lists)',
       helpGroup: 'GLOBAL',
+      min: 1,
     }),
   }
 
@@ -193,14 +236,9 @@ export default class BaseCommand extends Command {
     if (this.flags.jq) {
       // node-jq ships a native binary — load it only when actually used.
       // Single records pass UNWRAPPED: `--jq .id` works on a get without
-      // the historical `.[0]` indirection (changed in 0.9.0).
-      const { run } = await import('node-jq')
-      const input = JSON.stringify(data)
-      const result = await run(this.flags.jq, input, {
-        input: 'string',
-        output: 'pretty',
-      })
-      this.log(result)
+      // the historical `.[0]` indirection (changed in 0.9.0). runJq bounds the
+      // call so a missing/broken jq binary fails fast instead of hanging.
+      this.log(await runJq(this.flags.jq, JSON.stringify(data)))
       return
     }
 

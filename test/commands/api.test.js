@@ -290,6 +290,85 @@ describe('api --paginate', () => {
     )
     expect(err.exitCode ?? err.oclif?.exit).toBe(64)
   })
+
+  it('rejects a single-object endpoint with exit 64, not an internal 70', async () => {
+    mockApi()
+      .get('/api/v2/deals/5')
+      .reply(200, { success: true, data: { id: 5 } })
+
+    const err = await ApiCommand.run([
+      'GET',
+      '/api/v2/deals/5',
+      '--paginate',
+    ]).catch((e) => e)
+
+    expect(err.exitCode ?? err.oclif?.exit).toBe(64)
+    expect(err.message).toMatch(/list endpoint/i)
+  })
+
+  it('propagates a genuine API error during paging (not a single-record guard)', async () => {
+    // A 5xx while paging throws an ApiError (not a TypeError); it must surface
+    // as the API error (exit 69), not be masked as a list-endpoint usage error.
+    mockApi().get('/api/v2/deals').query(true).reply(500, { success: false })
+
+    const err = await ApiCommand.run([
+      'GET',
+      '/api/v2/deals',
+      '--paginate',
+      '--no-retry',
+    ]).catch((e) => e)
+
+    expect(err.exitCode ?? err.oclif?.exit).toBe(69)
+    expect(err.message).not.toMatch(/list endpoint/i)
+  })
+
+  it('rejects --limit 0 with exit 64', async () => {
+    const err = await ApiCommand.run([
+      'GET',
+      '/api/v2/deals',
+      '--paginate',
+      '--limit',
+      '0',
+    ]).catch((e) => e)
+
+    expect(err.exitCode ?? err.oclif?.exit).toBe(64)
+    // The shared --limit flag enforces min:1, so oclif rejects a non-positive
+    // value at parse time ("greater than or equal to 1").
+    expect(err.message).toMatch(/greater than or equal to 1/i)
+  })
+
+  it('rejects a negative --limit with exit 64', async () => {
+    const err = await ApiCommand.run([
+      'GET',
+      '/api/v2/deals',
+      '--paginate',
+      '--limit',
+      '-1',
+    ]).catch((e) => e)
+
+    expect(err.exitCode ?? err.oclif?.exit).toBe(64)
+  })
+
+  it('preserves repeated querystring keys into the first page', async () => {
+    // Three repeats exercises both the first-duplicate (make an array) and the
+    // subsequent-duplicate (append) branches; the client comma-joins the array.
+    mockApi()
+      .get('/api/v2/deals')
+      .query({ ids: '1,2,3' })
+      .reply(200, {
+        success: true,
+        data: [{ id: 1 }, { id: 2 }, { id: 3 }],
+        additional_data: { next_cursor: null },
+      })
+
+    const stdout = await runCmd(ApiCommand, [
+      'GET',
+      '/api/v2/deals?ids=1&ids=2&ids=3',
+      '--paginate',
+    ])
+
+    expect(JSON.parse(stdout).map((d) => d.id)).toEqual([1, 2, 3])
+  })
 })
 
 describe('api --jq', () => {

@@ -80,9 +80,20 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Single source of truth: read the version from the SAME package.json the
+      # npm publish step used, so the Docker image installs a version that exists
+      # on npm (deriving from the git tag can drift from package.json and 404).
+      # Only stable releases get :latest — a prerelease (0.20.0-rc1) must not
+      # poison the :latest tag that `docker pull` resolves by default.
       - name: Resolve version
         id: ver
-        run: echo "v=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          V=$(node -p "require('./package.json').version")
+          echo "v=$V" >> "$GITHUB_OUTPUT"
+          case "$V" in
+            *-*) echo "latest=" >> "$GITHUB_OUTPUT" ;; # prerelease: no :latest
+            *) echo "latest=ghcr.io/${{ github.repository }}:latest" >> "$GITHUB_OUTPUT" ;;
+          esac
 
       - uses: docker/setup-qemu-action@v4 # cross-build arm64
 
@@ -100,6 +111,8 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           build-args: PDCLI_VERSION=${{ steps.ver.outputs.v }}
+          # The :latest line is empty for prereleases (see Resolve version);
+          # build-push-action ignores blank tag lines.
           tags: |
             ghcr.io/${{ github.repository }}:${{ steps.ver.outputs.v }}
-            ghcr.io/${{ github.repository }}:latest
+            ${{ steps.ver.outputs.latest }}

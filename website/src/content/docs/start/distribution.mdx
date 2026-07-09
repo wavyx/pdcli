@@ -140,13 +140,24 @@ Five targets are published per release:
 | `darwin-arm64` | macOS, Apple Silicon |
 | `win32-x64` | Windows, 64-bit |
 
-Download the asset for your target, unpack it, and put the `bin` directory on your
-`PATH`:
+Each tarball filename embeds the build's commit SHA (for example
+`pdcli-v0.20.0-1a2b3c4-linux-x64.tar.gz`), so there is no fixed, predictable
+download URL. Grab the exact asset from the
+[Releases page](https://github.com/wavyx/pdcli/releases), or let the
+[`gh` CLI](https://cli.github.com/) resolve it for you:
 
 ```bash
-curl -fsSL -o pdcli.tar.gz \
-  https://github.com/wavyx/pdcli/releases/download/v0.20.0/pdcli-v0.20.0-linux-x64.tar.gz
-tar -xzf pdcli.tar.gz
+# See the tarballs attached to a release:
+gh release view v0.20.0 --json assets --jq '.assets[].name'
+
+# Download the one for your target by pattern (no need to know the SHA):
+gh release download v0.20.0 --pattern '*linux-x64.tar.gz'
+```
+
+Then unpack it and put the `bin` directory on your `PATH`:
+
+```bash
+tar -xzf pdcli-v0.20.0-*-linux-x64.tar.gz
 ./pdcli/bin/pdcli version
 ```
 

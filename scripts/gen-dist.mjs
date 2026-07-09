@@ -57,7 +57,13 @@ export function renderScoopManifest({ version }) {
           url: `https://registry.npmjs.org/${PKG}`,
           jsonpath: "$.['dist-tags'].latest",
         },
-        autoupdate: { version: '$version' },
+        // Templated with Scoop's $version placeholder so autoupdate rewrites the
+        // pinned version inside installer.script too — not just top-level version.
+        // Without this, autoupdate bumps `version` while the install command stays
+        // pinned to the previous release.
+        autoupdate: {
+          installer: { script: [`npm install -g ${PKG}@$version`] },
+        },
       },
       null,
       2,
