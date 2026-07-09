@@ -25,9 +25,15 @@ This downloads the npm tarball, computes its sha256, and writes:
 
 Both generated files are git-ignored here — they live in their own repos.
 
-> Auto-bumping these on every release would need a cross-repo token (PAT); for
-> now it's a one-line manual step. The Docker image and npm publish are fully
-> automated in `.github/workflows/release.yml`.
+## Automation
+
+The `dist` job in `.github/workflows/release.yml` regenerates both files from the
+just-published tarball and pushes them to the tap repos on every stable release —
+**as long as a `TAP_TOKEN` secret exists**. It must be a fine-grained PAT with
+`contents:write` on `wavyx/homebrew-tap` and `wavyx/scoop-pdcli`. Without the
+secret the job no-ops (the release never fails), and you publish with the manual
+`node scripts/gen-dist.mjs <version>` step above. npm publish and the Docker image
+are always automated.
 
 ## Container security caveat (env-var tokens)
 

@@ -17,13 +17,12 @@ path (npm) plus completions and the doctor. This page is the full menu.
 | **npm (global)** | Daily use on your own machine | Yes (20+) |
 | **npx** | A one-off, or a CI step you don't want to install | Yes (20+) |
 | **Docker** | CI runners and servers with no Node, reproducible pins | No |
-| **Homebrew** _(coming soon)_ | macOS / Linux users who live in `brew` | No |
-| **Scoop** _(coming soon)_ | Windows users who live in `scoop` | No |
+| **Homebrew** | macOS / Linux users who live in `brew` | No (brew installs it) |
+| **Scoop** | Windows users who live in `scoop` | No (scoop installs it) |
 | **Standalone tarball** | Air-gapped or Node-free hosts, manual pinning | No |
 
-The verified, working-today channels are **npm**, **npx**, **Docker**, and the
-**standalone tarballs**. Homebrew and Scoop are planned but not yet published — see
-their sections below.
+Every channel below is live. Homebrew installs Node and jq for you; the standalone
+tarballs are the only fully self-contained, Node-free option.
 
 ## Authentication, in one line
 
@@ -103,14 +102,8 @@ through as arguments. Auth: env vars only (there's no keychain in a container).
 
 ## Homebrew
 
-:::caution[Coming soon: not yet published]
-The Homebrew tap is planned but not live yet. There is no `pdcli` formula in
-`wavyx/tap`, so the command below will not work today. Until it ships, install with
-[npm](#npm-global), [Docker](#docker), or a [standalone tarball](#standalone-tarballs).
-:::
-
-For macOS and Linux users on Homebrew. Once published, it will install a self-contained
-binary, no Node required:
+For macOS and Linux users on Homebrew. `brew` installs Node and jq as dependencies, then
+pdcli via npm, and wires `--jq` to the Homebrew jq so it works out of the box:
 
 ```bash
 brew install wavyx/tap/pdcli
@@ -122,14 +115,8 @@ pdcli version
 
 ## Scoop
 
-:::caution[Coming soon: not yet published]
-The Scoop bucket is planned but not live yet. `wavyx/scoop-pdcli` does not exist, so the
-commands below will not work today. Until it ships, install with [npm](#npm-global),
-[Docker](#docker), or a [standalone tarball](#standalone-tarballs).
-:::
-
-For Windows users on Scoop. Once published, it will also install a self-contained binary,
-no Node required:
+For Windows users on Scoop. Installs pdcli via npm (Node is a dependency), and autoupdate
+tracks the latest npm release:
 
 ```powershell
 scoop bucket add wavyx https://github.com/wavyx/scoop-pdcli

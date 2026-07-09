@@ -15,28 +15,19 @@ running `pdcli auth login`. The token never touches disk and stays out of shell 
 PDCLI_COMPANY_DOMAIN=acme PDCLI_API_TOKEN=xxxxxxxx pdcli deal list
 ```
 
-Store the token as an encrypted secret and inject it per step. In GitHub Actions:
+Store the token as an encrypted secret and inject it as env vars per job — in GitHub
+Actions that's a two-line `env:` block wired to a repository secret:
 
 ```yaml
-name: pipedrive-audit
-on:
-  schedule:
-    - cron: '0 6 * * 1' # Mondays 06:00 UTC
-  workflow_dispatch:
-
-jobs:
-  audit:
-    runs-on: ubuntu-latest
-    env:
-      PDCLI_COMPANY_DOMAIN: acme
-      PDCLI_API_TOKEN: ${{ secrets.PIPEDRIVE_API_TOKEN }}
-    steps:
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 20
-      - run: npm install -g @wavyx/pdcli
-      - run: pdcli audit --strict
+env:
+  PDCLI_COMPANY_DOMAIN: acme
+  PDCLI_API_TOKEN: ${{ secrets.PIPEDRIVE_API_TOKEN }}
 ```
+
+The complete GitHub Actions workflow — a pinned install, the `pdcli doctor --offline`
+preflight, and exit-code gating — lives in
+[GitHub Actions](/pdcli/automation/github-actions/). This page stays platform-agnostic:
+the flags and scheduled-job patterns below work on any CI.
 
 Env auth means no OS keychain is required on the runner — env vars take precedence over the
 keychain, so writes (login) are never attempted. See

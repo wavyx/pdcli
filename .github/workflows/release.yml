@@ -128,3 +128,52 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository }}:${{ steps.ver.outputs.v }}
             ${{ steps.ver.outputs.latest }}
+
+  dist:
+    name: Publish Homebrew + Scoop
+    needs: release # regenerate from the just-published npm tarball
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      # Regenerate the formula + manifest from the published tarball (sha256).
+      - name: Generate dist files
+        id: gen
+        run: |
+          V=$(node -p "require('./package.json').version")
+          echo "v=$V" >> "$GITHUB_OUTPUT"
+          node scripts/gen-dist.mjs "$V"
+
+      # Cross-repo push needs a PAT (the default GITHUB_TOKEN is scoped to this
+      # repo). Add a fine-grained TAP_TOKEN secret with contents:write on
+      # wavyx/homebrew-tap and wavyx/scoop-pdcli to enable auto-publish; without
+      # it this step no-ops so the release never fails on a missing secret.
+      # Prereleases are skipped (they must not move the stable formula/manifest).
+      - name: Push to tap repos
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+          V: ${{ steps.gen.outputs.v }}
+        run: |
+          case "$V" in *-*) echo "prerelease $V — skipping tap publish"; exit 0 ;; esac
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "No TAP_TOKEN secret — skipping Homebrew/Scoop publish."
+            echo "Run 'node scripts/gen-dist.mjs $V' and push manually, or add the PAT."
+            exit 0
+          fi
+          git config --global user.name "pdcli-release"
+          git config --global user.email "release@wavyx.dev"
+          push_file() {
+            repo="$1"; src="$2"; dest="$3"
+            tmp=$(mktemp -d)
+            git clone --depth 1 "https://x-access-token:${TAP_TOKEN}@github.com/${repo}.git" "$tmp"
+            mkdir -p "$(dirname "$tmp/$dest")"
+            cp "$src" "$tmp/$dest"
+            git -C "$tmp" add "$dest"
+            git -C "$tmp" commit -m "pdcli $V" || { echo "no change for $repo"; return 0; }
+            git -C "$tmp" push
+          }
+          push_file wavyx/homebrew-tap packaging/homebrew/pdcli.rb Formula/pdcli.rb
+          push_file wavyx/scoop-pdcli   packaging/scoop/pdcli.json  bucket/pdcli.json

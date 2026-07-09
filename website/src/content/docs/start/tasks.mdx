@@ -1,0 +1,86 @@
+---
+title: Which command do I use?
+description: A goal-oriented index that maps the job you're trying to do to the pdcli command that does it, with a link to the guide for each.
+---
+
+pdcli ships 150+ commands across 28 topics. This page is the shortcut: find the **job**
+you're trying to do, and it points you at the command (and the guide that goes deep).
+
+Every command takes the [global flags](/pdcli/automation/output/) `--output`, `--jq`,
+`--fields`, `--profile`, and friends. For the exhaustive list of every command and flag,
+see the [command reference](/pdcli/reference/commands/).
+
+## Everyday CRM: create, find, update
+
+| I want to… | Command | Learn more |
+| --- | --- | --- |
+| Create a deal, person, or organization | `pdcli deal create`, `pdcli person create`, `pdcli org create` | [Quickstart](/pdcli/start/quickstart/) |
+| Find records (list or filter) | `pdcli deal list`, `pdcli person list`, `pdcli org list` | [Quickstart](/pdcli/start/quickstart/) |
+| Search across every entity at once | `pdcli search "acme"` | [Reference](/pdcli/reference/commands/#pdcli-search) |
+| Fetch one record by ID | `pdcli deal get 42`, `pdcli person get 17` | [Reference](/pdcli/reference/commands/) |
+| Update a field on a record | `pdcli deal update 42 --field "Deal Size=Large"` | [Custom fields](/pdcli/guides/custom-fields/) |
+| Delete a record | `pdcli deal delete 42` | [Reference](/pdcli/reference/commands/) |
+| See a deal's whole world in one call | `pdcli deal context 42` | [MCP server](/pdcli/guides/mcp/) |
+
+## Deduplicate & reconcile
+
+| I want to… | Command | Learn more |
+| --- | --- | --- |
+| Resolve a record by an exact field value (create-vs-update primitive) | `pdcli lookup person --by email=jane@acme.com` | [Bulk operations](/pdcli/guides/bulk/) |
+| Create-or-update idempotently (no dupes) | `pdcli person upsert`, `pdcli deal upsert`, `pdcli org upsert` | [Bulk operations](/pdcli/guides/bulk/) |
+| Merge a duplicate contact into the survivor | `pdcli person merge <losing-id> --into <survivor-id>` | [Bulk operations](/pdcli/guides/bulk/) |
+| Merge two organizations | `pdcli org merge <losing-id> --into <survivor-id>` | [Bulk operations](/pdcli/guides/bulk/) |
+
+## Import & bulk edit
+
+| I want to… | Command | Learn more |
+| --- | --- | --- |
+| Import a CSV of people (idempotent, matched on a field) | `pdcli person import people.csv --upsert --match-on email` | [Bulk operations](/pdcli/guides/bulk/) |
+| Import a CSV of organizations | `pdcli org import orgs.csv --upsert --match-on name` | [Bulk operations](/pdcli/guides/bulk/) |
+| Change one field across many deals | `pdcli deal bulk-update --owner 42` | [Bulk operations](/pdcli/guides/bulk/) |
+
+## Export, back up & sync
+
+| I want to… | Command | Learn more |
+| --- | --- | --- |
+| Back up the whole account to a JSON tree | `pdcli backup ./snapshot` | [Full-account backup](/pdcli/guides/backup/) |
+| Diff two backup snapshots (field-level, offline) | `pdcli backup diff old/ new/` | [Full-account backup](/pdcli/guides/backup/) |
+| Feed a data warehouse / BI (incremental NDJSON) | `pdcli sync warehouse` | [Full-account backup](/pdcli/guides/backup/) |
+| Get an incremental change feed | `pdcli changes` | [Sales analytics](/pdcli/guides/analytics/) |
+
+## Analyze & forecast
+
+| I want to… | Command | Learn more |
+| --- | --- | --- |
+| Forecast the quarter (commit / best-case / weighted) | `pdcli metrics forecast` | [Sales analytics](/pdcli/guides/analytics/) |
+| Get a Monday pipeline packet in one shot | `pdcli digest` | [Sales analytics](/pdcli/guides/analytics/) |
+| Check per-stage pipeline health | `pdcli pipeline health` | [Sales analytics](/pdcli/guides/analytics/) |
+| See velocity, aging, slippage, or coverage | `pdcli metrics velocity`, `pdcli metrics aging`, `pdcli metrics slippage`, `pdcli metrics coverage` | [Sales analytics](/pdcli/guides/analytics/) |
+| Approximate a stage-to-stage funnel | `pdcli funnel` | [Sales analytics](/pdcli/guides/analytics/) |
+| Total open / won / lost per currency | `pdcli deal summary` | [Sales analytics](/pdcli/guides/analytics/) |
+
+## Monitor & keep data clean
+
+| I want to… | Command | Learn more |
+| --- | --- | --- |
+| Audit data quality (stale, missing, duplicate) | `pdcli audit` | [Data-hygiene audit](/pdcli/guides/audit/) |
+| Emit only anomalies that are new since last run | `pdcli watch` | [Data-hygiene audit](/pdcli/guides/audit/) |
+| Check remaining daily API budget | `pdcli quota` | [Reference](/pdcli/reference/commands/#pdcli-quota) |
+| Diagnose the CLI environment | `pdcli doctor` | [Troubleshooting](/pdcli/reference/troubleshooting/) |
+
+## Automate & integrate
+
+| I want to… | Command | Learn more |
+| --- | --- | --- |
+| Expose pdcli to an AI agent | `pdcli mcp serve` | [MCP server](/pdcli/guides/mcp/) |
+| Hit an endpoint pdcli doesn't wrap (host-locked escape hatch) | `pdcli api GET /deals` | [Raw api escape hatch](/pdcli/guides/api/) |
+| Sign in and manage credentials | `pdcli auth login`, `pdcli auth status` | [Authentication](/pdcli/guides/authentication/) |
+| Manage profiles and settings | `pdcli config set`, `pdcli config list` | [Profiles & configuration](/pdcli/guides/configuration/) |
+
+## Still not sure?
+
+- Every command self-describes: `pdcli <command> --help`.
+- Browse the full [command reference](/pdcli/reference/commands/) for topics not listed
+  here (activities, notes, files, filters, goals, leads, products, projects, stages,
+  tasks, users, webhooks, and more).
+- Building for an agent? Start with the [AI agents quickstart](/pdcli/start/agents/).
