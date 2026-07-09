@@ -4,6 +4,29 @@ All notable changes to `pdcli` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/).
 
+## [0.22.0] - 2026-07-09
+
+Integrations: a local webhook dev loop, mail signal for agents, and filters as
+code. The last release before the 1.0 contract freeze.
+
+### Added
+
+- **`pdcli webhook listen`** — a stripe-listen-style dev loop. Tunnel mode
+  registers a temporary webhook against your public tunnel (`--url`), prints and
+  optionally forwards (`--forward-to`) each delivery, and deletes the webhook on
+  exit; the receiver only accepts deliveries carrying the generated basic-auth,
+  and orphaned webhooks from a crashed run are swept on the next start.
+  `--synthetic` emits the same delivery envelope off the changes feed with zero
+  inbound network (for firewalled CI and reactive agents).
+- **Mail signal** — `deal context --mail` adds a mail summary (message count,
+  last message time and direction, participants, latest subject); it is opt-in
+  because mail needs a scope most tokens lack. New `pdcli mail list --deal <id>`
+  lists a deal's messages (bodies excluded by design).
+- **Filters as code** — `filter create`/`filter update` take conditions as JSON
+  (inline, `@file`, or stdin), `filter helpers` lists the operators for authoring
+  them, and `filter export` emits a portable filter definition (single or
+  `--all`). Condition field references use numeric field_id.
+
 ## [0.21.0] - 2026-07-09
 
 Dev loop: check your rate budget, resolve records to ids, and point pdcli at a

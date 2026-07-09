@@ -5,7 +5,7 @@ description: Full command reference for the pdcli command-line interface.
 
 <!-- AUTO-GENERATED from the oclif manifest by scripts/gen-commands.mjs — do not edit by hand. -->
 
-Reference for `pdcli` v0.21.0 (148 commands). Every command also accepts the global flags `--output table|json|yaml|csv`, `--profile`, `--no-color`, `--verbose`, `--no-retry`, `--timeout`, and `--limit`.
+Reference for `pdcli` v0.22.0 (154 commands). Every command also accepts the global flags `--output table|json|yaml|csv`, `--profile`, `--no-color`, `--verbose`, `--no-retry`, `--timeout`, and `--limit`.
 
 ## Top-level
 
@@ -627,6 +627,8 @@ pdcli deal context <id> [flags]
 - `--no-notes` — Skip the notes slice
 - `--no-products` — Skip the products slice
 - `--no-participants` — Skip the participants slice
+- `--mail` — Include a mail summary (off by default; needs the mail:read scope and email sync)
+- `--mail-limit <value>` — Max mail messages to scan for the summary
 - `--activity-limit <value>` — Max activities to include
 - `--note-limit <value>` — Max notes to include
 
@@ -1269,6 +1271,25 @@ pdcli file upload ./report.pdf --deal 42
 
 ## pdcli filter
 
+### `pdcli filter create`
+
+Create a filter
+
+```
+pdcli filter create [flags]
+```
+
+- `--name <value>` _(required)_ — Filter name
+- `--type <deals|leads|org|people|products|activity|projects>` _(required)_ — Filter type
+- `--conditions <value>` — Conditions JSON (a value, @file, or piped stdin). Fields are referenced by numeric field_id — run `pdcli filter helpers` for the valid operators. The blob needs the two-level glue structure {"glue":"and","conditions":[{"glue":"and",...},{"glue":"or",...}]}.
+
+Examples:
+
+```bash
+pdcli filter create --name "Open deals" --type deals --conditions @conditions.json
+cat conditions.json | pdcli filter create --name "Open deals" --type deals
+```
+
 ### `pdcli filter delete`
 
 Delete a filter
@@ -1286,6 +1307,25 @@ pdcli filter delete 5
 pdcli filter delete 5 --yes
 ```
 
+### `pdcli filter export`
+
+Export a filter (or all filters) as portable {name, type, conditions} JSON. To recreate it, feed the fields to `filter create` separately (the create command takes --name/--type/--conditions, not one blob).
+
+```
+pdcli filter export [id] [flags]
+```
+
+- `--all` — Export every filter
+
+Examples:
+
+```bash
+pdcli filter export 5 > filter.json
+pdcli filter export --all > filters.json
+# recreate on another account (conditions reference numeric field_id):
+pdcli filter create --name "$(jq -r .name filter.json)" --type "$(jq -r .type filter.json)" --conditions "$(jq -c .conditions filter.json)"
+```
+
 ### `pdcli filter get`
 
 Get a filter by ID
@@ -1299,6 +1339,24 @@ Examples:
 ```bash
 pdcli filter get 5
 pdcli filter get 5 --output json
+```
+
+### `pdcli filter helpers`
+
+List the operators available for authoring filter conditions
+
+```
+pdcli filter helpers [flags]
+```
+
+- `--type <value>` — Only show operators for this field data type (e.g. varchar, date, int)
+
+Examples:
+
+```bash
+pdcli filter helpers
+pdcli filter helpers --type varchar
+pdcli filter helpers --output json
 ```
 
 ### `pdcli filter list`
@@ -1316,6 +1374,24 @@ Examples:
 ```bash
 pdcli filter list
 pdcli filter list --type deals --output json
+```
+
+### `pdcli filter update`
+
+Update a filter (only provided fields change)
+
+```
+pdcli filter update <id> [flags]
+```
+
+- `--name <value>` — Filter name
+- `--conditions <value>` — Conditions JSON (a value or @file). Fields are referenced by numeric field_id — run `pdcli filter helpers` for the valid operators.
+
+Examples:
+
+```bash
+pdcli filter update 5 --name "Renamed filter"
+pdcli filter update 5 --conditions @conditions.json
 ```
 
 ## pdcli goal
@@ -1474,6 +1550,25 @@ Examples:
 ```bash
 pdcli lead update adf21080-0e10-11eb-879b-05d71fb426ec --title "Renamed"
 pdcli lead update adf21080-0e10-11eb-879b-05d71fb426ec --value 7500 --currency USD
+```
+
+## pdcli mail
+
+### `pdcli mail list`
+
+List the synced email linked to a deal. Message bodies are excluded by design (privacy posture) — the 225-char snippet is the preview; each row carries has_body_flag and body_url so you can fetch a body yourself. Requires the mail:read scope and a configured email sync.
+
+```
+pdcli mail list [flags]
+```
+
+- `--deal <value>` _(required)_ — Deal ID to list mail for
+
+Examples:
+
+```bash
+pdcli mail list --deal 42
+pdcli mail list --deal 42 --output json
 ```
 
 ## pdcli mcp
@@ -2856,5 +2951,31 @@ Examples:
 ```bash
 pdcli webhook list
 pdcli webhook list --output json
+```
+
+### `pdcli webhook listen`
+
+Run a local webhook dev loop. In tunnel mode it registers a temporary Pipedrive webhook pointing at your public tunnel (--url) and prints/forwards each delivery, deleting the webhook on exit. In --synthetic mode it polls the changes feed instead and emits the same delivery envelope with zero inbound network — useful behind a firewall or for reactive agents.
+
+```
+pdcli webhook listen [flags]
+```
+
+- `--url <value>` — Public tunnel URL that forwards to the local receiver (tunnel mode)
+- `--forward-to <value>` — POST each delivery to this local URL as well
+- `--events <value>` — Comma-separated entity.action filters, e.g. deal.change,person.*
+- `--port <value>` — Local receiver port (tunnel mode)
+- `--synthetic` — Poll the changes feed and emit webhook-shaped events (no inbound network)
+- `--since <value>` — Synthetic start point: RFC3339 timestamp or Nd/Nm (else the stored watermark)
+- `--interval <value>` — Milliseconds between synthetic poll cycles
+- `--once` — Process a single delivery / poll cycle then exit
+- `--max-events <value>` — Exit after emitting this many events
+
+Examples:
+
+```bash
+pdcli webhook listen --url https://abc123.ngrok.app --forward-to http://localhost:3000
+pdcli webhook listen --url https://abc123.ngrok.app --events deal.change,person.*
+pdcli webhook listen --synthetic --since 15m
 ```
 
