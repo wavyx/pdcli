@@ -13,6 +13,7 @@ command shares the same ladder.
 | ---- | ------- | ----------------- | ----------------------- |
 | `0` | Success | 2xx | Continue. |
 | `1` | Generic error | — | Inspect the message; safe to surface and stop. `audit --strict` returns 1 on must-severity findings; a partial bulk/import failure returns 1 when some rows failed for non-data reasons. |
+| `3` | No match (`lookup` only) | — | `pdcli lookup` exits `3` when it finds zero rows, so a script can branch create-vs-update: `pdcli lookup … && pdcli … update \|\| pdcli … create`. A distinct code (not `1`) so a real error isn't mistaken for "not found". Not part of the general ladder — specific to `lookup`. |
 | `64` | Usage / bad input | — | A bad invocation: an unknown flag or a missing/invalid argument (caught by the parser), or a value pdcli validated and rejected (invalid `--period`, unknown `--checks` name, several pipelines with no `--pipeline`, a CSV missing its name column, `--ids` over 100). Fix the invocation — retrying won't help. |
 | `65` | Data / validation | `400`, `422` | The request body or input data was rejected: a bad field value, a non-numeric id cell in a CSV, an ambiguous upsert match, malformed `--body` JSON, or a conversion the API rejected. Fix the payload; don't retry unchanged. |
 | `69` | Service unavailable | `5xx`, network | Pipedrive is down/erroring, **or the host is unreachable** (DNS failure, connection refused, or a `--timeout`). pdcli already retried with backoff; safe to retry later. |
@@ -58,6 +59,7 @@ human form; `--verbose` there adds the request path, status code, and `error_inf
 pdcli deal get 42 --output json > deal.json
 case $? in
   0)  echo "ok" ;;
+  3)  echo "no match — create it" ;;
   64) echo "bad invocation — fix flags/args" ; exit 1 ;;
   65) echo "bad request — not retrying" ; exit 1 ;;
   75|69) echo "transient — retry later" ; exit 1 ;;

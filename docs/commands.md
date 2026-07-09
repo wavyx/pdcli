@@ -5,7 +5,7 @@ description: Full command reference for the pdcli command-line interface.
 
 <!-- AUTO-GENERATED from the oclif manifest by scripts/gen-commands.mjs — do not edit by hand. -->
 
-Reference for `pdcli` v0.20.0 (146 commands). Every command also accepts the global flags `--output table|json|yaml|csv`, `--profile`, `--no-color`, `--verbose`, `--no-retry`, `--timeout`, and `--limit`.
+Reference for `pdcli` v0.21.0 (148 commands). Every command also accepts the global flags `--output table|json|yaml|csv`, `--profile`, `--no-color`, `--verbose`, `--no-retry`, `--timeout`, and `--limit`.
 
 ## Top-level
 
@@ -146,6 +146,48 @@ Examples:
 ```bash
 pdcli funnel
 pdcli funnel --pipeline 1 --period 180d
+```
+
+### `pdcli lookup`
+
+Find item IDs by an exact field value — the create-vs-update primitive.
+Matching is CASE-SENSITIVE, and the search index is eventually consistent (a just-created record is not immediately findable), so a lookup-then-create loop can double-create in fast pipelines. Exit 3 means no match (branch to create); exit 0 with rows means it exists.
+
+```
+pdcli lookup <entity> [flags]
+```
+
+- `--field <value>` _(required)_ — Field name (built-in or custom) to search on
+- `--value <value>` _(required)_ — Value to match against the field
+- `--match <exact|beginning|middle>` — Match mode (case-sensitive)
+- `--first` — Return only the first match (a single object)
+
+Examples:
+
+```bash
+pdcli lookup deal --field "PO Number" --value PO-1234
+pdcli lookup person --field Email --value a@b.com --first --jq .id
+pdcli lookup org --field Name --value Acme --match beginning
+```
+
+### `pdcli quota`
+
+Show the remaining Pipedrive daily API token budget. Makes one cheap probe request purely to read the rate-limit headers. The budget is COMPANY-WIDE — shared across every integration and user on the account — so treat the reading as a hint, not a guarantee. --min / --threshold gate CI: they exit 75 (rate-limited) when the budget is too low.
+
+```
+pdcli quota [flags]
+```
+
+- `--min <value>` — Exit 75 if the remaining daily token budget is below this many tokens
+- `--threshold <value>` — Exit 75 if the remaining daily token budget is below this percentage
+
+Examples:
+
+```bash
+pdcli quota
+pdcli quota --output json
+pdcli quota --min 5000
+pdcli quota --threshold 10
 ```
 
 ### `pdcli search`

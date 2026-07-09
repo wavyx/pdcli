@@ -4,6 +4,31 @@ All notable changes to `pdcli` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/).
 
+## [0.21.0] - 2026-07-09
+
+Dev loop: check your rate budget, resolve records to ids, and point pdcli at a
+local mock.
+
+### Added
+
+- **`pdcli quota` (alias `ratelimit`)** — reads Pipedrive's daily token-budget
+  headers via one cheap request and prints remaining/limit/percent. `--min <n>`
+  and `--threshold <pct>` gate CI (exit 75 when too low) so a batch can check
+  headroom first: `pdcli quota --min 5000 && pdcli sync warehouse`. The budget is
+  company-wide, so treat the number as a hint. An exhausted budget still prints
+  the reading instead of erroring out.
+- **`pdcli lookup <entity> --field <name> --value <v>`** — exact-match id lookup
+  (deal, person, org, product, lead) via the field-search endpoint, resolving a
+  human field name to its custom-field key. `--first` returns one row for shell
+  composition (`--first --jq .id`); **no match exits 3** so a script can branch
+  create-vs-update. Matching is case-sensitive and the search index is eventually
+  consistent.
+- **Localhost mock endpoint** — set `PDCLI_BASE_URL` to a `localhost`/`127.0.0.1`
+  address (e.g. a Prism mock of the OpenAPI spec) to run pdcli against it. Any
+  non-localhost value is refused (exit 78), the real keychain/OAuth token is
+  never sent to the override host (a `PDCLI_API_TOKEN` is required), and a loud
+  banner prints to stderr.
+
 ## [0.20.0] - 2026-07-09
 
 Distribution: install pdcli however your pipeline prefers, and drive the

@@ -2,6 +2,7 @@ import createDebug from 'debug'
 import {
   ApiError,
   CliError,
+  ConfigError,
   RateLimitError,
   ServiceUnavailableError,
 } from './errors.js'
@@ -29,6 +30,55 @@ function clampLimit(query) {
   return query
 }
 
+/** Number-or-undefined: absent/NaN headers must never become NaN downstream. */
+function numHeader(value) {
+  if (value == null) return undefined
+  const n = Number(value)
+  return Number.isNaN(n) ? undefined : n
+}
+
+/**
+ * Resolve the `PDCLI_BASE_URL` mock-endpoint override, a guarded escape hatch
+ * for pointing pdcli at a local Prism/WireMock server. It ONLY accepts a
+ * localhost origin — anything else hard-fails (78) to reaffirm the host-lock,
+ * never silently trusting an arbitrary host with your token. And because a
+ * mock server has no business receiving your real Pipedrive credential, an
+ * explicit env token (PDCLI_API_TOKEN, which may be a throwaway dummy) is
+ * required: a keychain/profile token is refused rather than leaked.
+ * @param {string} rawUrl
+ * @returns {string} the localhost origin to use as the base
+ */
+function resolveMockOrigin(rawUrl) {
+  let url
+  try {
+    url = new URL(rawUrl)
+  } catch {
+    throw new ConfigError(`PDCLI_BASE_URL is not a valid URL: ${rawUrl}`)
+  }
+  // URL.hostname wraps IPv6 in brackets, so ::1 arrives as "[::1]".
+  const host = url.hostname
+  const isLocal =
+    host === 'localhost' || host === '127.0.0.1' || host === '[::1]'
+  if (!isLocal) {
+    throw new ConfigError(
+      `PDCLI_BASE_URL is host-locked to localhost — refusing ${url.origin}. ` +
+        `Only localhost / 127.0.0.1 / ::1 are accepted so a stray host can ` +
+        `never receive your Pipedrive token.`,
+    )
+  }
+  if (!process.env.PDCLI_API_TOKEN) {
+    throw new ConfigError(
+      `PDCLI_BASE_URL points at a mock endpoint (${url.origin}) but no ` +
+        `PDCLI_API_TOKEN is set. Refusing to send your stored keychain token ` +
+        `to the override host — set PDCLI_API_TOKEN=<dummy> to use the mock.`,
+    )
+  }
+  process.stderr.write(
+    `[pdcli] MOCK ENDPOINT — using ${url.origin} (host-lock bypassed)\n`,
+  )
+  return url.origin
+}
+
 /**
  * @param {object} options
  * @param {string} [options.companyDomain] Bare subdomain ("acme") — forms and
@@ -54,10 +104,26 @@ export function createClient({
   retry = true,
   userAgent = 'pdcli',
 }) {
-  const baseOrigin = apiDomain
-    ? new URL(apiDomain).origin
-    : companyDomainToBaseOrigin(companyDomain)
+  const usingMock = Boolean(process.env.PDCLI_BASE_URL)
+  const baseOrigin = usingMock
+    ? resolveMockOrigin(process.env.PDCLI_BASE_URL)
+    : apiDomain
+      ? new URL(apiDomain).origin
+      : companyDomainToBaseOrigin(companyDomain)
   let token = initialToken
+  if (usingMock) {
+    // The mock override is host-locked to localhost, but the token guarantee
+    // must hold at the CLIENT layer too: a skipAuth command (e.g. `auth
+    // status`) constructs the client directly with the REAL keychain/OAuth
+    // credential. Force the credential to the env token under token auth — and
+    // drop the OAuth refresh callback so a 401 can't mint a real access token
+    // and re-send it — so NO stored credential reaches the override host,
+    // regardless of which command built the client. resolveMockOrigin has
+    // already guaranteed PDCLI_API_TOKEN is set.
+    token = process.env.PDCLI_API_TOKEN
+    authMode = 'token'
+    onRefresh = undefined
+  }
 
   async function request(method, path, { body, query } = {}) {
     const url = new URL(path, baseOrigin)
@@ -212,6 +278,17 @@ export function createClient({
       }
 
       debug('%s %s → %d', method, path, res.status)
+
+      // Snapshot the daily token-budget headers off EVERY response (including
+      // 429s) so `pdcli quota` can read the last-seen budget without a fresh
+      // request. Missing/NaN headers stay undefined — never fabricated.
+      api.lastRateLimit = {
+        dailyRemaining: numHeader(
+          res.headers.get('x-daily-ratelimit-token-remaining'),
+        ),
+        dailyLimit: numHeader(res.headers.get('x-daily-ratelimit-token-limit')),
+        reset: numHeader(res.headers.get('x-ratelimit-reset')),
+      }
 
       if (res.status === 429) {
         // Daily-budget exhaustion has no useful reset window — backoff would
@@ -372,7 +449,7 @@ export function createClient({
     })
   }
 
-  return {
+  const api = {
     get: (path, opts) => request('GET', path, opts),
     post: (path, opts) => request('POST', path, opts),
     put: (path, opts) => request('PUT', path, opts),
@@ -384,5 +461,12 @@ export function createClient({
     putForm,
     pageV1,
     pageV2,
+    /**
+     * Daily token-budget + burst-reset from the most recent response, or
+     * undefined until the first request. Populated by transport().
+     * @type {{ dailyRemaining?: number, dailyLimit?: number, reset?: number } | undefined}
+     */
+    lastRateLimit: undefined,
   }
+  return api
 }

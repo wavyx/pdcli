@@ -75,6 +75,8 @@ export const READ_IDS = new Set([
   'audit:stage-skips',
   'digest',
   'funnel',
+  'lookup',
+  'quota',
 ])
 
 // Leaf verbs that mutate (documented for the audit test; classifyKind treats

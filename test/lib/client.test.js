@@ -1414,3 +1414,215 @@ describe('daily budget exhaustion', () => {
     expect(res.success).toBe(true)
   })
 })
+
+describe('lastRateLimit capture', () => {
+  beforeEach(() => nock.cleanAll())
+  const BASE3 = 'https://acme.pipedrive.com'
+
+  it('captures the daily budget + reset headers onto the client', async () => {
+    nock(BASE3).get('/api/v2/deals').reply(
+      200,
+      { success: true, data: [] },
+      {
+        'x-daily-ratelimit-token-remaining': '127320',
+        'x-daily-ratelimit-token-limit': '150000',
+        'x-ratelimit-reset': '2',
+      },
+    )
+
+    const client = createClient({
+      companyDomain: 'acme',
+      token: 'test-token',
+      retry: false,
+      timeout: 5000,
+    })
+    await client.get('/api/v2/deals')
+    expect(client.lastRateLimit).toEqual({
+      dailyRemaining: 127320,
+      dailyLimit: 150000,
+      reset: 2,
+    })
+  })
+
+  it('leaves fields undefined (never NaN) when headers are absent', async () => {
+    nock(BASE3).get('/api/v2/deals').reply(200, { success: true, data: [] })
+
+    const client = createClient({
+      companyDomain: 'acme',
+      token: 'test-token',
+      retry: false,
+      timeout: 5000,
+    })
+    await client.get('/api/v2/deals')
+    expect(client.lastRateLimit).toEqual({
+      dailyRemaining: undefined,
+      dailyLimit: undefined,
+      reset: undefined,
+    })
+  })
+
+  it('coerces a non-numeric header to undefined, never NaN', async () => {
+    nock(BASE3)
+      .get('/api/v2/deals')
+      .reply(200, { success: true, data: [] }, { 'x-ratelimit-reset': 'soon' })
+
+    const client = createClient({
+      companyDomain: 'acme',
+      token: 'test-token',
+      retry: false,
+      timeout: 5000,
+    })
+    await client.get('/api/v2/deals')
+    expect(client.lastRateLimit.reset).toBeUndefined()
+  })
+})
+
+describe('localhost mock endpoint (PDCLI_BASE_URL)', () => {
+  beforeEach(() => nock.cleanAll())
+  afterEach(() => {
+    delete process.env.PDCLI_BASE_URL
+    delete process.env.PDCLI_API_TOKEN
+    nock.cleanAll()
+  })
+
+  it('honors a localhost override and targets it (env token present)', async () => {
+    process.env.PDCLI_BASE_URL = 'http://127.0.0.1:4010'
+    process.env.PDCLI_API_TOKEN = 'dummy'
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+
+    const client = createClient({
+      companyDomain: 'acme',
+      token: 'keychain-secret',
+      retry: false,
+      timeout: 5000,
+    })
+
+    // The loud banner fires once at client construction.
+    expect(stderr).toHaveBeenCalledWith(
+      expect.stringContaining('MOCK ENDPOINT'),
+    )
+    expect(stderr).toHaveBeenCalledWith(
+      expect.stringContaining('http://127.0.0.1:4010'),
+    )
+
+    const scope = nock('http://127.0.0.1:4010')
+      .get('/api/v2/deals/1')
+      .reply(200, { success: true, data: { id: 1 } })
+
+    const res = await client.get('/api/v2/deals/1')
+    expect(res.data).toEqual({ id: 1 })
+    expect(scope.isDone()).toBe(true)
+    stderr.mockRestore()
+  })
+
+  it('sends the env token — never the caller keychain/OAuth token — to the mock host', async () => {
+    // A skipAuth command (e.g. `auth status`) builds the client directly with
+    // the REAL stored credential (here an OAuth access token). When the mock
+    // override is honored, the request must carry the ENV token under token
+    // auth — the caller's secret must never reach the override host.
+    process.env.PDCLI_BASE_URL = 'http://127.0.0.1:4010'
+    process.env.PDCLI_API_TOKEN = 'dummy-env'
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+
+    const client = createClient({
+      apiDomain: 'https://acme.pipedrive.com',
+      token: 'real-keychain-secret',
+      authMode: 'oauth',
+      retry: false,
+      timeout: 5000,
+    })
+
+    const scope = nock('http://127.0.0.1:4010')
+      .get('/api/v2/deals/1')
+      .matchHeader('x-api-token', 'dummy-env')
+      .matchHeader('authorization', (v) => v === undefined)
+      .reply(200, { success: true, data: { id: 1 } })
+
+    const res = await client.get('/api/v2/deals/1')
+    expect(res.data).toEqual({ id: 1 })
+    expect(scope.isDone()).toBe(true)
+    stderr.mockRestore()
+  })
+
+  it('does not invoke onRefresh against the mock host (no minted token leaks)', async () => {
+    // Forcing token auth is not enough on its own: if the OAuth refresh
+    // callback survived, a 401 from the mock would mint a real access token and
+    // re-send it. onRefresh must be disabled under the mock override.
+    process.env.PDCLI_BASE_URL = 'http://127.0.0.1:4010'
+    process.env.PDCLI_API_TOKEN = 'dummy-env'
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+    const onRefresh = vi.fn().mockResolvedValue('minted-real-token')
+
+    const client = createClient({
+      apiDomain: 'https://acme.pipedrive.com',
+      token: 'real-keychain-secret',
+      authMode: 'oauth',
+      onRefresh,
+      retry: false,
+      timeout: 5000,
+    })
+
+    nock('http://127.0.0.1:4010')
+      .get('/api/v2/deals/1')
+      .reply(401, { success: false, error: 'nope' })
+
+    await expect(client.get('/api/v2/deals/1')).rejects.toMatchObject({
+      statusCode: 401,
+    })
+    expect(onRefresh).not.toHaveBeenCalled()
+    stderr.mockRestore()
+  })
+
+  it('hard-exits 78 when PDCLI_BASE_URL is not localhost', () => {
+    process.env.PDCLI_BASE_URL = 'https://evil.example.com'
+    process.env.PDCLI_API_TOKEN = 'dummy'
+
+    try {
+      createClient({ companyDomain: 'acme', token: 'keychain-secret' })
+      expect.unreachable('should have thrown')
+    } catch (err) {
+      expect(err.exitCode).toBe(78)
+      expect(err.message).toMatch(/localhost|host-lock/i)
+    }
+  })
+
+  it('refuses a keychain token on a localhost override with no env token', () => {
+    process.env.PDCLI_BASE_URL = 'http://localhost:4010'
+    delete process.env.PDCLI_API_TOKEN
+
+    try {
+      createClient({ companyDomain: 'acme', token: 'keychain-secret' })
+      expect.unreachable('should have thrown')
+    } catch (err) {
+      expect(err.exitCode).toBe(78)
+      expect(err.message).toMatch(/PDCLI_API_TOKEN/)
+    }
+  })
+
+  it('accepts ::1 as a localhost override', async () => {
+    process.env.PDCLI_BASE_URL = 'http://[::1]:4010'
+    process.env.PDCLI_API_TOKEN = 'dummy'
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+
+    const client = createClient({ companyDomain: 'acme', token: 'x' })
+    const scope = nock('http://[::1]:4010')
+      .get('/api/v2/deals')
+      .reply(200, { success: true, data: [] })
+
+    await client.get('/api/v2/deals')
+    expect(scope.isDone()).toBe(true)
+    stderr.mockRestore()
+  })
+
+  it('rejects a malformed PDCLI_BASE_URL as a config error (78)', () => {
+    process.env.PDCLI_BASE_URL = 'not a url'
+    process.env.PDCLI_API_TOKEN = 'dummy'
+
+    try {
+      createClient({ companyDomain: 'acme', token: 'x' })
+      expect.unreachable('should have thrown')
+    } catch (err) {
+      expect(err.exitCode).toBe(78)
+    }
+  })
+})

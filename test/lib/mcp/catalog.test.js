@@ -56,6 +56,8 @@ describe('classifyKind', () => {
     ['funnel', 'read'],
     ['digest', 'read'],
     ['audit', 'read'],
+    ['lookup', 'read'],
+    ['quota', 'read'],
     ['audit:stage-skips', 'read'],
     ['version', 'read'],
     ['some:future-verb', 'write'], // unknown verbs default to gated
@@ -225,6 +227,7 @@ describe('real-config classification audit', () => {
     'lead:label:list': 'read',
     'lead:list': 'read',
     'lead:update': 'write',
+    lookup: 'read',
     'mcp:serve': 'excluded',
     'metrics:aging': 'read',
     'metrics:conversion-matrix': 'read',
@@ -282,6 +285,7 @@ describe('real-config classification audit', () => {
     'project:get': 'read',
     'project:list': 'read',
     'project:update': 'write',
+    quota: 'read',
     'rep:scorecard': 'read',
     search: 'read',
     'stage:get': 'read',
@@ -363,6 +367,11 @@ describe('real-config classification audit', () => {
     expect(kinds.filter((k) => k === 'read')).toHaveLength(45)
     expect(kinds.filter((k) => k === 'write')).toHaveLength(14)
     expect(kinds).not.toContain('destructive')
+  })
+
+  it('keeps lookup out of the curated default (its no-match exit 3 reads as a tool error)', () => {
+    expect(CURATED.has('lookup')).toBe(false)
+    expect(classifyKind('lookup')).toBe('read') // still reachable via --all-tools
   })
 
   it('curates user:find so agents can resolve owner names to ids', () => {
