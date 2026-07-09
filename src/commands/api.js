@@ -2,6 +2,7 @@ import { Args, Flags } from '@oclif/core'
 import BaseCommand from '../base-command.js'
 import { resolveBody } from '../lib/body.js'
 import { CliError } from '../lib/errors.js'
+import { collectPages } from '../lib/pagination.js'
 
 export default class ApiCommand extends BaseCommand {
   static description =
@@ -19,6 +20,12 @@ export default class ApiCommand extends BaseCommand {
     body: Flags.string({
       description: 'Request body (JSON string, @file, or pipe stdin)',
     }),
+    paginate: Flags.boolean({
+      aliases: ['all'],
+      description:
+        'Follow pagination and collect every page into one array (GET only; ' +
+        'pager inferred from the /api/v1/ or /api/v2/ path)',
+    }),
   }
 
   static args = {
@@ -35,6 +42,10 @@ export default class ApiCommand extends BaseCommand {
 
   async run() {
     const { args, flags } = await this.parse(ApiCommand)
+
+    if (flags.paginate) {
+      return this.runPaginated(args.method, args.path)
+    }
 
     const methodMap = {
       GET: 'get',
@@ -71,5 +82,44 @@ export default class ApiCommand extends BaseCommand {
       return
     }
     this.log(JSON.stringify(data, null, 2))
+  }
+
+  /**
+   * Follow pagination for a GET passthrough and print the collected array.
+   * The pager is inferred from the path (v2 cursor for /api/v2/, v1 offset for
+   * /api/v1/); any querystring already on the path seeds the first page. The
+   * global --limit caps the total items collected (all pages when unset).
+   * @param {string} method
+   * @param {string} path
+   */
+  async runPaginated(method, path) {
+    if (method !== 'GET') {
+      throw new CliError('--paginate is only valid with GET', { exitCode: 64 })
+    }
+
+    // Peel any querystring off the path into a seed query object — the pagers
+    // append cursor/start themselves. A dummy base makes relative paths parse.
+    const url = new URL(path, 'http://pdcli.invalid')
+    const query = Object.fromEntries(url.searchParams)
+    const cleanPath = url.pathname
+
+    let pager
+    if (cleanPath.includes('/api/v2/')) pager = this.apiClient.pageV2
+    else if (cleanPath.includes('/api/v1/')) pager = this.apiClient.pageV1
+    else {
+      throw new CliError(
+        `Cannot infer the pager for ${path} — --paginate needs an ` +
+          `/api/v1/ or /api/v2/ path`,
+        { exitCode: 64 },
+      )
+    }
+
+    const items = await collectPages(pager(cleanPath, query), this.flags.limit)
+
+    if (this.flags.jq || this.flags.output) {
+      await this.outputResults(items, {})
+      return
+    }
+    this.log(JSON.stringify(items, null, 2))
   }
 }

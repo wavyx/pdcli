@@ -121,6 +121,177 @@ describe('api', () => {
   })
 })
 
+describe('api --paginate', () => {
+  beforeEach(() => {
+    nock.cleanAll()
+    mockResolveCredentials.mockResolvedValue({
+      companyDomain: 'acme',
+      token: 'tok',
+      source: 'profile',
+    })
+  })
+
+  afterEach(() => {
+    nock.cleanAll()
+  })
+
+  it('follows v2 next_cursor across pages and concatenates', async () => {
+    mockApi()
+      .get('/api/v2/deals')
+      .reply(200, {
+        success: true,
+        data: [{ id: 1 }, { id: 2 }],
+        additional_data: { next_cursor: 'abc' },
+      })
+    mockApi()
+      .get('/api/v2/deals')
+      .query({ cursor: 'abc' })
+      .reply(200, {
+        success: true,
+        data: [{ id: 3 }],
+        additional_data: { next_cursor: null },
+      })
+
+    const stdout = await runCmd(ApiCommand, [
+      'GET',
+      '/api/v2/deals',
+      '--paginate',
+    ])
+
+    const items = JSON.parse(stdout)
+    expect(items.map((d) => d.id)).toEqual([1, 2, 3])
+  })
+
+  it('follows v1 next_start until more_items_in_collection is false', async () => {
+    mockApi()
+      .get('/api/v1/activities')
+      .reply(200, {
+        success: true,
+        data: [{ id: 1 }],
+        additional_data: {
+          pagination: { more_items_in_collection: true, next_start: 1 },
+        },
+      })
+    mockApi()
+      .get('/api/v1/activities')
+      .query({ start: '1' })
+      .reply(200, {
+        success: true,
+        data: [{ id: 2 }],
+        additional_data: {
+          pagination: { more_items_in_collection: false },
+        },
+      })
+
+    const stdout = await runCmd(ApiCommand, [
+      'GET',
+      '/api/v1/activities',
+      '--paginate',
+    ])
+
+    expect(JSON.parse(stdout).map((d) => d.id)).toEqual([1, 2])
+  })
+
+  it('accepts --all as an alias for --paginate', async () => {
+    mockApi()
+      .get('/api/v2/deals')
+      .reply(200, {
+        success: true,
+        data: [{ id: 1 }],
+        additional_data: { next_cursor: null },
+      })
+
+    const stdout = await runCmd(ApiCommand, ['GET', '/api/v2/deals', '--all'])
+
+    expect(JSON.parse(stdout).map((d) => d.id)).toEqual([1])
+  })
+
+  it('caps total items at --limit and stops fetching early', async () => {
+    const page1 = mockApi()
+      .get('/api/v2/deals')
+      .reply(200, {
+        success: true,
+        data: [{ id: 1 }, { id: 2 }],
+        additional_data: { next_cursor: 'abc' },
+      })
+    const page2 = mockApi()
+      .get('/api/v2/deals')
+      .query({ cursor: 'abc' })
+      .reply(200, {
+        success: true,
+        data: [{ id: 3 }],
+        additional_data: { next_cursor: null },
+      })
+
+    const stdout = await runCmd(ApiCommand, [
+      'GET',
+      '/api/v2/deals',
+      '--paginate',
+      '--limit',
+      '2',
+    ])
+
+    expect(JSON.parse(stdout).map((d) => d.id)).toEqual([1, 2])
+    expect(page1.isDone()).toBe(true)
+    expect(page2.isDone()).toBe(false)
+  })
+
+  it('preserves an existing querystring into the first page', async () => {
+    mockApi()
+      .get('/api/v2/deals')
+      .query({ status: 'open' })
+      .reply(200, {
+        success: true,
+        data: [{ id: 5 }],
+        additional_data: { next_cursor: null },
+      })
+
+    const stdout = await runCmd(ApiCommand, [
+      'GET',
+      '/api/v2/deals?status=open',
+      '--paginate',
+    ])
+
+    expect(JSON.parse(stdout).map((d) => d.id)).toEqual([5])
+  })
+
+  it('routes the collected array through --jq', async () => {
+    mockApi()
+      .get('/api/v2/deals')
+      .reply(200, {
+        success: true,
+        data: [{ id: 1 }, { id: 2 }],
+        additional_data: { next_cursor: null },
+      })
+
+    const stdout = await runCmd(ApiCommand, [
+      'GET',
+      '/api/v2/deals',
+      '--paginate',
+      '--jq',
+      'length',
+    ])
+
+    expect(stdout.trim()).toBe('2')
+  })
+
+  it('rejects --paginate on POST with exit 64', async () => {
+    const err = await ApiCommand.run([
+      'POST',
+      '/api/v2/deals',
+      '--paginate',
+    ]).catch((e) => e)
+    expect(err.exitCode ?? err.oclif?.exit).toBe(64)
+  })
+
+  it('rejects a path with no /api/v1|v2/ marker with exit 64', async () => {
+    const err = await ApiCommand.run(['GET', '/foo/bar', '--paginate']).catch(
+      (e) => e,
+    )
+    expect(err.exitCode ?? err.oclif?.exit).toBe(64)
+  })
+})
+
 describe('api --jq', () => {
   it('filters the raw response through jq', async () => {
     mockApi()
