@@ -362,11 +362,16 @@ describe('real-config classification audit', () => {
     }
   })
 
-  it('locks the curated split: 46 reads + 14 writes, nothing destructive', () => {
+  it('locks the curated split: 45 reads + 14 writes, nothing destructive', () => {
     const kinds = [...CURATED].map(classifyKind)
-    expect(kinds.filter((k) => k === 'read')).toHaveLength(46)
+    expect(kinds.filter((k) => k === 'read')).toHaveLength(45)
     expect(kinds.filter((k) => k === 'write')).toHaveLength(14)
     expect(kinds).not.toContain('destructive')
+  })
+
+  it('keeps lookup out of the curated default (its no-match exit 3 reads as a tool error)', () => {
+    expect(CURATED.has('lookup')).toBe(false)
+    expect(classifyKind('lookup')).toBe('read') // still reachable via --all-tools
   })
 
   it('curates user:find so agents can resolve owner names to ids', () => {

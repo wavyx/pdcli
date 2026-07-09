@@ -154,7 +154,6 @@ export const CURATED = new Set([
   'user:list',
   // reads — search + deal intelligence
   'search',
-  'lookup',
   'deal:context',
   'deal:history',
   'deal:summary',

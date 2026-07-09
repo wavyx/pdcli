@@ -1515,6 +1515,64 @@ describe('localhost mock endpoint (PDCLI_BASE_URL)', () => {
     stderr.mockRestore()
   })
 
+  it('sends the env token — never the caller keychain/OAuth token — to the mock host', async () => {
+    // A skipAuth command (e.g. `auth status`) builds the client directly with
+    // the REAL stored credential (here an OAuth access token). When the mock
+    // override is honored, the request must carry the ENV token under token
+    // auth — the caller's secret must never reach the override host.
+    process.env.PDCLI_BASE_URL = 'http://127.0.0.1:4010'
+    process.env.PDCLI_API_TOKEN = 'dummy-env'
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+
+    const client = createClient({
+      apiDomain: 'https://acme.pipedrive.com',
+      token: 'real-keychain-secret',
+      authMode: 'oauth',
+      retry: false,
+      timeout: 5000,
+    })
+
+    const scope = nock('http://127.0.0.1:4010')
+      .get('/api/v2/deals/1')
+      .matchHeader('x-api-token', 'dummy-env')
+      .matchHeader('authorization', (v) => v === undefined)
+      .reply(200, { success: true, data: { id: 1 } })
+
+    const res = await client.get('/api/v2/deals/1')
+    expect(res.data).toEqual({ id: 1 })
+    expect(scope.isDone()).toBe(true)
+    stderr.mockRestore()
+  })
+
+  it('does not invoke onRefresh against the mock host (no minted token leaks)', async () => {
+    // Forcing token auth is not enough on its own: if the OAuth refresh
+    // callback survived, a 401 from the mock would mint a real access token and
+    // re-send it. onRefresh must be disabled under the mock override.
+    process.env.PDCLI_BASE_URL = 'http://127.0.0.1:4010'
+    process.env.PDCLI_API_TOKEN = 'dummy-env'
+    const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+    const onRefresh = vi.fn().mockResolvedValue('minted-real-token')
+
+    const client = createClient({
+      apiDomain: 'https://acme.pipedrive.com',
+      token: 'real-keychain-secret',
+      authMode: 'oauth',
+      onRefresh,
+      retry: false,
+      timeout: 5000,
+    })
+
+    nock('http://127.0.0.1:4010')
+      .get('/api/v2/deals/1')
+      .reply(401, { success: false, error: 'nope' })
+
+    await expect(client.get('/api/v2/deals/1')).rejects.toMatchObject({
+      statusCode: 401,
+    })
+    expect(onRefresh).not.toHaveBeenCalled()
+    stderr.mockRestore()
+  })
+
   it('hard-exits 78 when PDCLI_BASE_URL is not localhost', () => {
     process.env.PDCLI_BASE_URL = 'https://evil.example.com'
     process.env.PDCLI_API_TOKEN = 'dummy'

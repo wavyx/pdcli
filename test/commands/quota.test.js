@@ -121,12 +121,113 @@ describe('quota', () => {
     expect(stdout).toContain('n/a')
   })
 
-  it('reports pct as n/a when remaining is known but limit is not', async () => {
+  it('passes when the remaining pct is at or above --threshold', async () => {
+    mockProbe({
+      'x-daily-ratelimit-token-remaining': '120000',
+      'x-daily-ratelimit-token-limit': '150000',
+    })
+
+    // pct = 80, which is >= 50 → no gate trips.
+    const stdout = await runCmd(QuotaCommand, ['--threshold', '50'])
+    expect(stdout).toContain('120000')
+  })
+
+  it('errors (not exit 0) when --threshold is set but the limit header is absent', async () => {
+    // remaining is known but no daily-limit header → pct can't be computed.
+    // The gate must FAIL CLOSED: silently passing would be a false green for a
+    // CI job gating on `pdcli quota --threshold N`. It still prints the reading.
     mockProbe({ 'x-daily-ratelimit-token-remaining': '5000' })
 
-    // --min still gates on the absolute remaining; --threshold can't (no pct).
-    const stdout = await runCmd(QuotaCommand, ['--threshold', '10'])
-    expect(stdout).toContain('5000')
-    expect(stdout).toContain('n/a')
+    const err = await runCmd(QuotaCommand, ['--threshold', '10']).catch(
+      (e) => e,
+    )
+
+    expect(err.oclif.exit).toBe(69)
+    expect(err.message).toMatch(/threshold/i)
+    expect(err.stdout).toContain('5000')
+    expect(err.stdout).toContain('n/a')
+  })
+
+  it('still gates on --min when the limit header is absent (needs only remaining)', async () => {
+    mockProbe({ 'x-daily-ratelimit-token-remaining': '500' })
+
+    const err = await runCmd(QuotaCommand, ['--min', '1000']).catch((e) => e)
+    expect(err.oclif.exit).toBe(75)
+    expect(err.message).toMatch(/min/i)
+  })
+
+  describe('probe that is itself rate-limited (Finding C)', () => {
+    it('prints the reading and exits 0 (no gate) when the daily budget is exhausted', async () => {
+      // The probe 429s with an exhausted budget — the transport would throw
+      // RateLimitError (75) before quota prints. quota must swallow it, read
+      // lastRateLimit (snapshotted off the 429), and print the reading.
+      mockApi().get('/api/v1/users/me').reply(
+        429,
+        {},
+        {
+          'x-daily-ratelimit-token-remaining': '0',
+          'x-daily-ratelimit-token-limit': '150000',
+          'x-ratelimit-reset': '5',
+        },
+      )
+
+      const stdout = await runCmd(QuotaCommand, ['--output', 'json'])
+      expect(JSON.parse(stdout)).toEqual({
+        daily: { remaining: 0, limit: 150000, pct: 0 },
+        reset: 5,
+      })
+    })
+
+    it('prints the reading first, then still exits 75 under --min', async () => {
+      mockApi().get('/api/v1/users/me').reply(
+        429,
+        {},
+        {
+          'x-daily-ratelimit-token-remaining': '0',
+          'x-daily-ratelimit-token-limit': '150000',
+        },
+      )
+
+      const err = await runCmd(QuotaCommand, [
+        '--min',
+        '1000',
+        '--output',
+        'json',
+      ]).catch((e) => e)
+
+      expect(err.oclif.exit).toBe(75)
+      expect(JSON.parse(err.stdout)).toMatchObject({ daily: { remaining: 0 } })
+    })
+
+    it('prints the last-seen reading when a burst 429 surfaces under --no-retry', async () => {
+      mockApi().get('/api/v1/users/me').reply(
+        429,
+        {},
+        {
+          'x-daily-ratelimit-token-remaining': '4100',
+          'x-daily-ratelimit-token-limit': '150000',
+          'x-ratelimit-reset': '2',
+        },
+      )
+
+      const stdout = await runCmd(QuotaCommand, [
+        '--no-retry',
+        '--output',
+        'json',
+      ])
+      expect(JSON.parse(stdout)).toEqual({
+        daily: { remaining: 4100, limit: 150000, pct: 3 },
+        reset: 2,
+      })
+    })
+
+    it('re-throws a non-rate-limit probe error unchanged (e.g. 5xx)', async () => {
+      mockApi()
+        .get('/api/v1/users/me')
+        .reply(500, { success: false, error: 'boom' })
+
+      const err = await runCmd(QuotaCommand, ['--no-retry']).catch((e) => e)
+      expect(err.oclif.exit).toBe(69)
+    })
   })
 })

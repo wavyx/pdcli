@@ -136,6 +136,25 @@ describe('lookup', () => {
     expect(err.exitCode ?? err.oclif?.exit).toBe(3)
   })
 
+  it('tolerates a flat result element (no item wrapper)', async () => {
+    mockDealFields()
+    mockApi()
+      .get('/api/v2/itemSearch/field')
+      .query(true)
+      .reply(200, { success: true, data: [{ id: 42, title: 'Acme' }] })
+
+    const stdout = await runCmd(LookupCommand, [
+      'deal',
+      '--field',
+      'PO Number',
+      '--value',
+      'PO-1234',
+      '--output',
+      'json',
+    ])
+    expect(JSON.parse(stdout)).toEqual([{ id: 42, title: 'Acme' }])
+  })
+
   it('treats a response with no data array as no match (exit 3)', async () => {
     mockDealFields()
     mockApi()

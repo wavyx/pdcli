@@ -33,10 +33,12 @@ deliberately narrow:
 ## Recipe: Prism against the Pipedrive OpenAPI spec
 
 [Prism](https://github.com/stoplightio/prism) turns an OpenAPI document into a
-local mock server. Point it at the Pipedrive v2 spec:
+local mock server. Point it at your local copy of the Pipedrive v2 OpenAPI spec
+(download it from the [Pipedrive developer docs](https://developers.pipedrive.com/docs/api/v1)
+and save it as `pipedrive-v2.yaml`):
 
 ```bash
-prism mock ~/dev/wavyx/pddoc/output/openapi-v2.yaml
+prism mock ./pipedrive-v2.yaml
 # → Prism is listening on http://127.0.0.1:4010
 ```
 

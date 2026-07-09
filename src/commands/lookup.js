@@ -95,7 +95,10 @@ export default class LookupCommand extends BaseCommand {
       },
     })
 
-    const rows = (body.data ?? []).map((entry) => entry.item)
+    // Each result wraps the matched record under `item`; tolerate a flat shape
+    // (`{ id, ... }` directly) so the no-match check and output stay correct
+    // whichever the live endpoint returns.
+    const rows = (body.data ?? []).map((entry) => entry.item ?? entry)
 
     if (rows.length === 0) {
       throw new CliError(

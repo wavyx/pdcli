@@ -104,12 +104,26 @@ export function createClient({
   retry = true,
   userAgent = 'pdcli',
 }) {
-  const baseOrigin = process.env.PDCLI_BASE_URL
+  const usingMock = Boolean(process.env.PDCLI_BASE_URL)
+  const baseOrigin = usingMock
     ? resolveMockOrigin(process.env.PDCLI_BASE_URL)
     : apiDomain
       ? new URL(apiDomain).origin
       : companyDomainToBaseOrigin(companyDomain)
   let token = initialToken
+  if (usingMock) {
+    // The mock override is host-locked to localhost, but the token guarantee
+    // must hold at the CLIENT layer too: a skipAuth command (e.g. `auth
+    // status`) constructs the client directly with the REAL keychain/OAuth
+    // credential. Force the credential to the env token under token auth — and
+    // drop the OAuth refresh callback so a 401 can't mint a real access token
+    // and re-send it — so NO stored credential reaches the override host,
+    // regardless of which command built the client. resolveMockOrigin has
+    // already guaranteed PDCLI_API_TOKEN is set.
+    token = process.env.PDCLI_API_TOKEN
+    authMode = 'token'
+    onRefresh = undefined
+  }
 
   async function request(method, path, { body, query } = {}) {
     const url = new URL(path, baseOrigin)
