@@ -89,6 +89,9 @@
       "note": {
         "description": "Notes (list, get, create, update, delete) and comments"
       },
+      "mail": {
+        "description": "Mail messages synced to a deal (list); bodies excluded by design"
+      },
       "pipeline": {
         "description": "Pipelines (list, get, health)"
       },
