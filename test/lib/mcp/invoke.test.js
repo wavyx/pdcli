@@ -1,10 +1,11 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   toArgv,
   runTool,
   makeExec,
   normalizeExit,
   errMessage,
+  scheduleHardKill,
 } from '../../../src/lib/mcp/invoke.js'
 
 const readEntry = {
@@ -296,6 +297,23 @@ describe('makeExec', () => {
       timeout: 150,
     })
     expect((await exec([])).signal).toBe('tool timed out after 0.15s')
+  })
+
+  // Directly exercises the SIGKILL escalation with fake timers and a fake
+  // child, so it is covered on every OS (a real process on Windows dies on the
+  // first signal and never reaches the grace escalation).
+  it('scheduleHardKill force-kills with SIGKILL after the grace period', () => {
+    vi.useFakeTimers()
+    try {
+      const kills = []
+      const child = { kill: (sig) => kills.push(sig) }
+      scheduleHardKill(child, 100)
+      expect(kills).toEqual([])
+      vi.advanceTimersByTime(100)
+      expect(kills).toEqual(['SIGKILL'])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('escalates to SIGKILL when the child ignores SIGTERM', async () => {
