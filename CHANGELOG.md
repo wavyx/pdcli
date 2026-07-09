@@ -4,6 +4,43 @@ All notable changes to `pdcli` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/).
 
+## [0.19.0] - 2026-07-09
+
+Agent surface: pdcli becomes an MCP server, and `doctor` grows a
+machine-readable CI-preflight contract.
+
+### Added
+
+- **`pdcli mcp serve` — Model Context Protocol server over stdio.** The tool
+  catalog is derived from the CLI's own command manifest, so every tool stays
+  in lockstep with the CLI. Defaults to a curated set of 45 read-only tools
+  (core entity reads, search, deal context/history/summary, all metrics,
+  funnel, digest, audit, rep scorecard); `--allow-writes` adds 14 core write
+  tools (create/update on core entities plus the idempotent upserts);
+  `--topics <csv>` and `--all-tools` widen the scope. Every command's
+  read/write/destructive classification is pinned by an audited test over all
+  146 commands — unknown future verbs default to gated writes. Tool calls run
+  pdcli as a child process forcing `--output=json`, `--yes`, and
+  `--resolve-fields` (agents see custom-field names, not hash keys), with a
+  120s timeout and 16 MB output cap. Never exposed: `api`, `auth *`,
+  `doctor`, `watch`, `changes`, `sync warehouse`, `backup` (`backup diff`
+  stays — it reads local snapshots only).
+- **`doctor --offline`** — skips the API probe; five local checks, zero
+  network egress. The CI preflight mode.
+- `doctor` env-token mode: with `PDCLI_API_TOKEN` set, the token check passes
+  with `source: env` and a missing OS keychain is no longer a failure
+  (containers/CI don't have one).
+
+### Changed
+
+- **BREAKING: `doctor` now exits 78 when any check fails** (previously always
+  exit 0). Scripts can finally gate on it; scripts that assumed 0 must adapt.
+- **`doctor` honors `--output`**: `json`/`yaml`/`csv` (or piped output) emit
+  machine rows `[{check, status, detail?}]` on stdout with the standard JSON
+  error envelope on stderr; the human table renders only interactively. The
+  old stdout summary line ("N checks failed") moved into the standard error
+  path.
+
 ## [0.18.0] - 2026-06-14
 
 Second contract-hardening pass from a full quality audit, closing the
