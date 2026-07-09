@@ -5,7 +5,7 @@ description: Every pdcli command, flag, and example — generated from the CLI m
 
 {/* AUTO-GENERATED from the oclif manifest by scripts/gen-commands.mjs — do not edit by hand. */}
 
-All 146 commands in `pdcli` v0.20.0. Every command also
+All 148 commands in `pdcli` v0.21.0. Every command also
 accepts the [global flags](/pdcli/reference/config/) `--output`, `--jq`,
 `--fields`, `--profile`, `--limit`, `--no-color`, `--verbose`,
 `--no-retry`, and `--timeout`. Run `pdcli <command> --help` for the live version.
@@ -149,6 +149,47 @@ pdcli funnel [flags]
 ```bash
 pdcli funnel
 pdcli funnel --pipeline 1 --period 180d
+```
+
+### `pdcli lookup`
+
+Find item IDs by an exact field value — the create-vs-update primitive.
+
+```text
+pdcli lookup <entity> [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--field` &lt;value&gt; | Field name (built-in or custom) to search on |
+| `--value` &lt;value&gt; | Value to match against the field |
+| `--match` &lt;exact\|beginning\|middle&gt; | Match mode (case-sensitive) |
+| `--first` | Return only the first match (a single object) |
+
+```bash
+pdcli lookup deal --field "PO Number" --value PO-1234
+pdcli lookup person --field Email --value a@b.com --first --jq .id
+pdcli lookup org --field Name --value Acme --match beginning
+```
+
+### `pdcli quota`
+
+Show the remaining Pipedrive daily API token budget. Makes one cheap probe request purely to read the rate-limit headers. The budget is COMPANY-WIDE — shared across every integration and user on the account — so treat the reading as a hint, not a guarantee. --min / --threshold gate CI: they exit 75 (rate-limited) when the budget is too low.
+
+```text
+pdcli quota [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--min` &lt;value&gt; | Exit 75 if the remaining daily token budget is below this many tokens |
+| `--threshold` &lt;value&gt; | Exit 75 if the remaining daily token budget is below this percentage |
+
+```bash
+pdcli quota
+pdcli quota --output json
+pdcli quota --min 5000
+pdcli quota --threshold 10
 ```
 
 ### `pdcli search`
