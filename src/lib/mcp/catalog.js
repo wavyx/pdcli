@@ -19,6 +19,7 @@ export const EXCLUDED = new Set([
   'doctor',
   'sync:warehouse',
   'watch',
+  'webhook:listen',
 ])
 
 // Topics excluded by prefix so future subcommands stay out: `auth:*` manage
@@ -67,6 +68,8 @@ export const READ_LEAVES = new Set([
   'forecast',
   'conversion-matrix',
   'version',
+  'helpers',
+  'export',
 ])
 
 // Read-only analytics command ids whose leaf is not a shared verb.

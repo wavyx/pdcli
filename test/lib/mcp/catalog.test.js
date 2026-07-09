@@ -215,9 +215,13 @@ describe('real-config classification audit', () => {
     'file:remote-link': 'write',
     'file:update': 'write',
     'file:upload': 'write',
+    'filter:create': 'write',
     'filter:delete': 'destructive',
+    'filter:export': 'read',
     'filter:get': 'read',
+    'filter:helpers': 'read',
     'filter:list': 'read',
+    'filter:update': 'write',
     funnel: 'read',
     'goal:list': 'read',
     'lead:convert': 'destructive',
@@ -228,6 +232,7 @@ describe('real-config classification audit', () => {
     'lead:list': 'read',
     'lead:update': 'write',
     lookup: 'read',
+    'mail:list': 'read',
     'mcp:serve': 'excluded',
     'metrics:aging': 'read',
     'metrics:conversion-matrix': 'read',
@@ -304,6 +309,7 @@ describe('real-config classification audit', () => {
     'webhook:create': 'write',
     'webhook:delete': 'destructive',
     'webhook:list': 'read',
+    'webhook:listen': 'excluded',
   }
 
   // Walk the actual command files (mirrors the oclif pattern strategy in
