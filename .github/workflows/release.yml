@@ -23,8 +23,11 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           cache: npm
 
-      # Trusted publishing requires a recent npm (>= 11.5.1).
-      - run: npm install -g npm@latest
+      # Trusted publishing needs npm >= 11.5.1. Pin it, don't chase @latest:
+      # newer npm builds have shipped a broken provenance bundle (publish dies
+      # with "Cannot find module 'sigstore'"), and @latest also silently
+      # dropped node-jq's install script (handled explicitly below).
+      - run: npm install -g npm@11.5.1
 
       - run: npm ci
 
