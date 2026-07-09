@@ -869,16 +869,38 @@ describe('--jq is guarded against a missing/broken jq binary', () => {
     mockLoadConfig.mockReturnValue({ activeProfile: 'default' })
   })
 
-  it('fails fast with EX_UNAVAILABLE (69) when jq run rejects', async () => {
-    jq.impl = () => Promise.reject(new Error('spawn jq ENOENT'))
+  it('surfaces a real jq error (invalid filter) unchanged, not as "unavailable"', async () => {
+    // node-jq REJECTS on a filter compile error (unlike the missing-binary hang).
+    // That must reach the user as jq's own diagnostic, not a misleading
+    // reinstall-jq message, and keep the prior exit code (70, not 69).
+    jq.impl = () =>
+      Promise.reject(new Error('jq: error: syntax error, unexpected end'))
     const origIsTTY = process.stdout.isTTY
     process.stdout.isTTY = true // human path carries the message
     try {
-      const err = await JqCmd.run(['--jq', '.name']).catch((e) => e)
-      expect(err.exitCode ?? err.oclif?.exit).toBe(69)
-      expect(err.message).toMatch(/jq is unavailable/i)
-      expect(err.message).toMatch(/rebuild node-jq|install jq/i)
+      const err = await JqCmd.run(['--jq', '.[']).catch((e) => e)
+      expect(err.exitCode ?? err.oclif?.exit).toBe(70)
+      expect(err.message).toMatch(/syntax error/i)
+      expect(err.message).not.toMatch(/unavailable|rebuild node-jq/i)
     } finally {
+      process.stdout.isTTY = origIsTTY
+    }
+  })
+
+  it('ignores a non-positive PDCLI_JQ_TIMEOUT_MS (no immediate timeout)', async () => {
+    // A negative override is truthy; without a floor setTimeout(-1) fires almost
+    // immediately and kills every --jq. The guard must fall back to the default.
+    // Small real delay: an unfloored -1 timeout (clamped to ~1ms) would beat it
+    // and fail with 69; the default 15s must win instead.
+    jq.impl = () => new Promise((r) => setTimeout(() => r('"X"'), 20))
+    process.env.PDCLI_JQ_TIMEOUT_MS = '-1'
+    const origIsTTY = process.stdout.isTTY
+    process.stdout.isTTY = true
+    try {
+      const stdout = await captureLogs(JqCmd, ['--jq', '.name'])
+      expect(stdout.trim()).toBe('"X"')
+    } finally {
+      delete process.env.PDCLI_JQ_TIMEOUT_MS
       process.stdout.isTTY = origIsTTY
     }
   })
@@ -893,7 +915,8 @@ describe('--jq is guarded against a missing/broken jq binary', () => {
     try {
       const err = await JqCmd.run(['--jq', '.name']).catch((e) => e)
       expect(err.exitCode ?? err.oclif?.exit).toBe(69)
-      expect(err.message).toMatch(/jq is unavailable/i)
+      expect(err.message).toMatch(/did not respond within 25ms/i)
+      expect(err.message).toMatch(/rebuild node-jq|install jq/i)
     } finally {
       process.stdout.isTTY = origIsTTY
       delete process.env.PDCLI_JQ_TIMEOUT_MS

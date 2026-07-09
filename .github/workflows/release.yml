@@ -47,10 +47,17 @@ jobs:
       - name: Publish to npm (skip if already published)
         run: |
           VERSION=$(node -p "require('./package.json').version")
+          # A prerelease (0.20.0-rc1) must NOT take the `latest` dist-tag, or
+          # `npm i` and the Scoop checkver (which reads dist-tags.latest) serve
+          # the RC. npm does not auto-detect prereleases, so pass --tag.
+          case "$VERSION" in
+            *-*) NPM_TAG=next ;;
+            *)   NPM_TAG=latest ;;
+          esac
           if npm view "@wavyx/pdcli@$VERSION" version >/dev/null 2>&1; then
             echo "@wavyx/pdcli@$VERSION already published — skipping"
           else
-            npm publish --provenance
+            npm publish --provenance --tag "$NPM_TAG"
           fi
 
       # Native tarballs for non-npm installs, attached to the GitHub Release.
@@ -71,7 +78,9 @@ jobs:
             /^## \[/ { flag=0 }
             flag { print }
           ' CHANGELOG.md)
-          gh release create "$GITHUB_REF_NAME" \
+          # Mark prerelease tags so an RC does not become GitHub's "Latest".
+          case "$VERSION" in *-*) PRE=--prerelease ;; *) PRE= ;; esac
+          gh release create "$GITHUB_REF_NAME" $PRE \
             --title "$GITHUB_REF_NAME" \
             --notes "${NOTES:-Release $GITHUB_REF_NAME}" \
             dist/*.tar.gz

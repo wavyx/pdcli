@@ -13,26 +13,28 @@ const debug = createDebug('pd:fields')
 const JQ_TIMEOUT_MS = 15_000
 
 /**
- * Run a jq filter, guarding against a missing/broken jq binary. npm >= 11 blocks
- * node-jq's preinstall, so a globally installed pdcli can ship without the jq
- * binary at node_modules/node-jq/bin/jq. node-jq's run() then does NOT reject on
- * the spawn ENOENT — it hangs forever. Bound it: race the run against a timeout
- * and translate any rejection OR timeout into a clear, deterministic error
- * (EX_UNAVAILABLE 69) so `--jq` fails fast instead of hanging. The timeout is
- * overridable via PDCLI_JQ_TIMEOUT_MS (ms) for slow machines / tests.
+ * Run a jq filter, guarding only against a HANG. npm >= 11 blocks node-jq's
+ * preinstall, so a globally installed pdcli can ship without the jq binary at
+ * node_modules/node-jq/bin/jq; node-jq's run() then does NOT reject on the spawn
+ * ENOENT — it hangs forever. Bound it: race the run against a timeout and, when
+ * the timeout wins, fail fast with EX_UNAVAILABLE (69). A genuine run() REJECTION
+ * is a real jq error (an invalid filter compiles to a syntax error) — surface it
+ * unchanged so the user sees jq's own diagnostic, not a misleading "reinstall
+ * jq". The timeout is overridable via PDCLI_JQ_TIMEOUT_MS (ms) for slow machines
+ * / tests; a non-positive/non-finite value falls back to the default.
  * @param {string} filter jq expression
  * @param {string} input JSON string
  * @returns {Promise<string>}
  */
 async function runJq(filter, input) {
-  const timeoutMs = Number(process.env.PDCLI_JQ_TIMEOUT_MS) || JQ_TIMEOUT_MS
+  const override = Number(process.env.PDCLI_JQ_TIMEOUT_MS)
+  const timeoutMs =
+    Number.isFinite(override) && override > 0 ? override : JQ_TIMEOUT_MS
   const { run } = await import('node-jq')
+  const TIMED_OUT = Symbol('jq-timeout')
   let timer
   const timeout = new Promise((_resolve, reject) => {
-    timer = setTimeout(
-      () => reject(new Error(`jq did not respond within ${timeoutMs}ms`)),
-      timeoutMs,
-    )
+    timer = setTimeout(() => reject(TIMED_OUT), timeoutMs)
     timer.unref?.() // never keep the event loop alive just for this guard
   })
   try {
@@ -41,11 +43,14 @@ async function runJq(filter, input) {
       timeout,
     ])
   } catch (cause) {
-    throw new CliError(
-      'jq is unavailable — the jq binary may be missing or failed to run. ' +
-        'Try: npm rebuild node-jq, or install jq.',
-      { exitCode: 69, cause },
-    )
+    if (cause === TIMED_OUT) {
+      throw new CliError(
+        `jq did not respond within ${timeoutMs}ms — the jq binary may be ` +
+          'missing or broken. Try: npm rebuild node-jq, or install jq.',
+        { exitCode: 69 },
+      )
+    }
+    throw cause // a real jq error (e.g. an invalid filter) — surface it as-is
   } finally {
     clearTimeout(timer)
   }
