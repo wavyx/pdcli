@@ -5,7 +5,7 @@ description: Full command reference for the pdcli command-line interface.
 
 <!-- AUTO-GENERATED from the oclif manifest by scripts/gen-commands.mjs — do not edit by hand. -->
 
-Reference for `pdcli` v0.18.0 (145 commands). Every command also accepts the global flags `--output table|json|yaml|csv`, `--profile`, `--no-color`, `--verbose`, `--no-retry`, `--timeout`, and `--limit`.
+Reference for `pdcli` v0.19.0 (146 commands). Every command also accepts the global flags `--output table|json|yaml|csv`, `--profile`, `--no-color`, `--verbose`, `--no-retry`, `--timeout`, and `--limit`.
 
 ## Top-level
 
@@ -112,16 +112,20 @@ pdcli digest --format md --out monday.md
 
 ### `pdcli doctor`
 
-Run diagnostic checks on the CLI environment
+Run diagnostic checks on the CLI environment. Exits 78 (EX_CONFIG) when any check fails. --offline skips the network probe — the CI preflight mode.
 
 ```
 pdcli doctor [flags]
 ```
 
+- `--offline` — Skip the API reachability probe (CI preflight mode; zero network egress)
+
 Examples:
 
 ```bash
 pdcli doctor
+pdcli doctor --offline
+pdcli doctor --output json
 ```
 
 ### `pdcli funnel`
@@ -1427,6 +1431,41 @@ Examples:
 ```bash
 pdcli lead update adf21080-0e10-11eb-879b-05d71fb426ec --title "Renamed"
 pdcli lead update adf21080-0e10-11eb-879b-05d71fb426ec --value 7500 --currency USD
+```
+
+## pdcli mcp
+
+### `pdcli mcp serve`
+
+Run pdcli as a Model Context Protocol (MCP) server over stdio.
+
+Exposes a curated set of core Pipedrive tools (entity reads, search, deal
+intelligence, metrics and analytics). Mutating tools are hidden unless
+--allow-writes is set; --topics or --all-tools widen the tool set. Each tool
+call re-invokes pdcli as a child process under the active auth profile.
+
+Register with Claude Code:
+  claude mcp add pipedrive -- pdcli mcp serve
+
+Or in .mcp.json:
+  {"mcpServers":{"pipedrive":{"command":"pdcli","args":["mcp","serve"]}}}
+
+```
+pdcli mcp serve [flags]
+```
+
+- `--allow-writes` — Expose mutating tools (create/update/delete/merge/bulk). Off by default — read-only.
+- `--all-tools` — Expose every command as a tool instead of the curated core set
+- `--topics <value>` — Comma-separated topics to expose (e.g. deal,person) instead of the curated set
+- `--tool-timeout <value>` — Seconds a tool call may run before its child process is terminated
+
+Examples:
+
+```bash
+pdcli mcp serve
+pdcli mcp serve --allow-writes
+pdcli mcp serve --topics deal,person,org
+pdcli mcp serve --all-tools --allow-writes
 ```
 
 ## pdcli metrics

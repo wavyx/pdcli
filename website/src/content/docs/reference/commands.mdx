@@ -5,7 +5,7 @@ description: Every pdcli command, flag, and example — generated from the CLI m
 
 {/* AUTO-GENERATED from the oclif manifest by scripts/gen-commands.mjs — do not edit by hand. */}
 
-All 145 commands in `pdcli` v0.18.0. Every command also
+All 146 commands in `pdcli` v0.19.0. Every command also
 accepts the [global flags](/pdcli/reference/config/) `--output`, `--jq`,
 `--fields`, `--profile`, `--limit`, `--no-color`, `--verbose`,
 `--no-retry`, and `--timeout`. Run `pdcli <command> --help` for the live version.
@@ -115,14 +115,20 @@ pdcli digest --format md --out monday.md
 
 ### `pdcli doctor`
 
-Run diagnostic checks on the CLI environment
+Run diagnostic checks on the CLI environment. Exits 78 (EX_CONFIG) when any check fails. --offline skips the network probe — the CI preflight mode.
 
 ```text
 pdcli doctor [flags]
 ```
 
+| Flag | Description |
+| --- | --- |
+| `--offline` | Skip the API reachability probe (CI preflight mode; zero network egress) |
+
 ```bash
 pdcli doctor
+pdcli doctor --offline
+pdcli doctor --output json
 ```
 
 ### `pdcli funnel`
@@ -1384,6 +1390,30 @@ pdcli lead update <id> [flags]
 ```bash
 pdcli lead update adf21080-0e10-11eb-879b-05d71fb426ec --title "Renamed"
 pdcli lead update adf21080-0e10-11eb-879b-05d71fb426ec --value 7500 --currency USD
+```
+
+## pdcli mcp
+
+### `pdcli mcp serve`
+
+Run pdcli as a Model Context Protocol (MCP) server over stdio.
+
+```text
+pdcli mcp serve [flags]
+```
+
+| Flag | Description |
+| --- | --- |
+| `--allow-writes` | Expose mutating tools (create/update/delete/merge/bulk). Off by default — read-only. |
+| `--all-tools` | Expose every command as a tool instead of the curated core set |
+| `--topics` &lt;value&gt; | Comma-separated topics to expose (e.g. deal,person) instead of the curated set |
+| `--tool-timeout` &lt;value&gt; | Seconds a tool call may run before its child process is terminated |
+
+```bash
+pdcli mcp serve
+pdcli mcp serve --allow-writes
+pdcli mcp serve --topics deal,person,org
+pdcli mcp serve --all-tools --allow-writes
 ```
 
 ## pdcli metrics

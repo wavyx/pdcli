@@ -27,6 +27,7 @@ vi.mock('../src/lib/config.js', () => ({
 
 const { default: BaseCommand } = await import('../src/base-command.js')
 const { AuthRequiredError } = await import('../src/lib/errors.js')
+const { clearFieldsCache } = await import('../src/lib/fields.js')
 
 const API_BASE = 'https://acme.pipedrive.com'
 
@@ -420,6 +421,95 @@ describe('BaseCommand output formats and filters', () => {
     ])
     expect(stdout).toContain('email: f@a.com')
     expect(stdout).not.toContain('Field User')
+  })
+})
+
+describe('--resolve-fields output resolution is best-effort', () => {
+  const HASH = 'c'.repeat(40)
+
+  class ResolveCmd extends BaseCommand {
+    async run() {
+      const body = await this.apiClient.get('/api/v2/deals')
+      await this.outputResults(
+        body.data,
+        { id: { header: 'ID' } },
+        { entity: 'deal' },
+      )
+    }
+  }
+
+  beforeEach(() => {
+    nock.cleanAll()
+    clearFieldsCache()
+    mockLoadConfig.mockReturnValue({ activeProfile: 'default' })
+    mockResolveCredentials.mockResolvedValue({
+      mode: 'token',
+      companyDomain: 'acme',
+      token: 'test-token',
+      source: 'profile',
+    })
+  })
+
+  it('falls back to the unresolved rows when the fields fetch fails', async () => {
+    nock(API_BASE)
+      .get('/api/v2/deals')
+      .reply(200, {
+        success: true,
+        data: [{ id: 1, custom_fields: { [HASH]: 7 } }],
+      })
+    nock(API_BASE)
+      .get('/api/v2/dealFields')
+      .query(true)
+      .reply(403, { success: false, error: 'Forbidden' })
+
+    // Must not throw: the list data already arrived; a failed defs fetch
+    // (403 restricted, late 429, transient 5xx) degrades to raw hash keys.
+    const stdout = await captureLogs(ResolveCmd, [
+      '--resolve-fields',
+      '--output',
+      'json',
+      '--no-retry',
+    ])
+
+    expect(JSON.parse(stdout)).toEqual([
+      { id: 1, custom_fields: { [HASH]: 7 } },
+    ])
+  })
+
+  it('still resolves names and option labels when the fields fetch succeeds', async () => {
+    nock(API_BASE)
+      .get('/api/v2/deals')
+      .reply(200, {
+        success: true,
+        data: [{ id: 1, custom_fields: { [HASH]: 7 } }],
+      })
+    nock(API_BASE)
+      .get('/api/v2/dealFields')
+      .query(true)
+      .reply(200, {
+        success: true,
+        data: [
+          {
+            id: 9,
+            field_code: HASH,
+            field_name: 'Tier',
+            field_type: 'enum',
+            options: [{ id: 7, label: 'Gold' }],
+            is_custom_field: true,
+          },
+        ],
+        additional_data: { next_cursor: null },
+      })
+
+    const stdout = await captureLogs(ResolveCmd, [
+      '--resolve-fields',
+      '--output',
+      'json',
+    ])
+
+    expect(JSON.parse(stdout)).toEqual([
+      { id: 1, custom_fields: { Tier: 'Gold' } },
+    ])
   })
 })
 
