@@ -8,6 +8,7 @@ on:
 permissions:
   contents: write # create the GitHub Release
   id-token: write # OIDC: npm trusted publishing + provenance (no NPM_TOKEN)
+  packages: write # push the Docker image to GHCR
 
 jobs:
   release:
@@ -46,10 +47,17 @@ jobs:
       - name: Publish to npm (skip if already published)
         run: |
           VERSION=$(node -p "require('./package.json').version")
+          # A prerelease (0.20.0-rc1) must NOT take the `latest` dist-tag, or
+          # `npm i` and the Scoop checkver (which reads dist-tags.latest) serve
+          # the RC. npm does not auto-detect prereleases, so pass --tag.
+          case "$VERSION" in
+            *-*) NPM_TAG=next ;;
+            *)   NPM_TAG=latest ;;
+          esac
           if npm view "@wavyx/pdcli@$VERSION" version >/dev/null 2>&1; then
             echo "@wavyx/pdcli@$VERSION already published — skipping"
           else
-            npm publish --provenance
+            npm publish --provenance --tag "$NPM_TAG"
           fi
 
       # Native tarballs for non-npm installs, attached to the GitHub Release.
@@ -70,7 +78,53 @@ jobs:
             /^## \[/ { flag=0 }
             flag { print }
           ' CHANGELOG.md)
-          gh release create "$GITHUB_REF_NAME" \
+          # Mark prerelease tags so an RC does not become GitHub's "Latest".
+          case "$VERSION" in *-*) PRE=--prerelease ;; *) PRE= ;; esac
+          gh release create "$GITHUB_REF_NAME" $PRE \
             --title "$GITHUB_REF_NAME" \
             --notes "${NOTES:-Release $GITHUB_REF_NAME}" \
             dist/*.tar.gz
+
+  docker:
+    name: Publish Docker image
+    needs: release # build from the just-published npm version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Single source of truth: read the version from the SAME package.json the
+      # npm publish step used, so the Docker image installs a version that exists
+      # on npm (deriving from the git tag can drift from package.json and 404).
+      # Only stable releases get :latest — a prerelease (0.20.0-rc1) must not
+      # poison the :latest tag that `docker pull` resolves by default.
+      - name: Resolve version
+        id: ver
+        run: |
+          V=$(node -p "require('./package.json').version")
+          echo "v=$V" >> "$GITHUB_OUTPUT"
+          case "$V" in
+            *-*) echo "latest=" >> "$GITHUB_OUTPUT" ;; # prerelease: no :latest
+            *) echo "latest=ghcr.io/${{ github.repository }}:latest" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - uses: docker/setup-qemu-action@v4 # cross-build arm64
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          build-args: PDCLI_VERSION=${{ steps.ver.outputs.v }}
+          # The :latest line is empty for prereleases (see Resolve version);
+          # build-push-action ignores blank tag lines.
+          tags: |
+            ghcr.io/${{ github.repository }}:${{ steps.ver.outputs.v }}
+            ${{ steps.ver.outputs.latest }}

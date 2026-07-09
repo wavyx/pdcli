@@ -1,0 +1,139 @@
+---
+title: GitHub Actions
+description: Run pdcli in GitHub Actions with pinned versions or the container image, secret-wired env-var auth, an offline preflight, and exit-code gating.
+---
+
+`pdcli` is built for non-interactive use, so it drops into GitHub Actions cleanly:
+authenticate with secrets as environment variables, run a preflight, then let the
+[deterministic exit codes](/pdcli/automation/exit-codes/) and `--output json` decide
+whether the job passes. This page is the GitHub-specific recipe; see
+[CI recipes](/pdcli/automation/ci/) for the flags and scheduled-job patterns that apply
+to any CI.
+
+## Wire the secrets
+
+Store the token as an encrypted repository or environment secret (never in the
+workflow file), and set the company domain and token as environment variables. Env
+vars take precedence over the keychain, so the runner needs no keychain and pdcli never
+prompts.
+
+```yaml
+env:
+  PDCLI_COMPANY_DOMAIN: acme
+  PDCLI_API_TOKEN: ${{ secrets.PIPEDRIVE_API_TOKEN }}
+```
+
+Add the token under **Settings → Secrets and variables → Actions** as
+`PIPEDRIVE_API_TOKEN`. The domain is not secret (it's your `{company}.pipedrive.com`
+subdomain), so it can sit in plain text.
+
+## Option A: pinned npm install
+
+Install a pinned version so a background release can't change behaviour mid-pipeline.
+
+```yaml
+name: pipedrive
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1' # Mondays 06:00 UTC
+
+jobs:
+  deals:
+    runs-on: ubuntu-latest
+    env:
+      PDCLI_COMPANY_DOMAIN: acme
+      PDCLI_API_TOKEN: ${{ secrets.PIPEDRIVE_API_TOKEN }}
+    steps:
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+      - run: npm install -g @wavyx/pdcli@0.20.0
+
+      # Preflight: config + keychain checks, zero network egress. Exits 78 on a
+      # config problem, failing the job before it spends any API budget.
+      - run: pdcli doctor --offline
+
+      - name: Open deals to JSON
+        run: pdcli deal list --status open --output json --jq '[.[] | {id, title, value}]' > deals.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deals
+          path: deals.json
+```
+
+## Option B: the container image
+
+Skip the Node setup entirely by running the job inside the published image. The
+`container:` key runs every step inside it, and the token/domain still arrive as env
+vars.
+
+```yaml
+jobs:
+  deals:
+    runs-on: ubuntu-latest
+    container: ghcr.io/wavyx/pdcli:0.20.0
+    env:
+      PDCLI_COMPANY_DOMAIN: acme
+      PDCLI_API_TOKEN: ${{ secrets.PIPEDRIVE_API_TOKEN }}
+    steps:
+      - run: pdcli doctor --offline
+      - run: pdcli deal list --status open --output json --jq '.[].id'
+```
+
+Pin the tag (`:0.20.0`) rather than `latest` for reproducible runs. See
+[Distribution](/pdcli/start/distribution/) for the image details.
+
+## Gate on the exit code
+
+Every command returns a deterministic [sysexit](/pdcli/automation/exit-codes/) code, so
+a step fails the job on the right condition without parsing text. A non-zero exit fails
+the step by default, which is usually what you want. When you need to branch, read
+`$?`:
+
+```yaml
+      - name: Fail only on real errors, tolerate rate limits
+        run: |
+          set +e
+          pdcli deal list --output json > deals.json
+          code=$?
+          case $code in
+            0)      echo "ok" ;;
+            75|69)  echo "::warning::transient ($code) — will retry next run"; exit 0 ;;
+            77)     echo "::error::auth failed — rotate PIPEDRIVE_API_TOKEN"; exit 1 ;;
+            *)      echo "::error::pdcli exited $code"; exit 1 ;;
+          esac
+```
+
+Because the error output also mirrors the format (JSON on a piped or `--output json`
+run, written to stderr), a failed step leaves a parseable object you can inspect or
+upload. `--output json` on the happy path means downstream `jq` and other tools get
+structured data every time.
+
+## Data-quality gate
+
+`pdcli audit --strict` exits `1` when any must-severity hygiene check has findings, so
+it works as a required check on a schedule or before a deploy that depends on clean
+data:
+
+```yaml
+      - run: pdcli audit --strict
+```
+
+Exit `1` fails the job and the findings print for the log. See
+[Data-hygiene audit](/pdcli/guides/audit/).
+
+## Fail fast under load
+
+For CI you often want a clean failure over a long retry. `--no-retry` surfaces the
+first `429`/`5xx` immediately (exit `75` or `69`) instead of sleeping through backoff,
+and `--timeout <ms>` caps each request so a hung network can't stall the job:
+
+```yaml
+      - run: pdcli deal list --no-retry --timeout 10000 --output json
+```
+
+Let the workflow's own retry or schedule re-run the job. See
+[CI recipes](/pdcli/automation/ci/) for nightly backups, incremental pulls, and bulk
+imports.

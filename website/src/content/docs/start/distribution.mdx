@@ -1,0 +1,177 @@
+---
+title: Distribution
+description: Every way to install pdcli — npm, npx, Docker, Homebrew, Scoop, and prebuilt standalone tarballs — with the auth note for each.
+---
+
+`pdcli` ships through several channels so you can pick the one that fits your machine
+or pipeline. They all run the same CLI; the difference is how the binary gets onto the
+box and how credentials reach it.
+
+Prefer the [Installation](/pdcli/start/installation/) page if you just want the fast
+path (npm) plus completions and the doctor. This page is the full menu.
+
+## Which channel?
+
+| Channel | Best for | Needs Node? |
+| ------- | -------- | ----------- |
+| **npm (global)** | Daily use on your own machine | Yes (20+) |
+| **npx** | A one-off, or a CI step you don't want to install | Yes (20+) |
+| **Docker** | CI runners and servers with no Node, reproducible pins | No |
+| **Homebrew** | macOS / Linux users who live in `brew` | No |
+| **Scoop** | Windows users who live in `scoop` | No |
+| **Standalone tarball** | Air-gapped or Node-free hosts, manual pinning | No |
+
+## Authentication, in one line
+
+Two ways to get a token to pdcli, and the choice usually follows the channel:
+
+- **Keychain (default).** `pdcli auth login` stores the token in your OS keychain
+  (macOS Keychain, GNOME Keyring / libsecret, Windows Credential Manager). Nothing
+  lands in plaintext on disk. This is the right choice for the npm, Homebrew, Scoop,
+  and tarball installs on a workstation.
+- **Environment variables.** Set `PDCLI_COMPANY_DOMAIN` and `PDCLI_API_TOKEN` instead.
+  Env vars take precedence over the keychain and require no keychain at all, which is
+  exactly what a container or CI runner needs. See
+  [Authentication](/pdcli/guides/authentication/) and the
+  [Security model](/pdcli/concepts/security/).
+
+On a headless host, verify the setup before you run real commands with the offline
+preflight (added in v0.19), which runs five checks with zero network egress:
+
+```bash
+PDCLI_COMPANY_DOMAIN=acme PDCLI_API_TOKEN=xxxxxxxx pdcli doctor --offline
+```
+
+It exits `78` if config or the keychain check fails, so it doubles as a CI gate.
+
+## npm (global)
+
+The primary channel. Puts a `pdcli` binary on your `PATH`.
+
+```bash
+npm install -g @wavyx/pdcli   # Node.js 20+
+pdcli version
+```
+
+Pin a version in CI so a background release can't change behaviour mid-pipeline:
+
+```bash
+npm install -g @wavyx/pdcli@0.20.0
+```
+
+Auth: keychain by default (`pdcli auth login`), or env vars for scripts.
+
+## npx (no install)
+
+Run the published package without a global install. Good for a single command or a CI
+step where you'd rather not add an install line.
+
+```bash
+npx @wavyx/pdcli deal list
+npx @wavyx/pdcli@0.20.0 deal list   # pinned
+```
+
+The global install is faster for daily use because npx resolves and caches the package
+on each cold run. Auth is the same as npm.
+
+## Docker
+
+The image bundles Node and the published package, so a runner needs neither. A
+container has no OS keychain, so pass the token and domain as environment variables:
+
+```bash
+docker run --rm \
+  -e PDCLI_API_TOKEN \
+  -e PDCLI_COMPANY_DOMAIN \
+  ghcr.io/wavyx/pdcli deal list --output json
+```
+
+Passing `-e NAME` (no `=value`) forwards the variable from your current shell, so the
+token never appears in the command or in shell history. Pin the tag in CI:
+
+```bash
+docker run --rm -e PDCLI_API_TOKEN -e PDCLI_COMPANY_DOMAIN \
+  ghcr.io/wavyx/pdcli:0.20.0 deal list --output json
+```
+
+The entrypoint is `pdcli`, so everything after the image name is passed straight
+through as arguments. Auth: env vars only (there's no keychain in a container).
+
+## Homebrew
+
+For macOS and Linux users on Homebrew. Installs a self-contained binary, no Node
+required.
+
+```bash
+brew install wavyx/tap/pdcli
+pdcli version
+```
+
+`wavyx/tap` is the custom tap; the first install taps it automatically. Upgrade with
+`brew upgrade wavyx/tap/pdcli`. Auth: keychain by default, or env vars.
+
+## Scoop
+
+For Windows users on Scoop. Also a self-contained binary, no Node required.
+
+```powershell
+scoop bucket add wavyx https://github.com/wavyx/scoop-pdcli
+scoop install pdcli
+pdcli version
+```
+
+Add the bucket once, then `scoop update pdcli` to upgrade. Auth: Windows Credential
+Manager by default, or env vars.
+
+## Standalone tarballs
+
+Every release attaches prebuilt, self-contained tarballs to its
+[GitHub Release](https://github.com/wavyx/pdcli/releases). Each bundles Node and the
+CLI, so the target host needs nothing preinstalled. Use these for air-gapped machines,
+Node-free servers, or when you want to vendor an exact build.
+
+Five targets are published per release:
+
+| Target | Platform |
+| ------ | -------- |
+| `linux-x64` | Linux, Intel/AMD 64-bit |
+| `linux-arm64` | Linux, ARM 64-bit |
+| `darwin-x64` | macOS, Intel |
+| `darwin-arm64` | macOS, Apple Silicon |
+| `win32-x64` | Windows, 64-bit |
+
+Each tarball filename embeds the build's commit SHA (for example
+`pdcli-v0.20.0-1a2b3c4-linux-x64.tar.gz`), so there is no fixed, predictable
+download URL. Grab the exact asset from the
+[Releases page](https://github.com/wavyx/pdcli/releases), or let the
+[`gh` CLI](https://cli.github.com/) resolve it for you:
+
+```bash
+# See the tarballs attached to a release:
+gh release view v0.20.0 --json assets --jq '.assets[].name'
+
+# Download the one for your target by pattern (no need to know the SHA):
+gh release download v0.20.0 --pattern '*linux-x64.tar.gz'
+```
+
+Then unpack it and put the `bin` directory on your `PATH`:
+
+```bash
+tar -xzf pdcli-v0.20.0-*-linux-x64.tar.gz
+./pdcli/bin/pdcli version
+```
+
+Auth: keychain by default where one is available, or env vars on a headless host.
+
+## Verify any install
+
+Whatever the channel, confirm it works the same way:
+
+```bash
+pdcli version          # version + Node + platform
+pdcli doctor --offline # five config checks, no network
+```
+
+See [Installation](/pdcli/start/installation/) for shell completions and the full
+doctor, and [CI recipes](/pdcli/automation/ci/) plus
+[GitHub Actions](/pdcli/automation/github-actions/) for pipeline patterns.

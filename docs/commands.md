@@ -5,7 +5,7 @@ description: Full command reference for the pdcli command-line interface.
 
 <!-- AUTO-GENERATED from the oclif manifest by scripts/gen-commands.mjs — do not edit by hand. -->
 
-Reference for `pdcli` v0.19.0 (146 commands). Every command also accepts the global flags `--output table|json|yaml|csv`, `--profile`, `--no-color`, `--verbose`, `--no-retry`, `--timeout`, and `--limit`.
+Reference for `pdcli` v0.20.0 (146 commands). Every command also accepts the global flags `--output table|json|yaml|csv`, `--profile`, `--no-color`, `--verbose`, `--no-retry`, `--timeout`, and `--limit`.
 
 ## Top-level
 
@@ -18,6 +18,7 @@ pdcli api <method> <path> [flags]
 ```
 
 - `--body <value>` — Request body (JSON string, @file, or pipe stdin)
+- `--paginate` — Follow pagination and collect every page into one array (GET only; pager inferred from the /api/v1/ or /api/v2/ path). Note: --jq then sees the bare concatenated item array (filter with `.[]`), whereas without --paginate it sees the full envelope (`.data[]`).
 
 Examples:
 

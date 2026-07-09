@@ -31,7 +31,18 @@ and **AI agents** (Claude Code, Codex, and similar) — no SDK glue required.
 npm install -g @wavyx/pdcli   # Node.js 20+
 ```
 
-The binary is `pdcli`.
+The binary is `pdcli`. Other channels, no Node required:
+
+```bash
+npx @wavyx/pdcli deal list                          # one-off, no install
+brew install wavyx/tap/pdcli                         # macOS / Linux
+scoop bucket add wavyx https://github.com/wavyx/scoop-pdcli && scoop install pdcli   # Windows
+docker run --rm -e PDCLI_API_TOKEN -e PDCLI_COMPANY_DOMAIN ghcr.io/wavyx/pdcli deal list   # containers / CI
+```
+
+Prebuilt standalone tarballs (5 targets) ship on each
+[GitHub Release](https://github.com/wavyx/pdcli/releases). Full menu and the auth note
+per channel: [Distribution](https://wavyx.github.io/pdcli/start/distribution/).
 
 ## Authenticate
 

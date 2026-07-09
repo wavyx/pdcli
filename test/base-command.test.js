@@ -25,6 +25,15 @@ vi.mock('../src/lib/config.js', () => ({
   getProfileConfig: vi.fn().mockReturnValue(undefined),
 }))
 
+// node-jq's run() does NOT reject on a missing binary — it hangs. Mock it so a
+// test can force a rejection or a never-resolving run; when `jq.impl` is unset
+// it delegates to the real binary so the --jq success path is still exercised.
+const jq = vi.hoisted(() => ({ impl: undefined }))
+vi.mock('node-jq', async (importOriginal) => {
+  const actual = await importOriginal()
+  return { ...actual, run: (...args) => (jq.impl ?? actual.run)(...args) }
+})
+
 const { default: BaseCommand } = await import('../src/base-command.js')
 const { AuthRequiredError } = await import('../src/lib/errors.js')
 const { clearFieldsCache } = await import('../src/lib/fields.js')
@@ -60,6 +69,12 @@ function captureLogs(CmdClass, argv = []) {
     .then(() => lines.join('\n'))
     .finally(() => spy.mockRestore())
 }
+
+// Every test starts with the real jq binary; jq-guard tests opt into a
+// forced rejection / hang and this restores the default afterwards.
+afterEach(() => {
+  jq.impl = undefined
+})
 
 describe('BaseCommand', () => {
   beforeEach(() => {
@@ -836,5 +851,109 @@ describe('resolveFormat with default_output', () => {
     // undefined (→ TTY/pipe fallback), never throw a secondary error.
     const result = BaseCommand.prototype.storedDefaultOutput.call({ flags: {} })
     expect(result).toBeUndefined()
+  })
+})
+
+describe('--jq is guarded against a missing/broken jq binary', () => {
+  // npm >= 11 blocks node-jq's preinstall, so a globally installed pdcli can
+  // ship without the jq binary. node-jq's run() then hangs forever on the
+  // spawn ENOENT rather than rejecting — every `pdcli … --jq` would hang.
+  class JqCmd extends BaseCommand {
+    static skipAuth = true
+    async run() {
+      await this.outputResults({ id: 1, name: 'X' }, { id: { header: 'ID' } })
+    }
+  }
+
+  beforeEach(() => {
+    mockLoadConfig.mockReturnValue({ activeProfile: 'default' })
+  })
+
+  it('surfaces a real jq error (invalid filter) unchanged, not as "unavailable"', async () => {
+    // node-jq REJECTS on a filter compile error (unlike the missing-binary hang).
+    // That must reach the user as jq's own diagnostic, not a misleading
+    // reinstall-jq message, and keep the prior exit code (70, not 69).
+    jq.impl = () =>
+      Promise.reject(new Error('jq: error: syntax error, unexpected end'))
+    const origIsTTY = process.stdout.isTTY
+    process.stdout.isTTY = true // human path carries the message
+    try {
+      const err = await JqCmd.run(['--jq', '.[']).catch((e) => e)
+      expect(err.exitCode ?? err.oclif?.exit).toBe(70)
+      expect(err.message).toMatch(/syntax error/i)
+      expect(err.message).not.toMatch(/unavailable|rebuild node-jq/i)
+    } finally {
+      process.stdout.isTTY = origIsTTY
+    }
+  })
+
+  it('ignores a non-positive PDCLI_JQ_TIMEOUT_MS (no immediate timeout)', async () => {
+    // A negative override is truthy; without a floor setTimeout(-1) fires almost
+    // immediately and kills every --jq. The guard must fall back to the default.
+    // Small real delay: an unfloored -1 timeout (clamped to ~1ms) would beat it
+    // and fail with 69; the default 15s must win instead.
+    jq.impl = () => new Promise((r) => setTimeout(() => r('"X"'), 20))
+    process.env.PDCLI_JQ_TIMEOUT_MS = '-1'
+    const origIsTTY = process.stdout.isTTY
+    process.stdout.isTTY = true
+    try {
+      const stdout = await captureLogs(JqCmd, ['--jq', '.name'])
+      expect(stdout.trim()).toBe('"X"')
+    } finally {
+      delete process.env.PDCLI_JQ_TIMEOUT_MS
+      process.stdout.isTTY = origIsTTY
+    }
+  })
+
+  it('does NOT hang when jq run never resolves — the timeout guard fires (69)', async () => {
+    // A never-resolving run mimics node-jq's spawn-ENOENT hang. With a tiny
+    // timeout override the guard must still fire fast instead of hanging.
+    jq.impl = () => new Promise(() => {})
+    process.env.PDCLI_JQ_TIMEOUT_MS = '25'
+    const origIsTTY = process.stdout.isTTY
+    process.stdout.isTTY = true
+    try {
+      const err = await JqCmd.run(['--jq', '.name']).catch((e) => e)
+      expect(err.exitCode ?? err.oclif?.exit).toBe(69)
+      expect(err.message).toMatch(/did not respond within 25ms/i)
+      expect(err.message).toMatch(/rebuild node-jq|install jq/i)
+    } finally {
+      process.stdout.isTTY = origIsTTY
+      delete process.env.PDCLI_JQ_TIMEOUT_MS
+    }
+  })
+
+  it('still runs the real jq binary on the success path', async () => {
+    const stdout = await captureLogs(JqCmd, ['--jq', '.name'])
+    expect(stdout).toContain('X')
+  })
+})
+
+describe('--limit rejects non-positive values (usage error, exit 64)', () => {
+  class LimitCmd extends BaseCommand {
+    static skipAuth = true
+    async run() {
+      this.log(`limit:${this.flags.limit}`)
+    }
+  }
+
+  beforeEach(() => {
+    mockLoadConfig.mockReturnValue({ activeProfile: 'default' })
+  })
+
+  it.each(['0', '-5'])('rejects --limit %s with exit 64', async (val) => {
+    const origIsTTY = process.stdout.isTTY
+    process.stdout.isTTY = true
+    try {
+      const err = await LimitCmd.run(['--limit', val]).catch((e) => e)
+      expect(err.exitCode ?? err.oclif?.exit).toBe(64)
+    } finally {
+      process.stdout.isTTY = origIsTTY
+    }
+  })
+
+  it('accepts a positive --limit', async () => {
+    const stdout = await captureLogs(LimitCmd, ['--limit', '1'])
+    expect(stdout).toContain('limit:1')
   })
 })

@@ -83,6 +83,7 @@ export default defineConfig({
           label: 'Start here',
           items: [
             { label: 'Installation', slug: 'start/installation' },
+            { label: 'Distribution (all channels)', slug: 'start/distribution' },
             { label: 'Quickstart', slug: 'start/quickstart' },
             { label: 'Quickstart for AI agents', slug: 'start/agents' },
           ],
@@ -114,6 +115,7 @@ export default defineConfig({
             { label: 'Output & filtering', slug: 'automation/output' },
             { label: 'Exit codes', slug: 'automation/exit-codes' },
             { label: 'CI recipes', slug: 'automation/ci' },
+            { label: 'GitHub Actions', slug: 'automation/github-actions' },
             { label: 'Cookbook', slug: 'automation/cookbook' },
           ],
         },

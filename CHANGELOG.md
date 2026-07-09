@@ -4,6 +4,31 @@ All notable changes to `pdcli` are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow
 [SemVer](https://semver.org/).
 
+## [0.20.0] - 2026-07-09
+
+Distribution: install pdcli however your pipeline prefers, and drive the
+host-locked passthrough across every page.
+
+### Added
+
+- **`pdcli api --paginate` (alias `--all`)** — the raw passthrough now follows
+  Pipedrive pagination itself and prints one concatenated array. GET only; the
+  pager is inferred from the `/api/v1/` (offset) or `/api/v2/` (cursor) path; any
+  querystring on the path (including repeated keys) seeds the first page;
+  `--limit` caps total items and stops fetching early. With `--paginate`, `--jq`
+  sees the bare item array (`.[]`) rather than the response envelope (`.data[]`).
+- **Docker images** on GHCR: `docker run --rm -e PDCLI_API_TOKEN -e PDCLI_COMPANY_DOMAIN ghcr.io/wavyx/pdcli deal list --output json` (multi-arch amd64+arm64, built after each npm publish).
+- **Homebrew** (`brew install wavyx/tap/pdcli`) and **Scoop** packaging generated per release, plus documented standalone tarballs and a GitHub Actions recipe.
+
+### Changed
+
+- **`--jq` can no longer hang.** If the jq binary is missing (npm >= 11 skips
+  node-jq's install step), `--jq` now fails fast with a clear "jq unavailable"
+  error (exit 69) instead of hanging forever. A genuinely invalid jq filter still
+  surfaces jq's own syntax error.
+- **`--limit` must be >= 1** (usage error 64) instead of silently treating `0`
+  as "all pages".
+
 ## [0.19.0] - 2026-07-09
 
 Agent surface: pdcli becomes an MCP server, and `doctor` grows a

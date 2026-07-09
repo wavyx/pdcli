@@ -26,3 +26,7 @@ website/.astro/
 dist/
 tmp/
 .playwright-mcp/
+
+# generated at release by scripts/gen-dist.mjs
+packaging/homebrew/pdcli.rb
+packaging/scoop/pdcli.json
