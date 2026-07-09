@@ -8,6 +8,33 @@ stages/activities or goals where needed) and computes the numbers locally, so th
 against any account without extra setup. All accept the global `--output`/`--jq`/`--fields`
 flags.
 
+## Which command answers what
+
+Most weeks, start with [`digest`](#digest): a single fetch fanned into velocity, pipeline
+health, coverage, funnel and forecast, so you rarely run the rest by hand. Reach for an
+individual command when you want one number in depth.
+
+| Command                                              | Answers                                                     |
+| ---------------------------------------------------- | ----------------------------------------------------------- |
+| [`digest`](#digest)                                  | **Start here** — the whole Monday packet in one call.       |
+| [`metrics velocity`](#metrics-velocity)              | How much deal value/day is the pipeline producing?          |
+| [`deal summary`](#deal-summary)                      | What's my pipeline worth right now?                         |
+| [`funnel`](#funnel)                                  | Where do deals drop off, stage to stage?                    |
+| [`metrics aging`](#metrics-aging)                    | Where are deals rotting (days in current stage)?            |
+| [`metrics slippage`](#metrics-slippage)              | Which close dates keep slipping?                            |
+| [`metrics conversion-matrix`](#metrics-conversion-matrix) | The real stage-transition graph, backward edges and all. |
+| [`metrics coverage`](#metrics-coverage)              | Am I carrying enough pipeline to hit quota?                 |
+| [`pipeline health`](#pipeline-health)                | What's neglected per stage right now?                       |
+| [`metrics forecast`](#metrics-forecast)              | What closes by month (commit / best case / weighted)?       |
+| [`rep scorecard`](#rep-scorecard)                    | How is each rep performing?                                 |
+
+:::caution[Currencies are never summed]
+`deal summary`, `metrics coverage`, `metrics forecast` and `digest` keep each currency on its
+own line — a USD deal and a EUR deal are different units. Because `coverage` collapses open
+value into a single ratio, a mixed-currency pipeline exits `64` until you scope it to one with
+`--currency`.
+:::
+
 ## `metrics velocity`
 
 The Sales Velocity Equation: how much deal value your pipeline produces per day.
@@ -133,6 +160,13 @@ source that records when a deal actually entered a stage or had its close date m
 a deal whose changelog can't be fetched is skipped, counted, and reported on stderr rather
 than aborting the run. `--pipeline <id>` is required when the account has more than one
 pipeline, inferred otherwise.
+
+:::caution[These mine the changelog — one request per deal]
+`metrics aging`, `slippage` and `conversion-matrix` — plus [`funnel --exact`](#exact-transitions---exact)
+and [`digest --deep`](#digest) — reconstruct history from each deal's changelog: one 20-token
+request per deal, with a stderr warning above 100 deals. Cheap on a small pipeline, a real
+cost on a large one, so scope with `--pipeline` / `--period` before running them wide.
+:::
 
 ### `metrics aging`
 

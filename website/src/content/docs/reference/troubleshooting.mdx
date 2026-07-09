@@ -7,6 +7,31 @@ Each entry pairs the symptom with the fix. When in doubt, start with `pdcli doct
 checks config access, keychain, active profile, company domain, token presence, and API
 reachability.
 
+## `--jq` fails right after a global install
+
+```text
+jq did not respond within 15000ms — the jq binary may be missing or broken.
+Try: npm rebuild node-jq, or install jq. (exit 69)
+```
+
+The most common first-run trap. npm 11+ blocks `node-jq`'s `preinstall` step, so a global
+`npm i -g @wavyx/pdcli` can land **without** the bundled jq binary. Every `--jq` call then
+stalls on the missing binary and fails with exit `69`
+([`EX_UNAVAILABLE`](/pdcli/automation/exit-codes/)) once the guard times out. Three fixes,
+cheapest first:
+
+```bash
+npm rebuild node-jq                      # re-fetch the bundled jq binary
+# ...or install jq yourself and point node-jq at it:
+brew install jq && export JQ_PATH="$(command -v jq)"
+```
+
+Or skip the bundled binary entirely — take raw JSON and run your own jq:
+
+```bash
+pdcli deal list --output json | jq '.[].title'
+```
+
 ## `401` — invalid or expired token
 
 ```text
@@ -45,6 +70,27 @@ Pipedrive escalates sustained rate-limit abuse from `429` to `403`. pdcli treats
 Reduce load: prefer single GETs over lists, and let `backup` pace itself rather than running
 many list commands in parallel. See
 [How pdcli talks to Pipedrive](/pdcli/concepts/api-model/).
+
+## `429` — rate limited
+
+```text
+Pipedrive API 429: ... (exit 75)
+```
+
+You've spent the token budget for the current window. pdcli already retries `429`s with
+backoff; exit `75` means they never cleared (or `--no-retry` surfaced the first one). Back
+off and retry after the reset window, and thin out the load — single GETs over lists, no
+parallel fans. Sustained abuse escalates to the `403` hard stop above.
+
+## `400` / `422` — bad request or rejected data
+
+```text
+Pipedrive API 400: ... (exit 65)
+```
+
+Pipedrive rejected the request body or input: a bad field value, an unknown option label, a
+malformed `--body` JSON, or a value the API won't accept. Exit `65` is a **data** error, not
+a transient one — fix the payload and retry; retrying it unchanged just fails again.
 
 ## Keychain unavailable (headless Linux)
 

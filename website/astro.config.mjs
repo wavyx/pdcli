@@ -94,8 +94,9 @@ export default defineConfig({
           label: 'Start here',
           items: [
             { label: 'Installation', slug: 'start/installation' },
-            { label: 'Distribution (all channels)', slug: 'start/distribution' },
             { label: 'Quickstart', slug: 'start/quickstart' },
+            { label: 'Which command do I use?', slug: 'start/tasks' },
+            { label: 'Distribution (all channels)', slug: 'start/distribution' },
           ],
         },
         {

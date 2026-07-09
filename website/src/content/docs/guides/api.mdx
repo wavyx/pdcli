@@ -43,11 +43,13 @@ relative path like `/api/v2/deals`.
 ## Request bodies
 
 For `POST`, `PUT`, and `PATCH`, supply a JSON body with `--body`, which takes either an
-inline string or an `@file` path (`GET` and `DELETE` ignore it):
+inline string or an `@file` path — or omit `--body` and pipe the JSON on stdin (`GET` and
+`DELETE` ignore the body):
 
 ```bash
 pdcli api POST /api/v2/deals --body '{"title":"Inline JSON"}'   # inline string
 pdcli api POST /api/v2/deals --body @new-deal.json              # @file
+echo '{"title":"Piped"}' | pdcli api POST /api/v2/deals         # piped stdin
 ```
 
 The body is parsed as JSON before sending; invalid JSON fails before any request.

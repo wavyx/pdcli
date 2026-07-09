@@ -114,6 +114,8 @@ they take precedence over the environment.)
 | `PDCLI_PROFILE` | Active profile name (same as `--profile`). |
 | `PDCLI_CLIENT_ID` | OAuth app client ID, read by `auth login --oauth`. |
 | `PDCLI_CLIENT_SECRET` | OAuth app client secret, read by `auth login --oauth`. |
+| `PDCLI_CONFIG_DIR` | Override the config-store directory — isolates profiles for tests, CI, or sandboxes so a run never touches your real profiles. Defaults to the OS config path. |
+| `PDCLI_BASE_URL` | Point pdcli at a localhost mock endpoint instead of the live host. Host-locked to `localhost`/`127.0.0.1`/`::1` and requires `PDCLI_API_TOKEN`. See [Local mock endpoint](/pdcli/guides/mock/). |
 | `NO_COLOR` | Any value disables colored output (same as `--no-color`). |
 
 Together, `PDCLI_COMPANY_DOMAIN` + `PDCLI_API_TOKEN` are all you need for a fully

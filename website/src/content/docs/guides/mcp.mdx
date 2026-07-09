@@ -60,6 +60,22 @@ flag to the `args` — `["mcp", "serve", "--allow-writes"]` — or to the
 Authenticate pdcli once (`pdcli auth login`, or an env-var token) before starting a
 host; the server itself needs no credentials — its child processes resolve them.
 
+### Verify it is running
+
+On start the server logs a single line to **stderr** and then waits for the host over
+stdio:
+
+```text
+pdcli MCP server ready — 45 tools (read-only)
+```
+
+The count is the number of tools actually registered, so it moves with your flags:
+`--allow-writes` changes the suffix to `(writes enabled)` and raises the count, and
+`--topics`/`--all-tools` change it too. On the host side, confirm the connection by
+opening the tool list — Claude Code and Claude Desktop show the registered pdcli tools in
+their tool picker. If you see neither the stderr line nor the tools, the server never
+came up.
+
 ## The tool model
 
 Tool selection happens in two stages: **scope**, then the **write gate**.
@@ -89,6 +105,24 @@ read: `lookup`. Its exit-3 "no match" result is a normal branch for a script, bu
 an MCP host reads a non-zero exit as a **tool error** — noisy for an agent. It
 stays reachable via `--all-tools`; for match-or-branch logic inside an agent,
 prefer `search` or the `upsert` tools.
+
+## What it looks like in practice
+
+The point of the read-only default is that an agent can gather real CRM context and act on
+it without you wiring up a single API call. A support agent asked to chase a stalled order
+does the whole thing through the curated tools:
+
+1. **Find the deal.** The user knows a purchase-order number, not a deal ID, so the agent
+   calls the `search` tool with that term and gets back the matching deal.
+2. **Pull its full context.** It hands that ID to `deal context`, which returns the
+   denormalized bundle in one call — the deal plus its person, organization, open
+   activities, recent notes, and line-item products — with custom fields already resolved to
+   human names, so the agent reads `"Renewal date"`, not a hash key.
+3. **Act on it.** With the whole picture in the prompt, the agent drafts a follow-up email
+   and flags the two overdue activities — all from a server that can't write anything.
+
+Only when you trust that workflow do you add `--allow-writes`, at which point the same agent
+can idempotently `upsert` the next-step activity instead of just proposing it.
 
 ## Custom-field names, not hash keys
 

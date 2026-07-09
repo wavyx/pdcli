@@ -48,7 +48,7 @@ const steps: [string, string, string, string][] = [
   ],
 ];
 
-const features: { t: string; b: string; d: string }[] = [
+const features: { t: string; b: string; d: string; href?: string }[] = [
   {
     t: 'Backup & data export',
     b: 'Stream your entire account to JSON with pdcli backup --resume, or export any resource to CSV. Resumable, scriptable, and perfect for archives or migrations.',
@@ -63,6 +63,7 @@ const features: { t: string; b: string; d: string }[] = [
     t: 'Built for AI agents',
     b: 'Runs as an MCP server — pdcli mcp serve — read-only by default, giving Claude and other hosts a safe, typed tool surface. For shell-driven agents there is also self-documenting --help, clean JSON, and deterministic exit codes.',
     d: '<rect x="4" y="6" width="16" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 12h0M15 12h0M9.5 15.5a3 3 0 005 0"/>',
+    href: 'start/agents/',
   },
   {
     t: 'Scriptable by design',
@@ -170,6 +171,20 @@ const showcaseTerm = `<span class="dim">$</span> <span class="g">pdcli</span> <s
       <pre class="clr-term__body" id="clr-aterm-body" aria-hidden="true"><span
           class="prompt">❯</span> <span class="c" id="clr-aterm-cmd"></span><span
           class="cur">▋</span><span id="clr-aterm-out"></span></pre>
+      <noscript>
+        <img
+          src={withBase('demo.svg')}
+          alt="Animated demo of pdcli: pipeline health, a winning deal update, and a data-hygiene audit"
+          width="880"
+          height="382"
+          style="display:block; width:100%; height:auto"
+        />
+      </noscript>
+      <a
+        class="clr-aterm__link"
+        href={withBase('guides/mcp/')}
+        aria-label="See how pdcli runs as an MCP server"
+        style="position:absolute; inset:0; z-index:2"></a>
     </div>
   </section>
 
@@ -271,26 +286,35 @@ const showcaseTerm = `<span class="dim">$</span> <span class="g">pdcli</span> <s
     </div>
     <div class="clr-grid">
       {
-        features.map((f) => (
-          <div class="clr-feat">
-            <div class="clr-feat__ic">
-              <svg
-                aria-hidden="true"
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.7"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                set:html={f.d}
-              />
-            </div>
-            <h3>{f.t}</h3>
-            <p>{f.b}</p>
-          </div>
-        ))
+        features.map((f) => {
+          const inner = (
+            <>
+              <div class="clr-feat__ic">
+                <svg
+                  aria-hidden="true"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.7"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  set:html={f.d}
+                />
+              </div>
+              <h3>{f.t}</h3>
+              <p>{f.b}</p>
+            </>
+          );
+          return f.href ? (
+            <a class="clr-feat" href={withBase(f.href)} style="color: inherit">
+              {inner}
+            </a>
+          ) : (
+            <div class="clr-feat">{inner}</div>
+          );
+        })
       }
     </div>
   </section>

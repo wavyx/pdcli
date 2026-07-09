@@ -43,6 +43,13 @@ npx vitest run test/deal/list.test.js   # a single file
 npm run test:coverage             # suite + coverage report
 ```
 
+## Docs site
+
+The documentation site lives in `website/` (Astro + Starlight). Preview it locally with
+`cd website && npm install && npm run dev`. The command reference at
+`reference/commands.mdx` is **generated** from the oclif manifest by
+`scripts/gen-commands.mjs` (`npm run docs:commands`) — don't hand-edit it, regenerate.
+
 ## Release flow
 
 Releases are tag-driven and automated (maintainers only): bump the version and
