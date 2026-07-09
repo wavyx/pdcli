@@ -1,0 +1,36 @@
+name: Publish Homebrew + Scoop (manual)
+
+# Manually (re)publish the Homebrew formula + Scoop manifest for a version that
+# is already on npm — without re-running the whole release (npm/docker). Use it
+# to test the TAP_TOKEN wiring or to backfill a channel. Auto-publishing on
+# release lives in the `dist` job of release.yml.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to publish (blank = current package.json version)
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  dist:
+    name: Publish Homebrew + Scoop
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+
+      - name: Generate and push tap files
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          V="${INPUT_VERSION:-$(node -p "require('./package.json').version")}"
+          echo "Publishing Homebrew + Scoop for $V"
+          node scripts/gen-dist.mjs "$V"
+          VERSION="$V" bash scripts/publish-tap.sh
