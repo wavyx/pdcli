@@ -27,6 +27,11 @@ jobs:
 
       - run: npm ci
 
+      # npm >= 11 (installed just above for trusted publishing) blocks
+      # dependency lifecycle scripts, so node-jq's preinstall never fetches its
+      # jq binary. Run its installer directly so --jq works in the test gate.
+      - run: node node_modules/node-jq/scripts/install-binary.mjs
+
       # Gate the release on the same checks as CI.
       - run: npm run lint
       - run: npm run test:coverage

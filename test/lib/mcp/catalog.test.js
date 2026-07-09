@@ -308,10 +308,14 @@ describe('real-config classification audit', () => {
   // which would import every command module and skew coverage merging.
   function realCommandIds() {
     const dir = fileURLToPath(new URL('../../../src/commands', import.meta.url))
-    return readdirSync(dir, { recursive: true })
-      .filter((f) => f.endsWith('.js'))
-      .map((f) => f.replace(/\.js$/, '').split('/').join(':'))
-      .sort()
+    return (
+      readdirSync(dir, { recursive: true })
+        .filter((f) => f.endsWith('.js'))
+        // readdirSync yields OS-native separators (backslashes on Windows);
+        // split on both so command ids normalize to colon form everywhere.
+        .map((f) => f.replace(/\.js$/, '').split(/[/\\]/).join(':'))
+        .sort()
+    )
   }
 
   it('classifies every real command exactly as audited', () => {
