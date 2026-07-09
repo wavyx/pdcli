@@ -70,9 +70,17 @@ When you hit v2 endpoints directly, remember the v2 conventions:
 - **Bodies are JSON only.** v2 doesn't take form-encoded data.
 - Lists use **cursor** pagination (`cursor`/`limit`, `limit` max 500); v1 lists use
   **offset** pagination (`start`/`limit`). See
-  [How pdcli talks to Pipedrive](/pdcli/concepts/api-model/). `pdcli api` makes a single
-  request — it does **not** auto-paginate — so pass `cursor`/`start` yourself for more
-  pages.
+  [How pdcli talks to Pipedrive](/pdcli/concepts/api-model/). By default `pdcli api`
+  makes a single request; add **`--paginate`** (alias `--all`) to follow every page and
+  print one concatenated array. It works on `GET` only and infers the pager from the
+  path (`/api/v1/` offset vs `/api/v2/` cursor); `--limit` caps the total. Note the shape
+  shift for `--jq`: with `--paginate` you filter the bare item array (`.[]`), without it
+  the full envelope (`.data[]`).
+
+```bash
+# every open deal across all pages, as one array
+pdcli api GET "/api/v2/deals?status=open" --paginate --jq '.[].id'
+```
 
 ## When to reach for it
 

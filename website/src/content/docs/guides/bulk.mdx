@@ -221,3 +221,21 @@ is indexed. For repeatable sync, key on a stable external ID and let the index s
 between runs; a periodic `backup diff` or a search will surface any duplicates that slip
 through.
 :::
+
+### Just checking: `lookup`
+
+When a script wants to **branch on existence itself** rather than have pdcli decide, use
+`lookup` — a read-only exact-match resolver. It exits `0` with the matching row(s) when
+found and **`3`** when nothing matches, so create-vs-update becomes a plain shell branch:
+
+```bash
+if pdcli lookup deal --field "PO Number" --value PO-1234 --first --jq .id >/tmp/id; then
+  pdcli deal update "$(cat /tmp/id)" --body '{"value":5000}'   # found → update
+else
+  pdcli deal create --body '{"title":"PO-1234","value":5000}'  # exit 3 → create
+fi
+```
+
+It resolves a human field name to its custom-field key for you (deal, person, org, product,
+lead). Matching is **case-sensitive**, and — like upsert — the search index is eventually
+consistent, so a `lookup`-then-`create` loop can still double-create in fast pipelines.

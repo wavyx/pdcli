@@ -7,6 +7,23 @@ pdcli is built to be driven by agents (Claude Code, Codex, CI bots). It is
 self-describing, emits machine-readable JSON, and uses deterministic exit codes.
 This page covers the conventions an agent needs.
 
+## Expose pdcli over MCP
+
+If your host speaks the [Model Context Protocol](https://modelcontextprotocol.io) —
+Claude Desktop, Claude Code, and other GUI or chat clients — pdcli can register as
+an MCP server and hand it a set of typed tools, read-only by default. Register it
+with Claude Code in one line:
+
+```bash
+claude mcp add pipedrive -- pdcli mcp serve
+```
+
+Everything below still applies: the MCP tools re-invoke this same CLI under your
+auth profile, with the same host-lock and exit-code semantics. If your agent has a
+shell, driving pdcli from bash (as this page describes) is often simpler than MCP.
+See the [MCP server guide](/pdcli/guides/mcp/) for the full tool model, the write
+gate, and scoping flags.
+
 ## Authenticate with environment variables
 
 Avoid the interactive `auth login` flow. Set credentials in the environment so no
@@ -44,6 +61,8 @@ script can react to the failure class without parsing text:
 | ---- | ------------------------------------------------------------------------------------------------- |
 | 0    | Success                                                                                           |
 | 1    | Generic error                                                                                     |
+| 3    | `lookup`: no record matched — not a failure; branch to create/upsert                              |
+| 8    | `watch`: new findings since the last run — the trigger for `pdcli watch \|\| notify`              |
 | 64   | Usage / bad flags or arguments (unknown flag, missing arg, invalid value, missing CSV column)     |
 | 65   | Bad input data (API 400 / 422)                                                                    |
 | 69   | Service unavailable (API 5xx, or unreachable)                                                     |
@@ -90,7 +109,8 @@ performance, `digest` for the whole Monday packet in one fetch (`--format md|htm
 a cron → Slack/email artifact), `changes` for an incremental cross-entity change feed with a
 self-advancing watermark (no receiver to host, unlike webhooks), `deal context <id>` for a
 one-call denormalized, prompt-ready bundle (deal + person + org + activities + notes +
-products + flags), `backup diff` for a zero-API field-level diff of two snapshots, `watch` for
+products + flags; add `--mail` to fold in a mail summary — opt-in, since it needs the
+`mail:read` scope and email sync), `backup diff` for a zero-API field-level diff of two snapshots, `watch` for
 an exit-code-gated anomaly poller that fires only on findings new since the last run
 (`pdcli watch || notify`), `sync warehouse` for an incremental NDJSON export with per-entity
 high-water marks, and `--updated-since` on the list commands for incremental polling.
@@ -101,6 +121,11 @@ and **refuse with exit 65** when more than one record matches, so an agent never
 writes the wrong one. `person import`/`org import --upsert --match-on <field>` apply the same
 match-or-create per CSV row, reporting created/updated/unchanged counts. Pair upsert with an
 external key (a custom field carrying your system's ID) for clean, repeatable sync.
+
+When you'd rather branch on existence yourself before deciding to create or update, `lookup`
+is the lighter read-only probe: it finds a record by a field value and exits **0 when found**
+(printing it) or **3 when nothing matched**, so `pdcli lookup person --field email --value … ||
+pdcli person create …` is a clean create-if-missing pattern that never mutates on its own.
 
 ## The host-locked `api` escape hatch
 

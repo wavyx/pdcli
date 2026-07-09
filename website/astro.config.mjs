@@ -85,7 +85,13 @@ export default defineConfig({
             { label: 'Installation', slug: 'start/installation' },
             { label: 'Distribution (all channels)', slug: 'start/distribution' },
             { label: 'Quickstart', slug: 'start/quickstart' },
+          ],
+        },
+        {
+          label: 'AI agents',
+          items: [
             { label: 'Quickstart for AI agents', slug: 'start/agents' },
+            { label: 'MCP server', slug: 'guides/mcp' },
           ],
         },
         {
