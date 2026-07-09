@@ -8,6 +8,7 @@ import {
   isExcluded,
   EXCLUDED,
   CURATED,
+  KIND_OVERRIDES,
   READ_LEAVES,
   READ_IDS,
   WRITE_LEAVES,
@@ -42,7 +43,8 @@ describe('classifyKind', () => {
     ['deal:context', 'read'],
     ['backup:diff', 'read'], // zero-API local snapshot diff
     ['user:me', 'read'],
-    ['file:download', 'read'],
+    // override beats the 'download' read leaf: --out can overwrite host files
+    ['file:download', 'destructive'],
     ['pipeline:health', 'read'],
     ['rep:scorecard', 'read'],
     ['metrics:velocity', 'read'],
@@ -74,6 +76,17 @@ describe('isExcluded', () => {
     'changes', // advances a persistent watermark
     'sync:warehouse', // long-running file-writing export
     'backup', // long-running file-writing export
+    // local operator state — an agent could booby-trap the operator's own CLI
+    'alias:list',
+    'alias:set',
+    'alias:unset',
+    'config:get',
+    'config:list',
+    'config:set',
+    'config:unset',
+    'profile:current',
+    'profile:list',
+    'profile:use',
   ])('excludes %s', (id) => {
     expect(isExcluded(id)).toBe(true)
   })
@@ -147,9 +160,9 @@ describe('real-config classification audit', () => {
     'activity:list': 'read',
     'activity:type:list': 'read',
     'activity:update': 'write',
-    'alias:list': 'read',
-    'alias:set': 'write',
-    'alias:unset': 'destructive',
+    'alias:list': 'excluded',
+    'alias:set': 'excluded',
+    'alias:unset': 'excluded',
     api: 'excluded',
     audit: 'read',
     'audit:stage-skips': 'read',
@@ -159,10 +172,10 @@ describe('real-config classification audit', () => {
     backup: 'excluded',
     'backup:diff': 'read',
     changes: 'excluded',
-    'config:get': 'read',
-    'config:list': 'read',
-    'config:set': 'write',
-    'config:unset': 'destructive',
+    'config:get': 'excluded',
+    'config:list': 'excluded',
+    'config:set': 'excluded',
+    'config:unset': 'excluded',
     'deal:bulk-update': 'destructive',
     'deal:context': 'read',
     'deal:convert': 'destructive',
@@ -194,7 +207,7 @@ describe('real-config classification audit', () => {
     'field:option:remove': 'destructive',
     'field:update': 'write',
     'file:delete': 'destructive',
-    'file:download': 'read',
+    'file:download': 'destructive',
     'file:get': 'read',
     'file:list': 'read',
     'file:remote-link': 'write',
@@ -261,9 +274,9 @@ describe('real-config classification audit', () => {
     'product:get': 'read',
     'product:list': 'read',
     'product:update': 'write',
-    'profile:current': 'read',
-    'profile:list': 'read',
-    'profile:use': 'write',
+    'profile:current': 'excluded',
+    'profile:list': 'excluded',
+    'profile:use': 'excluded',
     'project:create': 'write',
     'project:delete': 'destructive',
     'project:get': 'read',
@@ -316,11 +329,20 @@ describe('real-config classification audit', () => {
       if (isExcluded(id)) continue
       const leaf = id.split(':').pop()
       const known =
+        KIND_OVERRIDES.has(id) ||
         READ_IDS.has(id) ||
         READ_LEAVES.has(leaf) ||
         WRITE_LEAVES.has(leaf) ||
         DESTRUCTIVE_LEAVES.has(leaf)
       expect(known, `${id} has an unaudited verb "${leaf}"`).toBe(true)
+    }
+  })
+
+  it('every KIND_OVERRIDES id is a real, non-excluded command', () => {
+    const ids = new Set(realCommandIds())
+    for (const id of KIND_OVERRIDES.keys()) {
+      expect(ids.has(id), `${id} is not a real command`).toBe(true)
+      expect(isExcluded(id), `${id} is excluded`).toBe(false)
     }
   })
 

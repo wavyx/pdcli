@@ -25,6 +25,7 @@ describe('doctor', () => {
   beforeEach(() => {
     nock.cleanAll()
     delete process.env.PDCLI_API_TOKEN
+    delete process.env.PDCLI_COMPANY_DOMAIN
     mockGetToken.mockReset()
     mockIsKeychainAvailable.mockReset()
     mockGetProfileConfig.mockReset()
@@ -59,7 +60,7 @@ describe('doctor', () => {
 
     const err = await runCmd(DoctorCommand).catch((e) => e)
 
-    expect(err.exitCode ?? err.oclif?.exit).toBe(78)
+    expect(err.oclif.exit).toBe(78)
     expect(err.message).toMatch(/1 check\(s\) failed/)
     expect(err.stdout).toContain('pdcli auth login')
   })
@@ -71,7 +72,7 @@ describe('doctor', () => {
 
     const err = await runCmd(DoctorCommand).catch((e) => e)
 
-    expect(err.exitCode ?? err.oclif?.exit).toBe(78)
+    expect(err.oclif.exit).toBe(78)
     expect(err.message).toMatch(/2 check\(s\) failed/)
     expect(err.stdout).toContain('Company domain set')
   })
@@ -86,7 +87,7 @@ describe('doctor', () => {
 
     const err = await runCmd(DoctorCommand).catch((e) => e)
 
-    expect(err.exitCode ?? err.oclif?.exit).toBe(78)
+    expect(err.oclif.exit).toBe(78)
     expect(err.stdout).toContain('API reachable')
   })
 })
@@ -143,7 +144,7 @@ describe('doctor machine output', () => {
       (e) => e,
     )
 
-    expect(err.exitCode ?? err.oclif?.exit).toBe(78)
+    expect(err.oclif.exit).toBe(78)
     const rows = JSON.parse(err.stdout)
     expect(rows.find((r) => r.check === 'token')).toEqual({
       check: 'token',
@@ -296,10 +297,143 @@ describe('doctor failure branches', () => {
 
     const err = await runCmd(DoctorCommand).catch((e) => e)
 
-    expect(err.exitCode ?? err.oclif?.exit).toBe(78)
+    expect(err.oclif.exit).toBe(78)
     expect(err.message).toMatch(/check\(s\) failed/)
     expect(err.stdout).toContain('Cannot access config store')
     expect(err.stdout).toContain('No active profile')
+  })
+})
+
+describe('doctor --profile', () => {
+  beforeEach(() => {
+    nock.cleanAll()
+    delete process.env.PDCLI_API_TOKEN
+    delete process.env.PDCLI_COMPANY_DOMAIN
+    delete process.env.PDCLI_PROFILE
+    mockGetToken.mockReset()
+    mockIsKeychainAvailable.mockReset()
+    mockIsKeychainAvailable.mockReturnValue(true)
+    mockGetProfileConfig.mockReset()
+    mockGetConf.mockReset()
+    mockGetConf.mockReturnValue({ path: '/tmp/pdcli-test-config' })
+    mockGetActiveProfile.mockReset()
+    mockGetActiveProfile.mockReturnValue('default')
+  })
+
+  afterEach(() => {
+    nock.cleanAll()
+    delete process.env.PDCLI_PROFILE
+  })
+
+  it('diagnoses the --profile profile, not the stored active one', async () => {
+    mockGetProfileConfig.mockImplementation((profile, key) =>
+      profile === 'work' && key === 'company_domain' ? 'workco' : undefined,
+    )
+    mockGetToken.mockResolvedValue('work-token')
+    const scope = nock('https://workco.pipedrive.com')
+      .get('/api/v1/users/me')
+      .reply(401)
+
+    const stdout = await runCmd(DoctorCommand, [
+      '--profile',
+      'work',
+      '--output',
+      'json',
+    ])
+
+    const rows = JSON.parse(stdout)
+    expect(rows.every((r) => r.status === 'pass')).toBe(true)
+    expect(rows.find((r) => r.check === 'active-profile').detail).toBe('work')
+    expect(rows.find((r) => r.check === 'company-domain')).toEqual({
+      check: 'company-domain',
+      status: 'pass',
+      detail: 'workco',
+    })
+    expect(mockGetToken).toHaveBeenCalledWith('work')
+    expect(mockGetActiveProfile).not.toHaveBeenCalled()
+    expect(scope.isDone()).toBe(true)
+  })
+
+  it('honors PDCLI_PROFILE like every other command', async () => {
+    process.env.PDCLI_PROFILE = 'staging'
+    mockGetProfileConfig.mockReturnValue('stagco')
+    mockGetToken.mockResolvedValue('tok')
+
+    const stdout = await runCmd(DoctorCommand, [
+      '--offline',
+      '--output',
+      'json',
+    ])
+
+    const rows = JSON.parse(stdout)
+    expect(rows.find((r) => r.check === 'active-profile').detail).toBe(
+      'staging',
+    )
+    expect(mockGetProfileConfig).toHaveBeenCalledWith(
+      'staging',
+      'company_domain',
+    )
+  })
+})
+
+describe('doctor PDCLI_COMPANY_DOMAIN', () => {
+  beforeEach(() => {
+    nock.cleanAll()
+    delete process.env.PDCLI_API_TOKEN
+    delete process.env.PDCLI_COMPANY_DOMAIN
+    mockGetToken.mockReset()
+    mockIsKeychainAvailable.mockReset()
+    mockGetProfileConfig.mockReset()
+    mockGetConf.mockReset()
+    mockGetConf.mockReturnValue({ path: '/tmp/pdcli-test-config' })
+    mockGetActiveProfile.mockReset()
+    mockGetActiveProfile.mockReturnValue('default')
+  })
+
+  afterEach(() => {
+    nock.cleanAll()
+    delete process.env.PDCLI_API_TOKEN
+    delete process.env.PDCLI_COMPANY_DOMAIN
+  })
+
+  it('an env-only container config passes all checks and probes the env host', async () => {
+    process.env.PDCLI_API_TOKEN = 'env-token'
+    process.env.PDCLI_COMPANY_DOMAIN = 'envco'
+    mockIsKeychainAvailable.mockReturnValue(false)
+    mockGetProfileConfig.mockReturnValue(undefined)
+    const scope = nock('https://envco.pipedrive.com')
+      .get('/api/v1/users/me')
+      .reply(401)
+
+    const stdout = await runCmd(DoctorCommand, ['--output', 'json'])
+
+    const rows = JSON.parse(stdout)
+    expect(rows.every((r) => r.status === 'pass')).toBe(true)
+    expect(rows.find((r) => r.check === 'company-domain')).toEqual({
+      check: 'company-domain',
+      status: 'pass',
+      detail: 'envco (source: env)',
+    })
+    expect(scope.isDone()).toBe(true)
+    expect(mockGetToken).not.toHaveBeenCalled()
+  })
+
+  it('env domain wins over the profile domain and is normalized (mirrors lib/auth.js)', async () => {
+    process.env.PDCLI_COMPANY_DOMAIN = 'envco.pipedrive.com'
+    mockIsKeychainAvailable.mockReturnValue(true)
+    mockGetProfileConfig.mockReturnValue('acme')
+    mockGetToken.mockResolvedValue('tok')
+    const scope = nock('https://envco.pipedrive.com')
+      .get('/api/v1/users/me')
+      .reply(401)
+
+    const stdout = await runCmd(DoctorCommand, ['--output', 'json'])
+
+    const rows = JSON.parse(stdout)
+    expect(rows.find((r) => r.check === 'company-domain').detail).toBe(
+      'envco (source: env)',
+    )
+    expect(scope.isDone()).toBe(true)
   })
 })
 
@@ -316,7 +450,7 @@ describe('doctor without a keychain', () => {
 
     const err = await runCmd(DoctorCommand).catch((e) => e)
 
-    expect(err.exitCode ?? err.oclif?.exit).toBe(78)
+    expect(err.oclif.exit).toBe(78)
     expect(err.stdout).toContain('OS keychain unavailable')
   })
 })

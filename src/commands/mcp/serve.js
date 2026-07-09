@@ -89,6 +89,12 @@ Or in .mcp.json:
       description:
         'Comma-separated topics to expose (e.g. deal,person) instead of the curated set',
     }),
+    'tool-timeout': Flags.integer({
+      description:
+        'Seconds a tool call may run before its child process is terminated',
+      default: 120,
+      min: 1,
+    }),
   }
 
   async run() {
@@ -100,6 +106,7 @@ Or in .mcp.json:
       command: process.execPath,
       args: [process.argv[1]],
       env: { PDCLI_PROFILE: this.activeProfile },
+      timeout: flags['tool-timeout'] * 1000,
     })
     await startMcpServer({
       config: this.config,

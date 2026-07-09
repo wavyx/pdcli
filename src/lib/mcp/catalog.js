@@ -21,16 +21,31 @@ export const EXCLUDED = new Set([
   'watch',
 ])
 
+// Topics excluded by prefix so future subcommands stay out: `auth:*` manage
+// the operator's LOCAL credentials, `mcp:*` is this server itself, and
+// `alias:*` / `config:*` / `profile:*` manage LOCAL operator state (aliases,
+// CLI config, active profile) — exposing them would let an agent booby-trap
+// the operator's own CLI, not touch CRM data.
+const EXCLUDED_PREFIXES = ['auth:', 'mcp:', 'alias:', 'config:', 'profile:']
+
 /**
- * `auth:*` manage the operator's LOCAL credentials and `mcp:*` is this server
- * itself — whole topics excluded by prefix so future subcommands stay out.
  * @param {string} id oclif command id
  */
 export function isExcluded(id) {
-  return EXCLUDED.has(id) || id.startsWith('auth:') || id.startsWith('mcp:')
+  return EXCLUDED.has(id) || EXCLUDED_PREFIXES.some((p) => id.startsWith(p))
 }
 
-// Leaf verbs that never mutate remote or local state.
+/**
+ * Per-id classification overrides, checked before any leaf-verb set.
+ * `file:download` only reads the CRM, but its `--out` flag can overwrite an
+ * arbitrary existing file on the operator's host with CRM bytes — local
+ * destruction, so it must never ship in a read-only tool set.
+ * @type {Map<string, 'read'|'write'|'destructive'>}
+ */
+export const KIND_OVERRIDES = new Map([['file:download', 'destructive']])
+
+// Leaf verbs that never mutate remote or local state. A read-leaf command
+// that CAN mutate must be pinned in KIND_OVERRIDES instead.
 export const READ_LEAVES = new Set([
   'list',
   'get',
@@ -43,7 +58,6 @@ export const READ_LEAVES = new Set([
   'context',
   'diff',
   'me',
-  'download',
   'health',
   'scorecard',
   'velocity',
@@ -93,6 +107,8 @@ export const DESTRUCTIVE_LEAVES = new Set([
  * @returns {'read'|'write'|'destructive'}
  */
 export function classifyKind(id) {
+  const override = KIND_OVERRIDES.get(id)
+  if (override) return override
   const leaf = id.split(':').pop()
   if (DESTRUCTIVE_LEAVES.has(leaf)) return 'destructive'
   if (READ_IDS.has(id) || READ_LEAVES.has(leaf)) return 'read'

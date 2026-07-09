@@ -91,6 +91,22 @@ describe('selectTools selection matrix', () => {
   it('defaults its options object entirely', () => {
     expect(ids(selectTools(catalog))).toEqual(['deal:list', 'search'])
   })
+
+  it('never exposes file:download without allowWrites (host-file overwrite)', () => {
+    const fileCatalog = buildCatalog([
+      { id: 'file:list', summary: 'List files' },
+      { id: 'file:download', summary: 'Download a file' },
+    ])
+    expect(ids(selectTools(fileCatalog, { topics: ['file'] }))).toEqual([
+      'file:list',
+    ])
+    expect(ids(selectTools(fileCatalog, { allTools: true }))).toEqual([
+      'file:list',
+    ])
+    expect(
+      ids(selectTools(fileCatalog, { topics: ['file'], allowWrites: true })),
+    ).toEqual(['file:download', 'file:list'])
+  })
 })
 
 describe('annotationsFor', () => {
@@ -109,10 +125,12 @@ describe('annotationsFor', () => {
       },
     )
   })
-  it('flags writes as neither read-only nor destructive nor idempotent', () => {
+  it('flags writes destructive too — update/upsert overwrite existing values', () => {
+    // MCP spec: destructiveHint:false promises additive-only. An update tool
+    // replaces field values, so any non-read tool must carry the hint.
     expect(annotationsFor({ kind: 'write', summary: 'x' })).toMatchObject({
       readOnlyHint: false,
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
     })
   })

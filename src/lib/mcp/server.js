@@ -3,12 +3,16 @@ import { buildCatalog, CURATED } from './catalog.js'
 import { buildInputSchema } from './schema.js'
 import { runTool } from './invoke.js'
 
-/** MCP tool annotations derived from a catalog entry's kind. */
+/**
+ * MCP tool annotations derived from a catalog entry's kind. Per the MCP spec
+ * `destructiveHint: false` promises additive-only changes — update/upsert
+ * overwrite existing values, so every non-read tool carries the hint.
+ */
 export function annotationsFor(entry) {
   return {
     title: entry.summary,
     readOnlyHint: entry.kind === 'read',
-    destructiveHint: entry.kind === 'destructive',
+    destructiveHint: entry.kind !== 'read',
     idempotentHint: entry.kind === 'read',
     openWorldHint: true,
   }

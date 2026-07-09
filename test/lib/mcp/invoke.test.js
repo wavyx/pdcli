@@ -234,7 +234,22 @@ describe('runTool', () => {
       }),
     )
     expect(res.isError).toBe(true)
-    expect(res.content[0].text).toContain('SIGKILL')
+    expect(res.content[0].text).toBe('terminated: SIGKILL')
+  })
+
+  it('surfaces a timeout pseudo-signal verbatim, not as a signal kill', async () => {
+    const res = await runTool(
+      readEntry,
+      {},
+      fakeExec({
+        stdout: '',
+        stderr: '',
+        code: 0,
+        signal: 'tool timed out after 120s',
+      }),
+    )
+    expect(res.isError).toBe(true)
+    expect(res.content[0].text).toBe('tool timed out after 120s')
   })
 })
 
@@ -274,13 +289,32 @@ describe('makeExec', () => {
     expect((await exec([])).stdout).toBe('work')
   })
 
-  it('kills a child that exceeds the timeout', async () => {
+  it('kills a child that exceeds the timeout with a distinct label', async () => {
     const exec = makeExec({
       command: process.execPath,
       args: ['-e', 'setTimeout(()=>{}, 10000)'],
       timeout: 150,
     })
-    expect((await exec([])).signal).toBe('SIGKILL')
+    expect((await exec([])).signal).toBe('tool timed out after 0.15s')
+  })
+
+  it('escalates to SIGKILL when the child ignores SIGTERM', async () => {
+    const exec = makeExec({
+      command: process.execPath,
+      args: ['-e', 'process.on("SIGTERM",()=>{});setInterval(()=>{},1000)'],
+      timeout: 150,
+      grace: 100,
+    })
+    expect((await exec([])).signal).toBe('tool timed out after 0.15s')
+  })
+
+  it('decodes multibyte output split across chunk boundaries', async () => {
+    // 50k 3-byte chars: pipe chunks (64 KiB) are guaranteed to split one.
+    const exec = makeExec({
+      command: process.execPath,
+      args: ['-e', 'process.stdout.write("\\u20ac".repeat(50000))'],
+    })
+    expect((await exec([])).stdout).toBe('€'.repeat(50000))
   })
 
   it('kills a child that exceeds maxBuffer', async () => {
@@ -294,6 +328,21 @@ describe('makeExec', () => {
       timeout: 5000,
     })
     expect((await exec([])).signal).toBe('output limit exceeded')
+  })
+
+  it('kills a child that floods stderr past maxBuffer and reports an error', async () => {
+    const exec = makeExec({
+      command: process.execPath,
+      args: [
+        '-e',
+        'const b="x".repeat(100000); setInterval(()=>process.stderr.write(b), 1)',
+      ],
+      maxBuffer: 50000,
+      timeout: 5000,
+    })
+    const res = await runTool(readEntry, {}, exec)
+    expect(res.isError).toBe(true)
+    expect(res.content[0].text).toBe('output limit exceeded')
   })
 })
 

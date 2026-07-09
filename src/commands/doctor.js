@@ -4,7 +4,10 @@ import ora from 'ora'
 import BaseCommand from '../base-command.js'
 import { getConf, getActiveProfile, getProfileConfig } from '../lib/config.js'
 import { getToken, isKeychainAvailable } from '../lib/keychain.js'
-import { companyDomainToBaseOrigin } from '../lib/auth.js'
+import {
+  companyDomainToBaseOrigin,
+  normalizeCompanyDomain,
+} from '../lib/auth.js'
 import { CliError } from '../lib/errors.js'
 
 const PASS = chalk.green('✔')
@@ -70,10 +73,12 @@ export default class DoctorCommand extends BaseCommand {
           : 'OS keychain unavailable; pdcli cannot store credentials',
     })
 
-    // 3. Active profile set
+    // 3. Active profile set — --profile / PDCLI_PROFILE (oclif binds the env
+    //    var onto flags.profile) select the profile to diagnose, exactly like
+    //    every other command; only then fall back to the stored active profile.
     let profile
     try {
-      profile = getActiveProfile()
+      profile = flags.profile ?? getActiveProfile()
       results.push({
         check: 'active-profile',
         label: 'Active profile set',
@@ -88,15 +93,24 @@ export default class DoctorCommand extends BaseCommand {
       })
     }
 
-    // 4. Company domain set
-    const domain = profile
-      ? getProfileConfig(profile, 'company_domain')
-      : undefined
+    // 4. Company domain set — env wins over profile config and the value is
+    //    normalized, mirroring resolveCredentials (lib/auth.js), so an
+    //    env-only container config (PDCLI_API_TOKEN + PDCLI_COMPANY_DOMAIN,
+    //    no profile file) passes and the probe targets the real host.
+    const envDomain = process.env.PDCLI_COMPANY_DOMAIN
+    const rawDomain =
+      envDomain ??
+      (profile ? getProfileConfig(profile, 'company_domain') : undefined)
+    const domain = rawDomain ? normalizeCompanyDomain(rawDomain) : undefined
     results.push({
       check: 'company-domain',
       label: 'Company domain set',
       ok: Boolean(domain),
-      detail: domain ?? 'Run: pdcli auth login',
+      detail: domain
+        ? envDomain
+          ? `${domain} (source: env)`
+          : domain
+        : 'Run: pdcli auth login',
     })
 
     // 5. Token present

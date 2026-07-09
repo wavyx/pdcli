@@ -61,8 +61,12 @@ export async function runTool(entry, input, exec) {
   const { stdout, stderr, code, signal } = await exec(argv)
 
   if (signal || code !== 0) {
+    // Pseudo-signals from makeExec ('output limit exceeded', 'tool timed out
+    // after Ns') are already self-describing; only real signals get a prefix.
     const text = signal
-      ? `terminated: ${signal}`
+      ? signal.startsWith('SIG')
+        ? `terminated: ${signal}`
+        : signal
       : (stderr || stdout || `exited ${code}`).trim()
     return { content: [{ type: 'text', text }], isError: true }
   }
@@ -90,14 +94,18 @@ export function errMessage(e) {
 /**
  * Build an executor that spawns the pdcli CLI as a child process. Keeping
  * command output in a child process keeps the parent's stdout (the MCP stdio
- * channel) clean. Guards against hangs (timeout) and runaway output (maxBuffer).
- * @param {{command: string, args?: string[], env?: object, timeout?: number, maxBuffer?: number}} options
+ * channel) clean. Guards against hangs (timeout: SIGTERM, escalating to
+ * SIGKILL after `grace`) and runaway output on EITHER stream (maxBuffer caps
+ * stdout + stderr combined). Both kills resolve with a self-describing
+ * pseudo-signal so callers can tell them from a genuine signal death.
+ * @param {{command: string, args?: string[], env?: object, timeout?: number, grace?: number, maxBuffer?: number}} options
  */
 export function makeExec({
   command,
   args = [],
   env,
   timeout = 120_000,
+  grace = 2_000,
   maxBuffer = 16 * 1024 * 1024,
 }) {
   return (argv) =>
@@ -106,29 +114,51 @@ export function makeExec({
         stdio: ['ignore', 'pipe', 'pipe'],
         env: env ? { ...process.env, ...env } : process.env,
       })
+      // Decode in the stream so a multibyte character split across chunk
+      // boundaries is never corrupted by per-chunk toString().
+      child.stdout.setEncoding('utf8')
+      child.stderr.setEncoding('utf8')
       let stdout = ''
       let stderr = ''
       let limit = false
-      const timer = setTimeout(() => child.kill('SIGKILL'), timeout)
-      child.stdout.on('data', (d) => {
-        stdout += d
-        if (stdout.length > maxBuffer) {
+      let timedOut = false
+      let killTimer
+      const timer = setTimeout(() => {
+        timedOut = true
+        child.kill('SIGTERM')
+        killTimer = setTimeout(() => child.kill('SIGKILL'), grace)
+      }, timeout)
+      const guard = () => {
+        if (stdout.length + stderr.length > maxBuffer) {
           limit = true
           child.kill('SIGKILL')
         }
+      }
+      child.stdout.on('data', (d) => {
+        stdout += d
+        guard()
       })
-      child.stderr.on('data', (d) => (stderr += d))
+      child.stderr.on('data', (d) => {
+        stderr += d
+        guard()
+      })
       child.on('error', (e) => {
         clearTimeout(timer)
+        clearTimeout(killTimer)
         resolve({ stdout: '', stderr: errMessage(e), code: 1, signal: null })
       })
       child.on('close', (code, signal) => {
         clearTimeout(timer)
+        clearTimeout(killTimer)
         resolve({
           stdout,
           stderr,
           code: normalizeExit(code),
-          signal: limit ? 'output limit exceeded' : signal,
+          signal: limit
+            ? 'output limit exceeded'
+            : timedOut
+              ? `tool timed out after ${timeout / 1000}s`
+              : signal,
         })
       })
     })

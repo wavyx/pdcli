@@ -1,10 +1,13 @@
 import { Command, Flags } from '@oclif/core'
+import createDebug from 'debug'
 import { formatOutput } from './lib/output/index.js'
 import { loadConfig } from './lib/config.js'
 import { resolveCredentials, refreshAccessToken } from './lib/auth.js'
 import { setOAuthTokens } from './lib/keychain.js'
 import { createClient } from './lib/client.js'
 import { handleError } from './lib/errors.js'
+
+const debug = createDebug('pd:fields')
 
 export default class BaseCommand extends Command {
   static baseFlags = {
@@ -169,12 +172,22 @@ export default class BaseCommand extends Command {
       Array.isArray(data) &&
       data.some((row) => row?.custom_fields)
     ) {
-      const { getFields, makeResolver } = await import('./lib/fields.js')
-      // getFields is memoized per run — one defs fetch covers the whole list.
-      const resolver = makeResolver(await getFields(this.apiClient, entity))
-      data = data.map((row) =>
-        row?.custom_fields ? resolver.resolveCustomFields(row) : row,
-      )
+      try {
+        const { getFields, makeResolver } = await import('./lib/fields.js')
+        // getFields is memoized per run — one defs fetch covers the whole list.
+        const resolver = makeResolver(await getFields(this.apiClient, entity))
+        data = data.map((row) =>
+          row?.custom_fields ? resolver.resolveCustomFields(row) : row,
+        )
+      } catch (err) {
+        // Best-effort: the rows already arrived; a failed defs fetch (403
+        // restricted, late 429, transient 5xx) must not sink the whole list.
+        // Fall back to the raw hash keys instead.
+        debug(
+          '--resolve-fields skipped, field defs unavailable: %s',
+          err.message,
+        )
+      }
     }
 
     if (this.flags.jq) {
