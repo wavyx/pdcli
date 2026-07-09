@@ -28,8 +28,10 @@ Non-interactively:
 pdcli auth login --company acme --api-token <token>
 ```
 
-Prefer the prompt or an environment variable over `--api-token` so the token stays
-out of your shell history.
+Prefer the interactive prompt over `--api-token` so the token stays out of your shell
+history. If you'd rather not store anything in the keychain at all, skip `auth login`
+entirely and pass credentials per run with the `PDCLI_*` [environment
+variables](#ci-and-headless) — `auth login` does not read them.
 
 ## OAuth mode
 
@@ -91,6 +93,10 @@ Log out to clear stored credentials for the active profile (both modes):
 ```bash
 pdcli auth logout
 ```
+
+Any auth failure — missing or expired credentials, or a failed OAuth refresh — exits with
+code `77`, so a script can branch on re-authentication deterministically. See
+[Exit codes](/pdcli/automation/exit-codes/).
 
 ## CI and headless
 

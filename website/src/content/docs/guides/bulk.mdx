@@ -161,14 +161,17 @@ pdcli org upsert "D-42" --by "External ID" --field "Status=Active"
 ```
 
 The match value is the positional argument; `--by` names the field to match on — a built-in
-key or a **searchable** custom field (`address`, `varchar`, `text`, `double`, `monetary`,
-`phone`):
+key or a **searchable** custom field (`varchar`, `varchar_auto`, `text`, `double`, `phone`):
 
 | Entity | Built-in `--by` keys  |
 | ------ | --------------------- |
 | person | `email`, `name`, `phone` |
 | org    | `name`                |
 | deal   | `title`               |
+
+`address` and `monetary` custom fields are deliberately **refused** with exit 64: v2 returns
+those as objects (`{ value, currency }` / `{ value, … }`), so the scalar compare would never
+match and every run would create a duplicate.
 
 ### Why it refuses instead of guessing
 
@@ -239,3 +242,8 @@ fi
 It resolves a human field name to its custom-field key for you (deal, person, org, product,
 lead). Matching is **case-sensitive**, and — like upsert — the search index is eventually
 consistent, so a `lookup`-then-`create` loop can still double-create in fast pipelines.
+
+Beyond the default exact match, `--match beginning|middle` does a prefix or substring search
+(also case-sensitive; these modes need a value of **at least 2 characters**). Any mode returns
+**at most 100 rows** — the per-entity `/search` endpoint's hard cap — so tighten the value if
+you're brushing that ceiling.

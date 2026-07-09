@@ -20,6 +20,28 @@ export function groupByTopic(manifest) {
 const nonGlobalFlags = (c) =>
   Object.entries(c.flags || {}).filter(([, f]) => f.helpGroup !== 'GLOBAL')
 
+// The global flags every command inherits (BaseCommand.baseFlags, tagged
+// helpGroup:'GLOBAL'). Derived from the manifest so the reference intro can't
+// drift from the code — no hand-kept list to forget `--resolve-fields` again.
+// `withOptions` renders `--output`'s value enum inline (GitHub-facing style).
+const globalFlagTokens = (manifest, { withOptions = false } = {}) => {
+  const cmd = Object.values(manifest.commands).find((c) =>
+    Object.values(c.flags || {}).some((f) => f.helpGroup === 'GLOBAL'),
+  )
+  return Object.entries(cmd?.flags || {})
+    .filter(([, f]) => f.helpGroup === 'GLOBAL')
+    .map(([name, f]) => {
+      const opts = withOptions && f.options ? ` ${f.options.join('|')}` : ''
+      return `\`--${name}${opts}\``
+    })
+}
+
+// Join with an Oxford "and" before the last item: "a, b, and c".
+const andList = (items) =>
+  items.length > 1
+    ? `${items.slice(0, -1).join(', ')}, and ${items.at(-1)}`
+    : items.join('')
+
 const argString = (c) =>
   Object.entries(c.args || {})
     .map(([name, a]) => (a.required ? ` <${name}>` : ` [${name}]`))
@@ -48,7 +70,7 @@ description: Full command reference for the pdcli command-line interface.
 
 <!-- AUTO-GENERATED from the oclif manifest by scripts/gen-commands.mjs — do not edit by hand. -->
 
-Reference for \`${bin}\` v${manifest.version} (${commands.length} commands). Every command also accepts the global flags \`--output table|json|yaml|csv\`, \`--profile\`, \`--no-color\`, \`--verbose\`, \`--no-retry\`, \`--timeout\`, and \`--limit\`.
+Reference for \`${bin}\` v${manifest.version} (${commands.length} commands). Every command also accepts the global flags ${andList(globalFlagTokens(manifest, { withOptions: true }))}.
 
 `
   for (const topic of Object.keys(byTopic).sort()) {
@@ -98,9 +120,8 @@ description: Every ${bin} command, flag, and example — generated from the CLI 
 {/* AUTO-GENERATED from the oclif manifest by scripts/gen-commands.mjs — do not edit by hand. */}
 
 All ${commands.length} commands in \`${bin}\` v${manifest.version}. Every command also
-accepts the [global flags](/pdcli/reference/config/) \`--output\`, \`--jq\`,
-\`--fields\`, \`--profile\`, \`--limit\`, \`--no-color\`, \`--verbose\`,
-\`--no-retry\`, and \`--timeout\`. Run \`${bin} <command> --help\` for the live version.
+accepts the [global flags](/pdcli/reference/config/) ${andList(globalFlagTokens(manifest))}.
+Run \`${bin} <command> --help\` for the live version.
 
 `
   const topics = Object.keys(byTopic).sort()

@@ -63,9 +63,16 @@ Pass at least one field flag, or it's exit 64 (`Nothing to update`). Any of `--p
 combined; the server recomputes `sum` from the new values.
 
 :::note
-There is **no per-line duration or billing-cycle flag**. Pipedrive replaced the old
-`duration`/`duration_unit` line-item fields with a product-level `billing_frequency` in 2024,
-so recurring terms are configured on the product (`product`), not on each deal attachment.
+pdcli has **no per-line billing-cycle flag yet** — but the v2 API does support it. `POST`/`PATCH
+/api/v2/deals/{id}/products` accept per-line `billing_frequency`, `billing_frequency_cycles`,
+and `billing_start_date` (a Growth-plan-and-above feature), so recurring terms can be set on the
+individual attachment, not just the catalog product. Until pdcli exposes flags for them, reach
+for the raw [`pdcli api`](/pdcli/guides/api/) escape hatch:
+
+```bash
+pdcli api PATCH /api/v2/deals/42/products/3 \
+  --body '{"billing_frequency":"monthly","billing_frequency_cycles":12}'
+```
 :::
 
 ## Remove a line item

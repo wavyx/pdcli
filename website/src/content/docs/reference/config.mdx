@@ -12,8 +12,7 @@ A flat reference for how `pdcli` is configured. For the workflow, see
    exist only on `pdcli auth login`.)
 2. **Environment variables** — `PDCLI_COMPANY_DOMAIN`, `PDCLI_API_TOKEN`, `PDCLI_PROFILE`, …
 3. **Profile config** — per-profile keys in the config file.
-4. **Global config** — shared defaults.
-5. **Built-in defaults.**
+4. **Built-in defaults.**
 
 The company domain and the token resolve **independently**, each down this chain. So a profile
 domain plus an env token (`PDCLI_API_TOKEN=… pdcli deal list`), or an env domain plus the
@@ -26,6 +25,7 @@ keychain token, both work.
 | `PDCLI_COMPANY_DOMAIN` | Company subdomain (`acme` from `acme.pipedrive.com`). Forms and locks the API host. |
 | `PDCLI_API_TOKEN` | Personal API token, sent as `x-api-token`. Preferred over `--api-token` so it stays out of shell history. |
 | `PDCLI_PROFILE` | Active profile name (same as `--profile`). |
+| `PDCLI_CONFIG_DIR` | Override the directory that holds `config.json` (takes precedence over the platform default and `$XDG_CONFIG_HOME`). |
 | `PDCLI_CLIENT_ID` | OAuth app client ID (used with `auth login --oauth`). |
 | `PDCLI_CLIENT_SECRET` | OAuth app client secret (used with `auth login --oauth`). |
 | `NO_COLOR` | Any value disables colored output (same as `--no-color`). |
@@ -43,7 +43,8 @@ Every command accepts these. Run any command with `--help` to confirm.
 | `--output`, `-o` | table (TTY) / json (piped) | Output format: `table`, `json`, `yaml`, or `csv`. |
 | `--jq <expr>` | — | Filter output through a jq expression. |
 | `--fields <a,b,c>` | — | Comma-separated columns to display. |
-| `--profile <name>` | `default` | Named auth profile (env `PDCLI_PROFILE`). |
+| `--resolve-fields` | off | Resolve custom-field hash keys to names (and option ids to labels) in `json`/`yaml`/`csv` output of `get` and core `list` commands. |
+| `--profile <name>` | active profile | Named auth profile (env `PDCLI_PROFILE`). Defaults to the stored `activeProfile`. |
 | `--no-color` | off | Disable colored output. |
 | `--verbose` | off | Show request path, status, and `error_info` on errors; enables `pd:*` debug. |
 | `--no-retry` | off | Disable automatic retry on `429` and `5xx`. |
@@ -80,9 +81,13 @@ Config is managed by [`conf`](https://www.npmjs.com/package/conf) under the proj
 
 | Platform | Path |
 | -------- | ---- |
-| Linux | `~/.config/pdcli/config.json` (XDG) |
+| Linux | `~/.config/pdcli-nodejs/config.json` (XDG) |
 | macOS | `~/Library/Preferences/pdcli-nodejs/config.json` |
 | Windows | `%APPDATA%\pdcli-nodejs\Config\config.json` |
+
+On Linux the base directory follows `$XDG_CONFIG_HOME` when set. To relocate the config
+directory on any platform, set `PDCLI_CONFIG_DIR` — it wins over both the platform default
+and `$XDG_CONFIG_HOME`.
 
 It holds only `activeProfile`, the non-secret per-profile keys above, and any command
 [aliases](/pdcli/guides/configuration/) under the global `aliases` key (shared across
