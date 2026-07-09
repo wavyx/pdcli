@@ -5,12 +5,11 @@ export default defineConfig({
     globals: true,
     include: ['test/**/*.test.js'],
     setupFiles: ['test/setup.js'],
-    // node-jq shells out to the jq binary; its subprocess cold-start under
-    // coverage instrumentation on shared CI runners can spike well past the
-    // 5s default, timing out --jq tests that run in ~30ms locally. Give CI
-    // headroom without masking a genuine hang.
-    testTimeout: 20000,
-    hookTimeout: 20000,
+    // The client retry tests exercise real exponential backoff (sleeps that
+    // sum to ~14s in the worst-case exhaustion path), so the 5s default is too
+    // tight; give generous headroom, more so on coverage-instrumented CI.
+    testTimeout: 30000,
+    hookTimeout: 30000,
     coverage: {
       include: ['src/**/*.js'],
       exclude: ['src/hooks/**'],

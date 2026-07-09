@@ -92,6 +92,18 @@ export function errMessage(e) {
 }
 
 /**
+ * After a graceful SIGTERM, force-kill the child if it has not exited within
+ * `grace` ms. Extracted so the escalation is unit-testable without depending on
+ * OS signal semantics: Windows terminates a child on the first kill, so a
+ * real-process test can never exercise this escalation there.
+ * @param {import('node:child_process').ChildProcess} child
+ * @param {number} grace
+ */
+export function scheduleHardKill(child, grace) {
+  return setTimeout(() => child.kill('SIGKILL'), grace)
+}
+
+/**
  * Build an executor that spawns the pdcli CLI as a child process. Keeping
  * command output in a child process keeps the parent's stdout (the MCP stdio
  * channel) clean. Guards against hangs (timeout: SIGTERM, escalating to
@@ -126,7 +138,7 @@ export function makeExec({
       const timer = setTimeout(() => {
         timedOut = true
         child.kill('SIGTERM')
-        killTimer = setTimeout(() => child.kill('SIGKILL'), grace)
+        killTimer = scheduleHardKill(child, grace)
       }, timeout)
       const guard = () => {
         if (stdout.length + stderr.length > maxBuffer) {
