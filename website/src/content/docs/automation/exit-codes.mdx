@@ -21,7 +21,7 @@ command shares the same ladder.
 | `75` | Rate limited | `429` | Token budget exhausted. pdcli retries 429s with backoff; if they never clear it surfaces `75` (not `69`), and `--no-retry` surfaces the first one. Back off and retry after the reset window. |
 | `77` | Auth / permission | `401`, `403` | Token is invalid, expired, or lacks scope — including a **failed OAuth refresh** (`invalid_grant`). Re-authenticate (`pdcli auth login`). Don't loop. A `403` after repeated `429`s is a rate-limit hard stop — wait for the reset, don't retry. |
 | `78` | Config / account | `402`, missing domain/token, host-lock violation, no keychain | The CLI or account is misconfigured: no company domain, no keychain to write to, a `pdcli api` URL outside your host, a redirect off your host, or a `402` (plan lacks the feature). Fix config or the account — don't retry. |
-| `8` | Findings present (`watch` only) | — | `pdcli watch` exits `8` when it surfaces new anomalies, so `pdcli watch \|\| notify` fires only on findings. Not part of the general ladder — specific to `watch`. |
+| `8` | Findings present (`watch` only) | — | `pdcli watch` exits `8` when it surfaces new anomalies. Test for it explicitly (`pdcli watch; [ $? -eq 8 ] && notify`) — a bare `pdcli watch \|\| notify` also fires on any other failure, not just findings. Not part of the general ladder — specific to `watch`. |
 
 The HTTP-status mapping lives in `src/lib/errors.js` (`exitCodeForStatus`): `400/422 → 65`,
 `401/403 → 77`, `402 → 78`, `429 → 75`, `5xx → 69`. On top of that: an oclif parse error
@@ -56,7 +56,7 @@ human form; `--verbose` there adds the request path, status code, and `error_inf
 ## Branching on the code
 
 ```bash
-pdcli deal get 42 --output json > deal.json
+pdcli lookup deal --field "PO Number" --value PO-1234 --output json > deal.json
 case $? in
   0)  echo "ok" ;;
   3)  echo "no match — create it" ;;
@@ -69,7 +69,7 @@ case $? in
 esac
 ```
 
-`pdcli` also prints `127` (via the command-not-found hook) when you invoke a command name
+`pdcli` also exits `127` (via the command-not-found hook) when you invoke a command name
 that doesn't exist.
 
 See also: [Troubleshooting](/pdcli/reference/troubleshooting/) for what to do per failure,

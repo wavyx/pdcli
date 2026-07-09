@@ -73,7 +73,8 @@ applies to file downloads and uploads.
   `Authorization: Bearer` for OAuth) and are never echoed in logs, errors, or `--verbose`
   output. `--verbose` shows the request path, status, and Pipedrive's `error_info`, but not
   credentials.
-- **User-Agent.** Every request identifies itself as `pdcli/<version>` (e.g. `pdcli/0.5.0`).
+- **User-Agent.** Every request identifies itself as `pdcli/<version>`, where
+  `<version>` is the installed release.
 
 For where each setting is stored and the full precedence order, see
 [Config & environment](/pdcli/reference/config/).

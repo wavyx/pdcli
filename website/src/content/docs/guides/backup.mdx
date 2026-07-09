@@ -136,9 +136,14 @@ pdcli sync warehouse --dir ./warehouse --full # rebuild from scratch
 
 Each of the five incremental entities (deals, persons, organizations, activities, products)
 appends to `<entity>.ndjson` (one JSON object per line) and advances its **own** high-water
-mark in `manifest.json`. The watermark moves to the newest `update_time` seen **+ 1 second**
-(the API's `updated_since` is inclusive, so this avoids re-emitting the boundary record), and
-only after the append succeeds — an interrupted run replays rather than skips. `--since`
+mark in `warehouse-manifest.json` (kept deliberately distinct from `backup`'s own
+`manifest.json`, so a warehouse and a backup can share a directory). The watermark moves to
+the newest `update_time` seen **exactly** — not +1s. Since `updated_since` is inclusive, the
+boundary record is re-emitted on the next run: the feed is **at-least-once**, so dedupe
+downstream by `(entity, id)`. Emitting a row twice is harmless; a +1s skip could silently
+drop a record saved later in the same boundary second. The mark only advances after the
+append succeeds — an interrupted run replays rather than skips — and it **never moves
+backward**, so a one-off `--since` backfill can't rewind the maintained cursor. `--since`
 overrides the start for every entity.
 
 :::caution[Hard deletes are not captured]

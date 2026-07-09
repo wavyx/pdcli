@@ -130,10 +130,9 @@ const showcaseTerm = `<span class="dim">$</span> <span class="g">pdcli</span> <s
   4774  Northwind expansion   <span class="m">€ 8,500</span>   Proposal
   4710  Globex pilot          <span class="m">€ 4,200</span>   Qualified
   4699  Initech seats         <span class="m">€ 2,750</span>   Contact
-<span class="dim">  4 open deals · €27,450 open value</span>
 
 <span class="dim">$</span> <span class="g">pdcli</span> <span class="c">deal update</span> 4821 <span class="f">--status</span> won
-<span class="ok">✓</span> Acme renewal → <span class="badge">Won</span> · activity logged
+<span class="ok">✓</span> Updated deal 4821 (Acme renewal → <span class="badge">Won</span>)
 <span class="dim">$</span> <span class="cur">▋</span>`;
 ---
 
@@ -437,24 +436,20 @@ const showcaseTerm = `<span class="dim">$</span> <span class="g">pdcli</span> <s
   // ── Animated hero terminal: types three real pdcli commands in a loop. ──
   const SCRIPT = [
     {
-      cmd: 'pdcli pipeline health',
-      out: `<span class="dim">  ┌ SALES PIPELINE ───────────────── Q2 ┐</span>
-  Qualified     <span class="n">18</span> deals    <span class="m">€142,000</span>
-  Contact       <span class="n">11</span> deals    <span class="m">€ 98,500</span>
-  Proposal       <span class="n">7</span> deals    <span class="m">€ 76,200</span>
-  Negotiation    <span class="n">4</span> deals    <span class="m">€ 51,000</span>
-<span class="dim">  ─────────────────────────────────────</span>
-  weighted forecast          <span class="ok">€221,480</span>
-<span class="dim">  win rate 32% · avg cycle 24d</span>`,
+      cmd: 'pdcli pipeline health --pipeline 1',
+      out: `<span class="dim">  STAGE         OPEN   VALUE      STALE >14d   NO NEXT STEP</span>
+  Qualified     <span class="n">18</span>    <span class="m">€142,000</span>       <span class="warn">3</span>            <span class="warn">5</span>
+  Proposal       <span class="n">7</span>    <span class="m">€ 76,200</span>       <span class="warn">1</span>            <span class="warn">2</span>
+  Negotiation    <span class="n">4</span>    <span class="m">€ 51,000</span>       <span class="ok">0</span>            <span class="warn">1</span>`,
     },
     {
       cmd: "pdcli deal list --status open --jq '.[].id' | pdcli deal bulk-update --stage 5",
       out: `<span class="ok">  ✓</span> 40 open deals moved → <span class="badge">Negotiation</span>`,
     },
     {
-      cmd: 'pdcli person import leads.csv --dry-run',
-      out: `  <span class="ok">+212</span> new   <span class="n">~18</span> updates   <span class="warn">!3</span> conflicts
-<span class="dim">  dry run · nothing written · custom fields matched by name</span>`,
+      cmd: 'pdcli person import leads.csv --upsert --match-on email --dry-run',
+      out: `  <span class="ok">194</span> create · <span class="n">18</span> update · <span class="dim">nothing written</span>
+<span class="dim">  dry run · custom fields matched by name</span>`,
     },
     {
       cmd: 'pdcli mcp serve',

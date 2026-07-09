@@ -48,7 +48,8 @@ If a lever can't be computed (no decided deals, no won deals, or a zero cycle), 
 
 A one-call rollup of deal value, computed **server-side**: Pipedrive returns per-currency
 totals, a probability-weighted total, and a deal count, so there's no list to page through.
-It's the cheapest way to ask "what's my pipeline worth right now?"
+It's one 40-token call regardless of deal count — the way to ask "what's my pipeline worth
+right now?" without paging every deal.
 
 ```bash
 pdcli deal summary
@@ -137,9 +138,14 @@ pipeline, inferred otherwise.
 
 Days-in-current-stage for every open deal, bucketed, so you can see at a glance how much
 value is going stale and where. For each stage it also mines the **completed** dwell
-distribution (entry → next-entry across all deals) and reports per-stage **p50/p90**, then
-flags how many open deals have now sat in the stage longer than its own p90 — the deals most
-likely to be quietly dying.
+distribution (entry → next-entry) and reports per-stage **p50/p90**, then flags how many open
+deals have now sat in the stage longer than its own p90 — the deals most likely to be quietly
+dying.
+
+The dwell baseline is mined from the **open** deals it fetches, not the whole account, so it's
+a "deals that are still around" sample: it skips the dwells of deals that already closed, which
+can bias the p50/p90 lower than the true historical distribution. Read the p90 flag as a
+relative signal, not a calibrated benchmark.
 
 ```bash
 pdcli metrics aging --pipeline 1 --buckets 30,60,90
@@ -390,4 +396,6 @@ digest never fails for that reason).
 
 `--format md|html` renders the packet as a shareable document — pipe it to Slack/email from
 cron, or write it to a file with `--out`. These artifact formats are distinct from the global
-`--output table|json|yaml|csv` (which stays for scripting the structured packet).
+`--output table|json|yaml|csv` (which stays for scripting the structured packet), and
+**mutually exclusive** with it: passing `--format` together with `--output`, `--jq`, or
+`--fields` exits 64. Pick the document artifact or the machine format, not both.

@@ -84,12 +84,16 @@ pdcli org relationship list --org 1481
 ```
 
 ```text
-┌────┬────────┬───────────┬───────────┬─────────┐
+┌────┬────────┬───────────┬────────────┬─────────┐
 │ ID │ Type   │ Owner Org │ Linked Org │ Related │
-├────┼────────┼───────────┼───────────┼─────────┤
-│ 7  │ parent │ 1481      │ 1480      │ Globex  │
-└────┴────────┴───────────┴───────────┴─────────┘
+├────┼────────┼───────────┼────────────┼─────────┤
+│ 7  │ parent │ Initech   │ Initech UK │ Globex  │
+└────┴────────┴───────────┴────────────┴─────────┘
 ```
+
+The `Owner Org` / `Linked Org` columns render the organization **names** (the API returns
+each side as a nested object), not their IDs. `add` and `remove` still take numeric IDs; pass
+`--output json` to see the raw org IDs on the relationship record.
 
 Create a link with `--type parent|related`, naming the two orgs with `--owner` and
 `--linked`. **For a `parent` relationship the `--owner` is the parent and `--linked` is the
@@ -108,3 +112,10 @@ pdcli org relationship remove 7 --yes
 ```
 
 It confirms first; `-y`/`--yes` skips the prompt for scripts.
+
+## See also
+
+- [Command reference](/pdcli/reference/commands/) — full flag lists for `deal participant`,
+  `follower`, `org relationship`, and `deal merge` / `person merge` / `org merge` (fold a
+  duplicate and its links into one record).
+- [Data-hygiene audit](/pdcli/guides/audit/) — surface orphaned or neglected records.

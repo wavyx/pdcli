@@ -12,7 +12,7 @@ Pipedrive runs two API versions. `pdcli` routes each topic to the right one.
 
 | Topic | API |
 | ----- | --- |
-| deals, persons, organizations, products, pipelines, stages, activities, projects, fields, search | **v2** |
+| deals, persons, organizations, products, pipelines, stages, activities, projects, tasks, fields, search | **v2** |
 | leads, notes, files, filters, webhooks, goals, users, mail | **v1** |
 
 Core CRM is on **v2** because Pipedrive deprecated ~59 v1 core endpoints after 2025-12-31, so
@@ -55,12 +55,10 @@ cost depends on the verb:
 | POST / PUT / PATCH | 10 |
 | DELETE one | 6 |
 | DELETE list | 10 |
-| Search | 40 |
+| Search | 20 |
 
 There's a rolling **2-second burst window** plus a **daily budget** (scales with plan and
-seats, resets at midnight server time). On a `429`, pdcli reads `x-ratelimit-reset`
-(falling back to `Retry-After`, then a 2s default) to decide how long to wait before
-retrying.
+seats, resets at midnight server time).
 
 Inspect the remaining budget with **`pdcli quota`** (alias `ratelimit`): it reports the
 daily token budget remaining/limit and gates CI with `--min`/`--threshold` (exit `75` when

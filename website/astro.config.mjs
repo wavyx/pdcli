@@ -1,5 +1,6 @@
 // @ts-check
 import { defineConfig } from 'astro/config'
+import { unified } from '@astrojs/markdown-remark'
 import starlight from '@astrojs/starlight'
 import starlightLlmsTxt from 'starlight-llms-txt'
 
@@ -9,10 +10,20 @@ export default defineConfig({
   site: 'https://wavyx.github.io',
   base: '/pdcli',
 
-  // GFM tables in .md/.mdx (the MDX pipeline inherits these classic options,
-  // unlike a custom `processor`); smartypants off so code examples keep
-  // literal `--flags` and straight quotes.
-  markdown: { gfm: true, smartypants: false },
+  // GFM tables in .md/.mdx; smartypants OFF so prose keeps literal `--flags`,
+  // `--`, and straight quotes (Astro's smart punctuation would turn `--` into
+  // an en/em dash). Astro 6 deprecated the top-level `markdown.gfm` /
+  // `markdown.smartypants` booleans — configure them on the unified processor
+  // instead (removed in a future major otherwise).
+  //
+  // NOTE: the build still prints ONE `markdown.gfm`/`smartypants` deprecation
+  // line during `/llms-*.txt` generation. That is NOT from this config: the
+  // `starlight-llms-txt` plugin renders via the experimental Astro Container,
+  // which calls `validateConfig(ASTRO_CONFIG_DEFAULTS, …)` (astro/dist/container/
+  // index.js), and Astro's own defaults object still carries explicit
+  // `gfm`/`smartypants` keys — so it trips its own deprecation check. It is
+  // unfixable from here; it clears when Astro drops those keys from the defaults.
+  markdown: { processor: unified({ gfm: true, smartypants: false }) },
 
   integrations: [
     starlight({

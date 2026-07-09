@@ -53,8 +53,9 @@ produces.
 
 ## Pick columns with `--fields`
 
-`--fields` limits a `table` or `csv` to the columns you name (by their data key, not
-the header):
+`--fields` limits the output to the columns you name (by their data key, not the
+header). It projects `table` and `csv` columns, and also narrows each `json`/`yaml`
+record to just those keys:
 
 ```bash
 pdcli deal list --fields id,title,value
@@ -129,7 +130,7 @@ stage_id: 3
 ## Resolving custom fields in machine output
 
 By default `json`, `yaml`, and `csv` keep custom-field values raw — hash keys and numeric
-option IDs — so scripts have a stable shape to parse. On single-record `get` commands you can
+option IDs — so scripts have a stable shape to parse. On `get` and core `list` commands you can
 opt into readable names with `--resolve-fields`, which swaps hash keys for field names and
 option IDs for labels. See [Custom fields](/pdcli/guides/custom-fields/) for the details.
 
