@@ -18,11 +18,17 @@ function toPortable(filter) {
 
 export default class FilterExportCommand extends BaseCommand {
   static description =
-    'Export a filter (or all filters) as create-compatible JSON'
+    'Export a filter (or all filters) as portable {name, type, conditions} ' +
+    'JSON. To recreate it, feed the fields to `filter create` separately ' +
+    '(the create command takes --name/--type/--conditions, not one blob).'
 
   static examples = [
     '<%= config.bin %> filter export 5 > filter.json',
     '<%= config.bin %> filter export --all > filters.json',
+    '# recreate on another account (conditions reference numeric field_id):\n' +
+      '<%= config.bin %> filter create --name "$(jq -r .name filter.json)" ' +
+      '--type "$(jq -r .type filter.json)" ' +
+      '--conditions "$(jq -c .conditions filter.json)"',
   ]
 
   static args = {

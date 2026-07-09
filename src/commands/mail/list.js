@@ -1,6 +1,5 @@
 import { Flags } from '@oclif/core'
 import BaseCommand from '../../base-command.js'
-import { collectPages } from '../../lib/pagination.js'
 
 /**
  * The deal mailMessages list wraps each message under
@@ -22,6 +21,38 @@ export function unwrapMailMessage(item) {
  */
 export function mailDirection(msg) {
   return msg?.sent_flag ? 'sent' : 'received'
+}
+
+/**
+ * Page a deal's mail messages with OFFSET paging and return unwrapped message
+ * objects. Unlike every other v1 list, `/deals/{id}/mailMessages` paginates
+ * with start/limit/more_items_in_collection but returns NO `next_start`, so the
+ * shared cursor pager (pageV1) would re-request page 0 forever / duplicate rows.
+ * Advance `start` by the returned count instead, and stop on an empty page.
+ * @param {object} client
+ * @param {number} dealId
+ * @param {number} [limit]
+ * @returns {Promise<object[]>}
+ */
+export async function fetchDealMail(client, dealId, limit = 100) {
+  const path = `/api/v1/deals/${dealId}/mailMessages`
+  const out = []
+  let start = 0
+  while (out.length < limit) {
+    const body = await client.get(path, {
+      query: { start, limit: Math.min(limit - out.length, 100) },
+    })
+    const page = body.data ?? []
+    out.push(...page)
+    if (
+      page.length === 0 ||
+      !body.additional_data?.pagination?.more_items_in_collection
+    ) {
+      break
+    }
+    start += page.length
+  }
+  return out.slice(0, limit).map(unwrapMailMessage)
 }
 
 /** First participant's address (or name) from a from/to array. */
@@ -68,14 +99,11 @@ export default class MailListCommand extends BaseCommand {
 
   async run() {
     const { flags } = await this.parse(MailListCommand)
-    const limit = flags.limit ?? 100
-
-    const items = await collectPages(
-      this.apiClient.pageV1(`/api/v1/deals/${flags.deal}/mailMessages`, {
-        limit: Math.min(limit, 100),
-      }),
-      limit,
+    const items = await fetchDealMail(
+      this.apiClient,
+      flags.deal,
+      flags.limit ?? 100,
     )
-    await this.outputResults(items.map(unwrapMailMessage), columns)
+    await this.outputResults(items, columns)
   }
 }

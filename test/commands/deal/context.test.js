@@ -158,7 +158,12 @@ describe('deal context', () => {
 
   it('assembles the full bundle with hydrated contacts and resolved fields (JSON)', async () => {
     mockFullBundle()
-    const stdout = await runCmd(DealContextCommand, ['42', '--output', 'json'])
+    const stdout = await runCmd(DealContextCommand, [
+      '42',
+      '--mail',
+      '--output',
+      'json',
+    ])
     const b = JSON.parse(stdout)
     expect(b.deal.id).toBe(42)
     // custom field hash resolved to name + option label
@@ -197,7 +202,12 @@ describe('deal context', () => {
 
   it('renders a compact summary in table mode', async () => {
     mockFullBundle()
-    const stdout = await runCmd(DealContextCommand, ['42', '--output', 'table'])
+    const stdout = await runCmd(DealContextCommand, [
+      '42',
+      '--mail',
+      '--output',
+      'table',
+    ])
     expect(stdout).toContain('Acme expansion')
     expect(stdout).toContain('Jane Doe')
     expect(stdout).toContain('Acme Inc')
@@ -216,20 +226,20 @@ describe('deal context', () => {
       ],
       additional_data: { pagination: { more_items_in_collection: false } },
     })
-    const stdout = await runCmd(DealContextCommand, ['42', '--output', 'table'])
+    const stdout = await runCmd(DealContextCommand, [
+      '42',
+      '--mail',
+      '--output',
+      'table',
+    ])
     expect(stdout).toMatch(/Mail: 1 msgs · last received$/m)
   })
 
-  it('sets mail to null and skips the fetch with --no-mail', async () => {
+  it('does not fetch mail by default (mail is opt-in)', async () => {
     mockCoreBundle()
-    // Register the mail interceptor but expect it to stay unused.
+    // Register the mail interceptor but expect it to stay unused without --mail.
     const mail = mockMail(200, { success: true, data: MAIL_WRAPPED })
-    const stdout = await runCmd(DealContextCommand, [
-      '42',
-      '--no-mail',
-      '--output',
-      'json',
-    ])
+    const stdout = await runCmd(DealContextCommand, ['42', '--output', 'json'])
     const b = JSON.parse(stdout)
     expect(b.mail).toBeNull()
     expect(mail.isDone()).toBe(false)
@@ -238,7 +248,12 @@ describe('deal context', () => {
   it('degrades mail to null on a 403 (no mail:read scope) without failing', async () => {
     mockCoreBundle()
     mockMail(403, { success: false, error: 'Scope mail:read is missing' })
-    const stdout = await runCmd(DealContextCommand, ['42', '--output', 'json'])
+    const stdout = await runCmd(DealContextCommand, [
+      '42',
+      '--mail',
+      '--output',
+      'json',
+    ])
     const b = JSON.parse(stdout)
     expect(b.deal.id).toBe(42)
     expect(b.mail).toBeNull()
@@ -251,7 +266,12 @@ describe('deal context', () => {
       data: [],
       additional_data: { pagination: { more_items_in_collection: false } },
     })
-    const stdout = await runCmd(DealContextCommand, ['42', '--output', 'json'])
+    const stdout = await runCmd(DealContextCommand, [
+      '42',
+      '--mail',
+      '--output',
+      'json',
+    ])
     const b = JSON.parse(stdout)
     expect(b.mail).toBeNull()
   })
@@ -292,7 +312,6 @@ describe('deal context', () => {
       '--no-notes',
       '--no-products',
       '--no-participants',
-      '--no-mail',
       '--output',
       'json',
     ])
@@ -342,12 +361,7 @@ describe('deal context', () => {
       .query(true)
       .reply(200, { success: true, data: [] })
 
-    const stdout = await runCmd(DealContextCommand, [
-      '42',
-      '--no-mail',
-      '--output',
-      'table',
-    ])
+    const stdout = await runCmd(DealContextCommand, ['42', '--output', 'table'])
     expect(stdout).toContain('Deal 42')
     expect(stdout).toContain('Person: — · Org: —')
     expect(stdout).toMatch(/Flags:.*missingContact/)
@@ -381,12 +395,7 @@ describe('deal context', () => {
       .query(true)
       .reply(200, { success: true, data: [] })
 
-    const stdout = await runCmd(DealContextCommand, [
-      '42',
-      '--no-mail',
-      '--output',
-      'json',
-    ])
+    const stdout = await runCmd(DealContextCommand, ['42', '--output', 'json'])
     const b = JSON.parse(stdout)
     expect(b.person).toBeNull()
     expect(b.org).toBeNull()

@@ -154,6 +154,53 @@ describe('mail list', () => {
     ).rejects.toMatchObject({ oclif: { exit: 77 } })
   })
 
+  it('offset-pages when more_items is set (endpoint has no next_start)', async () => {
+    const msg = (id) => ({ object: 'mailMessage', data: { id } })
+    mockApi()
+      .get('/api/v1/deals/42/mailMessages')
+      .query((q) => q.start === '0')
+      .reply(200, {
+        success: true,
+        data: [msg(1), msg(2)],
+        additional_data: { pagination: { more_items_in_collection: true } },
+      })
+    mockApi()
+      .get('/api/v1/deals/42/mailMessages')
+      .query((q) => q.start === '2')
+      .reply(200, {
+        success: true,
+        data: [msg(3)],
+        additional_data: { pagination: { more_items_in_collection: false } },
+      })
+
+    const stdout = await runCmd(MailListCommand, [
+      '--deal',
+      '42',
+      '--output',
+      'json',
+    ])
+    expect(JSON.parse(stdout).map((r) => r.id)).toEqual([1, 2, 3])
+  })
+
+  it('stops when a page carries no data (deal with no synced mail)', async () => {
+    // No `data` key at all — exercises the `body.data ?? []` fallback too.
+    mockApi()
+      .get('/api/v1/deals/42/mailMessages')
+      .query(true)
+      .reply(200, {
+        success: true,
+        additional_data: { pagination: { more_items_in_collection: true } },
+      })
+
+    const stdout = await runCmd(MailListCommand, [
+      '--deal',
+      '42',
+      '--output',
+      'json',
+    ])
+    expect(JSON.parse(stdout)).toEqual([])
+  })
+
   describe('unwrapMailMessage', () => {
     it('unwraps the { object, timestamp, data } list shape', () => {
       expect(

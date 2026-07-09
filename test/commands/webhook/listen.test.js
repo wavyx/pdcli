@@ -34,25 +34,37 @@ const {
   compareByUpdateTime,
 } = listenModule
 import { runCmd, mockApi } from '../../helpers.js'
+import { formatApiDatetime } from '../../../src/lib/period.js'
 
 const DAY = 86_400_000
 const daysAgo = (n) => new Date(Date.now() - n * DAY).toISOString()
 
+/** Build a Basic auth header value from the receiver's generated creds. */
+function basicAuth(creds) {
+  return (
+    'Basic ' + Buffer.from(`${creds.user}:${creds.password}`).toString('base64')
+  )
+}
+
 /** POST a JSON body to the local receiver and resolve its HTTP status. */
-async function deliver(port, payload, { raw } = {}) {
+async function deliver(port, payload, { raw, creds } = {}) {
+  const headers = { 'content-type': 'application/json' }
+  if (creds) headers.authorization = basicAuth(creds)
   const res = await fetch(`http://127.0.0.1:${port}/`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers,
     body: raw ?? JSON.stringify(payload),
   })
   return res.status
 }
 
 /** POST via raw node http (no content-type header) to exercise the default. */
-function deliverNoContentType(port, payload) {
+function deliverNoContentType(port, payload, creds) {
   return new Promise((resolve, reject) => {
+    const headers = {}
+    if (creds) headers.Authorization = basicAuth(creds)
     const req = httpRequest(
-      { host: '127.0.0.1', port, method: 'POST', path: '/' },
+      { host: '127.0.0.1', port, method: 'POST', path: '/', headers },
       (res) => {
         res.resume()
         res.on('end', resolve)
@@ -204,15 +216,19 @@ describe('webhook listen', () => {
     mockApi()
       .post(
         '/api/v1/webhooks',
-        (b) => b.name === 'pdcli-listen' && b.event_action === '*',
+        (b) => b.name.startsWith('pdcli-listen:') && b.event_action === '*',
       )
       .reply(201, { success: true, data: { id: 42 } })
     const del = mockApi()
       .delete('/api/v1/webhooks/42')
       .reply(200, { success: true, data: { id: 42 } })
 
-    testHooks.onListening = async (port) => {
-      await deliver(port, { meta: { entity: 'deal', action: 'change', id: 9 } })
+    testHooks.onListening = async (port, creds) => {
+      await deliver(
+        port,
+        { meta: { entity: 'deal', action: 'change', id: 9 } },
+        { creds },
+      )
     }
 
     const stdout = await runCmd(WebhookListenCommand, [
@@ -256,10 +272,14 @@ describe('webhook listen', () => {
     await new Promise((r) => sink.listen(0, '127.0.0.1', r))
     const sinkUrl = `http://127.0.0.1:${sink.address().port}/`
 
-    testHooks.onListening = async (port) => {
-      await deliver(port, {
-        meta: { entity: 'person', action: 'create', id: 3 },
-      })
+    testHooks.onListening = async (port, creds) => {
+      await deliver(
+        port,
+        {
+          meta: { entity: 'person', action: 'create', id: 3 },
+        },
+        { creds },
+      )
     }
 
     const stdout = await runCmd(WebhookListenCommand, [
@@ -286,12 +306,20 @@ describe('webhook listen', () => {
       .delete('/api/v1/webhooks/5')
       .reply(200, { success: true, data: {} })
 
-    testHooks.onListening = async (port) => {
+    testHooks.onListening = async (port, creds) => {
       // A non-matching event first (dropped), then a matching one triggers --once.
-      await deliver(port, {
-        meta: { entity: 'person', action: 'change', id: 1 },
-      })
-      await deliver(port, { meta: { entity: 'deal', action: 'change', id: 2 } })
+      await deliver(
+        port,
+        {
+          meta: { entity: 'person', action: 'change', id: 1 },
+        },
+        { creds },
+      )
+      await deliver(
+        port,
+        { meta: { entity: 'deal', action: 'change', id: 2 } },
+        { creds },
+      )
     }
 
     const stdout = await runCmd(WebhookListenCommand, [
@@ -319,9 +347,17 @@ describe('webhook listen', () => {
       .delete('/api/v1/webhooks/8')
       .reply(200, { success: true, data: {} })
 
-    testHooks.onListening = async (port) => {
-      await deliver(port, { meta: { entity: 'deal', action: 'change', id: 1 } })
-      await deliver(port, { meta: { entity: 'deal', action: 'change', id: 2 } })
+    testHooks.onListening = async (port, creds) => {
+      await deliver(
+        port,
+        { meta: { entity: 'deal', action: 'change', id: 1 } },
+        { creds },
+      )
+      await deliver(
+        port,
+        { meta: { entity: 'deal', action: 'change', id: 2 } },
+        { creds },
+      )
     }
 
     const stdout = await runCmd(WebhookListenCommand, [
@@ -347,9 +383,9 @@ describe('webhook listen', () => {
       .reply(200, { success: true, data: {} })
 
     let probeStatus
-    testHooks.onListening = async (port) => {
+    testHooks.onListening = async (port, creds) => {
       probeStatus = (await fetch(`http://127.0.0.1:${port}/`)).status
-      await deliver(port, null, { raw: 'not json' })
+      await deliver(port, null, { raw: 'not json', creds })
     }
 
     const stdout = await runCmd(WebhookListenCommand, [
@@ -365,22 +401,38 @@ describe('webhook listen', () => {
     expect(JSON.parse(stdout.trim())).toEqual({ raw: 'not json' })
   })
 
-  it('sweeps orphaned pdcli-listen webhooks from a previous crashed run', async () => {
-    store.listen_webhook_id = 77
+  it('sweeps only stale leftovers and never a concurrently-live listener', async () => {
+    // A concurrent session's own id is tracked in the shared config set.
+    store.listen_webhook_id = [999]
+    const stale = '2020-01-01 00:00:00' // long ago → crash leftover
+    const fresh = new Date().toISOString() // just created → live listener
     mockApi()
       .get('/api/v1/webhooks')
       .reply(200, {
         success: true,
         data: [
-          { id: 77, name: 'pdcli-listen' },
-          { id: 88, name: 'someone-elses-hook' },
+          { id: 100, name: 'pdcli-listen:crashed', add_time: stale }, // swept
+          { id: 150, name: 'pdcli-listen:notime' }, // no add_time → swept
+          { id: 200, name: 'pdcli-listen:live', add_time: fresh }, // fresh → kept
+          { id: 999, name: 'pdcli-listen:mine', add_time: stale }, // tracked → kept
+          { id: 300, name: 'someone-elses-hook', add_time: stale }, // no prefix → kept
+          { id: 500, add_time: stale }, // no name → kept
         ],
       })
-    const sweepDel = mockApi()
-      .delete('/api/v1/webhooks/77')
+    const del100 = mockApi()
+      .delete('/api/v1/webhooks/100')
+      .reply(200, { success: true })
+    const del150 = mockApi()
+      .delete('/api/v1/webhooks/150')
       .reply(200, { success: true })
     mockApi()
-      .post('/api/v1/webhooks')
+      .post(
+        '/api/v1/webhooks',
+        (b) =>
+          b.name.startsWith('pdcli-listen:') &&
+          typeof b.http_auth_user === 'string' &&
+          typeof b.http_auth_password === 'string',
+      )
       .reply(201, { success: true, data: { id: 90 } })
     mockApi()
       .delete('/api/v1/webhooks/90')
@@ -396,7 +448,11 @@ describe('webhook listen', () => {
       '--port',
       '0',
     ])
-    expect(sweepDel.isDone()).toBe(true)
+    // Only the stale leftovers were swept; live + tracked + foreign left alone.
+    expect(del100.isDone()).toBe(true)
+    expect(del150.isDone()).toBe(true)
+    // The concurrent listener's tracking id survives this run's shutdown.
+    expect(store.listen_webhook_id).toEqual([999])
   })
 
   it('tolerates a failed orphan-list sweep (best effort)', async () => {
@@ -439,11 +495,15 @@ describe('webhook listen', () => {
     const deadUrl = `http://127.0.0.1:${dead.address().port}/`
     await new Promise((r) => dead.close(r))
 
-    testHooks.onListening = async (port) => {
+    testHooks.onListening = async (port, creds) => {
       // No content-type header on this delivery → forwardEvent defaults it.
-      await deliverNoContentType(port, {
-        meta: { entity: 'deal', action: 'change', id: 1 },
-      })
+      await deliverNoContentType(
+        port,
+        {
+          meta: { entity: 'deal', action: 'change', id: 1 },
+        },
+        creds,
+      )
     }
 
     await expect(
@@ -464,7 +524,16 @@ describe('webhook listen', () => {
   it('continues when sweeping an orphaned webhook fails to delete', async () => {
     mockApi()
       .get('/api/v1/webhooks')
-      .reply(200, { success: true, data: [{ id: 70, name: 'pdcli-listen' }] })
+      .reply(200, {
+        success: true,
+        data: [
+          {
+            id: 70,
+            name: 'pdcli-listen:crashed',
+            add_time: '2020-01-01 00:00:00',
+          },
+        ],
+      })
     mockApi().delete('/api/v1/webhooks/70').reply(500, { success: false })
     mockApi()
       .post('/api/v1/webhooks')
@@ -613,6 +682,89 @@ describe('webhook listen', () => {
     expect(err.exitCode ?? err.oclif?.exit).not.toBe(0)
   })
 
+  it('rejects a forged POST lacking the generated basic-auth creds', async () => {
+    mockApi().get('/api/v1/webhooks').reply(200, { success: true, data: [] })
+    mockApi()
+      .post(
+        '/api/v1/webhooks',
+        (b) =>
+          typeof b.http_auth_user === 'string' &&
+          typeof b.http_auth_password === 'string',
+      )
+      .reply(201, { success: true, data: { id: 61 } })
+    mockApi()
+      .delete('/api/v1/webhooks/61')
+      .reply(200, { success: true, data: {} })
+
+    let noAuthStatus, wrongAuthStatus
+    testHooks.onListening = async (port, creds) => {
+      // No Authorization header at all → 401, never emitted or forwarded.
+      noAuthStatus = await deliver(port, {
+        meta: { entity: 'deal', action: 'change', id: 1 },
+      })
+      // Wrong credentials → 401.
+      wrongAuthStatus = await deliver(
+        port,
+        { meta: { entity: 'deal', action: 'change', id: 2 } },
+        { creds: { user: 'nope', password: 'wrong' } },
+      )
+      // Correct credentials → accepted, triggers --once.
+      await deliver(
+        port,
+        { meta: { entity: 'deal', action: 'change', id: 3 } },
+        { creds },
+      )
+    }
+
+    const stdout = await runCmd(WebhookListenCommand, [
+      '--url',
+      'https://tunnel.example',
+      '--port',
+      '0',
+      '--once',
+      '--output',
+      'json',
+    ])
+    expect(noAuthStatus).toBe(401)
+    expect(wrongAuthStatus).toBe(401)
+    const lines = stdout.trim().split('\n').filter(Boolean)
+    expect(lines).toHaveLength(1)
+    expect(JSON.parse(lines[0]).meta.id).toBe(3) // only the authenticated one
+  })
+
+  it('cleans up the webhook + listeners on a post-bind server error', async () => {
+    mockApi().get('/api/v1/webhooks').reply(200, { success: true, data: [] })
+    mockApi()
+      .post('/api/v1/webhooks')
+      .reply(201, { success: true, data: { id: 78 } })
+    const del = mockApi()
+      .delete('/api/v1/webhooks/78')
+      .reply(200, { success: true, data: {} })
+
+    const signals = new EventEmitter()
+    testHooks.signals = signals
+    // Simulate e.g. EMFILE surfacing on the server AFTER a successful bind.
+    testHooks.onListening = (_port, _creds, server) => {
+      server.emit('error', new Error('EMFILE: too many open files'))
+    }
+
+    const err = await WebhookListenCommand.run([
+      '--url',
+      'https://tunnel.example',
+      '--port',
+      '0',
+      '--no-retry',
+    ]).catch((e) => e)
+
+    expect(err.exitCode ?? err.oclif?.exit).toBe(78)
+    // The already-created webhook was deleted, not orphaned.
+    expect(del.isDone()).toBe(true)
+    // Signal handlers were removed and the own config entry cleared.
+    expect(signals.listenerCount('SIGINT')).toBe(0)
+    expect(signals.listenerCount('SIGTERM')).toBe(0)
+    expect(store.listen_webhook_id).toBeUndefined()
+  })
+
   // ---- synthetic mode -----------------------------------------------------
 
   function mockCycle(deals = [], others = {}) {
@@ -738,6 +890,57 @@ describe('webhook listen', () => {
       'json',
     ])
     expect(stdout.trim().split('\n').filter(Boolean)).toHaveLength(3)
+  })
+
+  it('does not drop same-second events when --max-events lands mid-second', async () => {
+    // ids 1 & 2 share one update_time second; id 3 is a later second. With
+    // --max-events 1 the naive loop would stop after id 1, then advance the
+    // watermark past the whole second — silently losing id 2. The cut-second
+    // guard drains the rest of that second (id 2) before stopping, and stops
+    // before the strictly-later id 3.
+    const sameSecond = '2026-07-01 12:00:00'
+    const laterSecond = '2026-07-01 12:00:05'
+    mockCycle([
+      {
+        id: 1,
+        title: 'a',
+        add_time: '2026-06-01 00:00:00',
+        update_time: sameSecond,
+      },
+      {
+        id: 2,
+        title: 'b',
+        add_time: '2026-06-01 00:00:00',
+        update_time: sameSecond,
+      },
+      {
+        id: 3,
+        title: 'c',
+        add_time: '2026-06-01 00:00:00',
+        update_time: laterSecond,
+      },
+    ])
+    const stdout = await runCmd(WebhookListenCommand, [
+      '--synthetic',
+      '--since',
+      '90d',
+      '--max-events',
+      '1',
+      '--output',
+      'json',
+    ])
+    const ids = stdout
+      .trim()
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => JSON.parse(l).meta.id)
+    // Both same-second events are emitted; the later-second one is not.
+    expect(ids).toEqual([1, 2])
+    // Watermark advanced one second past the boundary (nothing replays/drops).
+    const expectedWatermark = formatApiDatetime(
+      new Date(new Date(sameSecond).getTime() + 1000),
+    )
+    expect(store.listen_watermark).toBe(expectedWatermark)
   })
 
   it('sorts synthetic events by update_time, missing timestamps last', async () => {

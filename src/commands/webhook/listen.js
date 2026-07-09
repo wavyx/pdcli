@@ -1,4 +1,5 @@
 import { createServer } from 'node:http'
+import { randomUUID, randomBytes } from 'node:crypto'
 import { Flags } from '@oclif/core'
 import chalk from 'chalk'
 import BaseCommand from '../../base-command.js'
@@ -12,14 +13,67 @@ import {
   deleteProfileConfig,
 } from '../../lib/config.js'
 
-/** Name stamped on every temp webhook so a later run can sweep leftovers. */
+/** Name prefix stamped on every temp webhook; each run appends a unique token
+ *  (`pdcli-listen:<uuid>`) so concurrent sessions never share an identity and a
+ *  later run can recognise — but not clobber — another run's live webhook. */
 const MARKER = 'pdcli-listen'
-/** Per-profile config key holding the last temp webhook id (orphan GC). */
+/** Per-profile config key holding the SET of this profile's live temp webhook
+ *  ids (orphan GC). A set — not a scalar — so one session's shutdown clears only
+ *  its own entry and leaves a concurrent session's tracking intact. */
 const LISTEN_ID_KEY = 'listen_webhook_id'
 /** Per-profile resume watermark for --synthetic (kept apart from `changes`). */
 const WATERMARK_KEY = 'listen_watermark'
 const DEFAULT_PORT = 3000
 const DEFAULT_INTERVAL_MS = 10_000
+/** A MARKER webhook created within this window is assumed to belong to a
+ *  concurrently-starting listener and is left alone by the sweep; older ones
+ *  (and same-profile tracked ids, regardless of age) are also protected. Only
+ *  untracked MARKER webhooks older than this are treated as crash leftovers. */
+const STALE_MS = 60_000
+
+/** Whole-second bucket of an update_time (v2 timestamps are seconds-precision);
+ *  a missing timestamp returns -Infinity (such rows can't be resumed anyway). */
+function secondOf(updateTime) {
+  if (updateTime == null) return -Infinity
+  return Math.floor(new Date(updateTime).getTime() / 1000)
+}
+
+/** Is a listed webhook a stale crash leftover we may sweep? A MARKER webhook
+ *  with no usable `add_time` is treated as stale; otherwise it must be older
+ *  than STALE_MS so we never race-delete a freshly-created concurrent listener.
+ * @param {string|undefined} addTime
+ * @param {number} now epoch ms
+ * @returns {boolean}
+ */
+function isStaleWebhook(addTime, now) {
+  const t = addTime ? Date.parse(addTime) : NaN
+  if (Number.isNaN(t)) return true
+  return now - t > STALE_MS
+}
+
+/** Read this profile's tracked temp-webhook id set as an array. */
+function getListenIds(profile) {
+  const raw = getProfileConfig(profile, LISTEN_ID_KEY)
+  return Array.isArray(raw) ? raw : []
+}
+
+/** Record this run's own temp-webhook id without disturbing other entries. */
+function addListenId(profile, id) {
+  setProfileConfig(profile, LISTEN_ID_KEY, [...getListenIds(profile), id])
+}
+
+/** Drop only this run's own id; delete the key once the set is empty. */
+function removeListenId(profile, id) {
+  const ids = getListenIds(profile).filter((x) => x !== id)
+  if (ids.length === 0) deleteProfileConfig(profile, LISTEN_ID_KEY)
+  else setProfileConfig(profile, LISTEN_ID_KEY, ids)
+}
+
+/** Constant-shape check that an inbound Authorization header matches the
+ *  generated basic-auth creds registered on the temp webhook. */
+function authMatches(header, expected) {
+  return typeof header === 'string' && header === expected
+}
 
 /** v2 entities that support `updated_since` + update_time ordering. */
 const ENTITY_PATHS = {
@@ -242,12 +296,15 @@ export default class WebhookListenCommand extends BaseCommand {
   }
 
   /**
-   * Delete leftover pdcli-listen webhooks from a previous crashed run. Best
-   * effort: a failed list must not block starting a fresh listener.
+   * Delete STALE leftover pdcli-listen webhooks from a previous crashed run.
+   * Best effort: a failed list must not block starting a fresh listener. Scoped
+   * to avoid clobbering a concurrently-live listener — a webhook is swept only
+   * when it (a) carries the MARKER prefix, (b) is NOT a tracked id of this
+   * profile (a live/own session), and (c) is stale (older than STALE_MS, so a
+   * freshly-created concurrent listener survives).
    * @param {string} profile
    */
   async sweepOrphans(profile) {
-    const storedId = getProfileConfig(profile, LISTEN_ID_KEY)
     let list
     try {
       const body = await this.apiClient.get('/api/v1/webhooks')
@@ -256,20 +313,24 @@ export default class WebhookListenCommand extends BaseCommand {
       process.stderr.write(`Orphan sweep skipped: ${err.message}\n`)
       return
     }
-    const orphans = list.filter(
-      (w) => w.name === MARKER || (storedId != null && w.id === storedId),
-    )
+    const now = Date.now()
+    const tracked = new Set(getListenIds(profile))
+    const prefix = `${MARKER}:`
+    const orphans = list.filter((w) => {
+      if (!w.name?.startsWith(prefix)) return false
+      if (tracked.has(w.id)) return false
+      return isStaleWebhook(w.add_time, now)
+    })
     for (const w of orphans) {
       try {
         await this.apiClient.del(`/api/v1/webhooks/${w.id}`)
-        process.stderr.write(`Swept orphaned listen webhook ${w.id}\n`)
+        process.stderr.write(`Swept stale listen webhook ${w.id}\n`)
       } catch (err) {
         process.stderr.write(
           `Could not sweep webhook ${w.id}: ${err.message}\n`,
         )
       }
     }
-    if (storedId != null) deleteProfileConfig(profile, LISTEN_ID_KEY)
   }
 
   /**
@@ -292,27 +353,41 @@ export default class WebhookListenCommand extends BaseCommand {
 
     await this.sweepOrphans(profile)
 
+    // A unique identity per run: a random name suffix keeps concurrent sessions
+    // apart, and generated basic-auth creds let the receiver reject any forged
+    // POST from someone who merely discovered the public tunnel URL.
+    const ownName = `${MARKER}:${randomUUID()}`
+    const authUser = randomBytes(12).toString('hex')
+    const authPass = randomBytes(24).toString('hex')
+    const expectedAuth =
+      'Basic ' + Buffer.from(`${authUser}:${authPass}`).toString('base64')
+
     return new Promise((resolve, reject) => {
       let webhookId
       let count = 0
       let closing = false
 
-      const shutdown = async (signal) => {
-        if (closing) return
-        closing = true
+      // Delete the temp webhook, clear only our own tracking entry, and
+      // deregister the signal handlers. Shared by clean shutdown and the
+      // post-bind error path so neither orphans the webhook or leaks listeners.
+      const cleanup = async () => {
         server.close()
         try {
           await this.apiClient.del(`/api/v1/webhooks/${webhookId}`)
-          deleteProfileConfig(profile, LISTEN_ID_KEY)
+          removeListenId(profile, webhookId)
         } catch (err) {
           process.stderr.write(
             `Cleanup of webhook ${webhookId} failed: ${err.message}\n`,
           )
         }
-        // Deregister after cleanup: while the async delete is in flight the
-        // `closing` guard (not listener removal) dedupes a second signal.
         signals.off('SIGINT', onSigint)
         signals.off('SIGTERM', onSigterm)
+      }
+
+      const shutdown = async (signal) => {
+        if (closing) return
+        closing = true
+        await cleanup()
         if (signal) {
           process.stderr.write(
             `\nReceived ${signal} — deleted webhook ${webhookId}\n`,
@@ -326,6 +401,13 @@ export default class WebhookListenCommand extends BaseCommand {
       const server = createServer((req, res) => {
         if (req.method !== 'POST') {
           res.writeHead(405)
+          res.end()
+          return
+        }
+        // Reject forged deliveries: only POSTs carrying the generated basic-auth
+        // creds (which only Pipedrive was handed) are printed/forwarded.
+        if (!authMatches(req.headers['authorization'], expectedAuth)) {
+          res.writeHead(401)
           res.end()
           return
         }
@@ -356,15 +438,24 @@ export default class WebhookListenCommand extends BaseCommand {
         })
       })
 
-      server.on('error', (err) => {
+      const rejectBind = (err) =>
         reject(
           new CliError(
-            `Cannot bind the local receiver on port ${flags.port}: ${err.message}`,
-            {
-              exitCode: 78,
-            },
+            `Local webhook receiver failed on port ${flags.port}: ${err.message}`,
+            { exitCode: 78 },
           ),
         )
+
+      server.on('error', (err) => {
+        // Pre-bind (e.g. EADDRINUSE): nothing to unwind, just reject. Post-bind
+        // (e.g. EMFILE) the webhook already exists, so run the full cleanup
+        // before rejecting rather than orphaning it and leaking listeners.
+        if (webhookId == null) {
+          rejectBind(err)
+          return
+        }
+        closing = true
+        cleanup().finally(() => rejectBind(err))
       })
 
       // Bind loopback only: a tunnel (ngrok/cloudflared) forwards to localhost,
@@ -379,7 +470,9 @@ export default class WebhookListenCommand extends BaseCommand {
               event_action: '*',
               event_object: '*',
               version: '2.0',
-              name: MARKER,
+              name: ownName,
+              http_auth_user: authUser,
+              http_auth_password: authPass,
             },
           })
           webhookId = created.data.id
@@ -388,13 +481,17 @@ export default class WebhookListenCommand extends BaseCommand {
           reject(err)
           return
         }
-        setProfileConfig(profile, LISTEN_ID_KEY, webhookId)
+        addListenId(profile, webhookId)
         signals.on('SIGINT', onSigint)
         signals.on('SIGTERM', onSigterm)
         process.stderr.write(
           `Listening on :${port} — webhook ${webhookId} → ${flags.url}\n`,
         )
-        testHooks.onListening?.(port)
+        testHooks.onListening?.(
+          port,
+          { user: authUser, password: authPass },
+          server,
+        )
       })
     })
   }
@@ -446,7 +543,15 @@ export default class WebhookListenCommand extends BaseCommand {
     try {
       while (!stopping) {
         const events = await this.pollSynthetic(since)
+        // Once --max-events is hit we must not stop mid-second: the watermark
+        // advances to (last update_time + 1s), which would skip un-emitted
+        // events sharing that boundary second. So on hitting the cap we record
+        // its second and keep emitting until the next event is strictly later,
+        // then stop — every same-second event is emitted, nothing is dropped.
+        let cutSecond = null
         for (const evt of events) {
+          const sec = secondOf(evt.meta.updateTime)
+          if (cutSecond != null && sec !== cutSecond) break
           const emitted = this.emitEvent(evt, { format, patterns })
           if (emitted && forwardTo) {
             await forwardEvent(
@@ -462,12 +567,16 @@ export default class WebhookListenCommand extends BaseCommand {
           }
           if (emitted) {
             count++
-            if (flags['max-events'] != null && count >= flags['max-events']) {
-              stopping = true
-              break
+            if (
+              flags['max-events'] != null &&
+              count >= flags['max-events'] &&
+              cutSecond == null
+            ) {
+              cutSecond = sec
             }
           }
         }
+        if (cutSecond != null) stopping = true
         setProfileConfig(profile, WATERMARK_KEY, since)
         if (flags.once || stopping) break
         await sleep(flags.interval)

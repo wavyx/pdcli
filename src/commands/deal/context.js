@@ -3,7 +3,7 @@ import BaseCommand from '../../base-command.js'
 import { collectPages } from '../../lib/pagination.js'
 import { getFields, makeResolver } from '../../lib/fields.js'
 import { assembleContext } from '../../lib/deal-context.js'
-import { unwrapMailMessage, mailDirection } from '../mail/list.js'
+import { fetchDealMail, mailDirection } from '../mail/list.js'
 
 /**
  * Condense a deal's mail messages into an agent-friendly signal. Returns null
@@ -75,7 +75,10 @@ export default class DealContextCommand extends BaseCommand {
     'no-participants': Flags.boolean({
       description: 'Skip the participants slice',
     }),
-    'no-mail': Flags.boolean({ description: 'Skip the mail summary slice' }),
+    mail: Flags.boolean({
+      description:
+        'Include a mail summary (off by default; needs the mail:read scope and email sync)',
+    }),
     'mail-limit': Flags.integer({
       description: 'Max mail messages to scan for the summary',
       default: 50,
@@ -102,15 +105,14 @@ export default class DealContextCommand extends BaseCommand {
     // users have neither, so a 403 / permission error (or any mail-only
     // failure) degrades to null rather than sinking the whole context bundle.
     const fetchMail = async () => {
-      if (flags['no-mail']) return null
+      if (!flags.mail) return null
       try {
-        const items = await collectPages(
-          this.apiClient.pageV1(`/api/v1/deals/${id}/mailMessages`, {
-            limit: 100,
-          }),
+        const items = await fetchDealMail(
+          this.apiClient,
+          id,
           flags['mail-limit'],
         )
-        return summarizeMail(items.map(unwrapMailMessage))
+        return summarizeMail(items)
       } catch {
         return null
       }
