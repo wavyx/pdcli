@@ -61,7 +61,7 @@ const features: { t: string; b: string; d: string }[] = [
   },
   {
     t: 'Built for AI agents',
-    b: 'Self-documenting --help on every command and clean JSON output make pdcli easy for agents to discover and drive — a ready-made tool surface for your LLM workflows.',
+    b: 'Runs as an MCP server — pdcli mcp serve — read-only by default, giving Claude and other hosts a safe, typed tool surface. For shell-driven agents there is also self-documenting --help, clean JSON, and deterministic exit codes.',
     d: '<rect x="4" y="6" width="16" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 12h0M15 12h0M9.5 15.5a3 3 0 005 0"/>',
   },
   {
@@ -455,6 +455,11 @@ const showcaseTerm = `<span class="dim">$</span> <span class="g">pdcli</span> <s
       cmd: 'pdcli person import leads.csv --dry-run',
       out: `  <span class="ok">+212</span> new   <span class="n">~18</span> updates   <span class="warn">!3</span> conflicts
 <span class="dim">  dry run · nothing written · custom fields matched by name</span>`,
+    },
+    {
+      cmd: 'pdcli mcp serve',
+      out: `<span class="ok">  ✓</span> pdcli MCP server ready — <span class="n">45</span> tools <span class="dim">(read-only)</span>
+<span class="dim">  connect Claude · --allow-writes to expose create/update</span>`,
     },
   ];
 

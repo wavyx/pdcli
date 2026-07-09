@@ -56,7 +56,7 @@ pdcli version
 Pin a version in CI so a background release can't change behaviour mid-pipeline:
 
 ```bash
-npm install -g @wavyx/pdcli@0.20.0
+npm install -g @wavyx/pdcli@0.22.0
 ```
 
 Auth: keychain by default (`pdcli auth login`), or env vars for scripts.
@@ -68,7 +68,7 @@ step where you'd rather not add an install line.
 
 ```bash
 npx @wavyx/pdcli deal list
-npx @wavyx/pdcli@0.20.0 deal list   # pinned
+npx @wavyx/pdcli@0.22.0 deal list   # pinned
 ```
 
 The global install is faster for daily use because npx resolves and caches the package
@@ -91,7 +91,7 @@ token never appears in the command or in shell history. Pin the tag in CI:
 
 ```bash
 docker run --rm -e PDCLI_API_TOKEN -e PDCLI_COMPANY_DOMAIN \
-  ghcr.io/wavyx/pdcli:0.20.0 deal list --output json
+  ghcr.io/wavyx/pdcli:0.22.0 deal list --output json
 ```
 
 The entrypoint is `pdcli`, so everything after the image name is passed straight
@@ -141,23 +141,23 @@ Five targets are published per release:
 | `win32-x64` | Windows, 64-bit |
 
 Each tarball filename embeds the build's commit SHA (for example
-`pdcli-v0.20.0-1a2b3c4-linux-x64.tar.gz`), so there is no fixed, predictable
+`pdcli-v0.22.0-1a2b3c4-linux-x64.tar.gz`), so there is no fixed, predictable
 download URL. Grab the exact asset from the
 [Releases page](https://github.com/wavyx/pdcli/releases), or let the
 [`gh` CLI](https://cli.github.com/) resolve it for you:
 
 ```bash
 # See the tarballs attached to a release:
-gh release view v0.20.0 --json assets --jq '.assets[].name'
+gh release view v0.22.0 --json assets --jq '.assets[].name'
 
 # Download the one for your target by pattern (no need to know the SHA):
-gh release download v0.20.0 --pattern '*linux-x64.tar.gz'
+gh release download v0.22.0 --pattern '*linux-x64.tar.gz'
 ```
 
 Then unpack it and put the `bin` directory on your `PATH`:
 
 ```bash
-tar -xzf pdcli-v0.20.0-*-linux-x64.tar.gz
+tar -xzf pdcli-v0.22.0-*-linux-x64.tar.gz
 ./pdcli/bin/pdcli version
 ```
 

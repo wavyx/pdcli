@@ -1,0 +1,130 @@
+---
+title: MCP server
+description: Expose pdcli to Claude and other AI hosts as a Model Context Protocol server — read-only by default, with writes gated behind an explicit flag.
+---
+
+`pdcli mcp serve` runs pdcli as a [Model Context Protocol](https://modelcontextprotocol.io)
+(MCP) server over stdio, so an MCP host — Claude Desktop, Claude Code, or any other
+client — can drive your Pipedrive account as a set of typed tools.
+
+It is the same CLI you already trust, wrapped in a tool surface. Every tool call
+re-invokes `pdcli` itself as a child process under your auth profile, so the tools
+honor the same host-lock, the same keychain credentials, and the same rate-limit
+handling as the commands you run by hand. Nothing new touches your token.
+
+## Safe by default
+
+The design goal is that connecting the server can't hurt you:
+
+- **Read-only out of the box.** The default tool set is a curated **45 read-only
+  tools** — core entity list/get, `search`, deal intelligence
+  (`deal context`/`history`/`summary`), every metric, `funnel`, `digest`, `audit`,
+  `rep scorecard`, `user me`, and more. No tool that writes is even registered
+  unless you ask for it.
+- **Writes are opt-in.** Every command is classified `read`, `write`, or
+  `destructive`. Writes and destructive operations are exposed **only** under
+  `--allow-writes`.
+- **Dangerous surfaces are excluded entirely** — they never appear as tools, even
+  with `--all-tools`. That includes the raw `api` escape hatch, `auth:*`,
+  `config:*`, `alias:*`, `profile:*` (all of which manage your local machine, not
+  CRM data), `doctor`, `watch`, `changes` (advances a stateful watermark),
+  `sync warehouse`, `backup` (but `backup diff`, a zero-API local read, is kept),
+  `webhook listen`, and `mcp serve` itself.
+
+## Quick start
+
+Register the server with Claude Code in one line:
+
+```bash
+claude mcp add pipedrive -- pdcli mcp serve
+```
+
+Or add it to an `.mcp.json` (Claude Code project config, Claude Desktop, or any
+MCP host) by hand:
+
+```json
+{
+  "mcpServers": {
+    "pipedrive": {
+      "command": "pdcli",
+      "args": ["mcp", "serve"]
+    }
+  }
+}
+```
+
+That's the read-only server. To let the host create and update records, add the
+flag to the `args` — `["mcp", "serve", "--allow-writes"]` — or to the
+`claude mcp add` command after the `--`.
+
+Authenticate pdcli once (`pdcli auth login`, or an env-var token) before starting a
+host; the server itself needs no credentials — its child processes resolve them.
+
+## The tool model
+
+Tool selection happens in two stages: **scope**, then the **write gate**.
+
+**Scope** decides which commands are candidates:
+
+| Flag                    | Tools exposed                                                        |
+| ----------------------- | ------------------------------------------------------------------- |
+| _(none)_                | the curated core set — 45 read tools, small enough not to overwhelm a host |
+| `--topics deal,person`  | every command under those topics, instead of the curated set        |
+| `--all-tools`           | every non-excluded command                                          |
+
+**The write gate** then filters that scope: reads are always exposed; `write` and
+`destructive` tools appear only with `--allow-writes`. With the default scope,
+`--allow-writes` adds ~14 core write tools — the create/update commands on core
+entities plus the idempotent `upsert`s (`person`/`org`/`deal upsert`).
+
+```bash
+pdcli mcp serve                              # curated, read-only (default)
+pdcli mcp serve --allow-writes               # curated reads + core writes
+pdcli mcp serve --topics deal,person,org     # everything under those topics (reads)
+pdcli mcp serve --all-tools --allow-writes   # the whole CLI as tools
+```
+
+One command is deliberately kept out of the curated default even though it's a
+read: `lookup`. Its exit-3 "no match" result is a normal branch for a script, but
+an MCP host reads a non-zero exit as a **tool error** — noisy for an agent. It
+stays reachable via `--all-tools`; for match-or-branch logic inside an agent,
+prefer `search` or the `upsert` tools.
+
+## Custom-field names, not hash keys
+
+Every tool call forces `--resolve-fields`, so the host sees human-readable custom
+field **names** (and option labels) instead of Pipedrive's 40-character hash keys —
+on both input and output. An agent can ask for `"Renewal date"`, not
+`"a1b2c3…"`. Each call also forces `--output=json` (so the parent's stdio channel
+stays clean) and `--yes` (no interactive confirm can block a headless call).
+
+## Timeouts and limits
+
+Each tool call is a child process with guardrails:
+
+- `--tool-timeout <seconds>` (default **120**) bounds how long a call may run
+  before its child is terminated (SIGTERM, escalating to SIGKILL).
+- Output is capped at **16&nbsp;MB** across stdout and stderr combined; a runaway
+  call is killed rather than flooding the host.
+
+Both a timeout and an overflow surface to the host as a tool error with a
+self-describing message, never as a silent success.
+
+## MCP vs. the CLI over bash
+
+If your agent already has a shell — a terminal agent like Claude Code or Codex —
+you may not need MCP at all. pdcli is built to be driven from bash directly:
+`--output json`, `--jq`, self-describing `--help`, and
+[deterministic exit codes](/pdcli/start/agents/) give a shell-capable agent
+everything it needs, with the full command set and no tool-registration step.
+
+Reach for `mcp serve` when the host **can't** run shell commands — Claude Desktop
+and other GUI/chat hosts that speak MCP but have no terminal. There, the MCP server
+turns pdcli into first-class typed tools with the same safety posture you'd get on
+the command line.
+
+:::tip
+Start read-only. Add `--allow-writes` only once you trust the workflow, and prefer
+scoping with `--topics` over `--all-tools` so the host sees a focused, relevant set
+of tools rather than the entire CLI.
+:::

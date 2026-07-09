@@ -13,7 +13,7 @@ Pipedrive runs two API versions. `pdcli` routes each topic to the right one.
 | Topic | API |
 | ----- | --- |
 | deals, persons, organizations, products, pipelines, stages, activities, projects, fields, search | **v2** |
-| leads, notes, files, filters, webhooks, goals, users | **v1** |
+| leads, notes, files, filters, webhooks, goals, users, mail | **v1** |
 
 Core CRM is on **v2** because Pipedrive deprecated ~59 v1 core endpoints after 2025-12-31, so
 pdcli never builds core CRUD on v1. The v1-only topics above have no v2 equivalent yet and are
@@ -61,6 +61,13 @@ There's a rolling **2-second burst window** plus a **daily budget** (scales with
 seats, resets at midnight server time). On a `429`, pdcli reads `x-ratelimit-reset`
 (falling back to `Retry-After`, then a 2s default) to decide how long to wait before
 retrying.
+
+Inspect the remaining budget with **`pdcli quota`** (alias `ratelimit`): it reports the
+daily token budget remaining/limit and gates CI with `--min`/`--threshold` (exit `75` when
+too low), so a batch can check headroom first — `pdcli quota --min 5000 && pdcli sync
+warehouse`. The budget is **company-wide** (shared across every integration on the
+account), so treat the reading as a hint, not a reservation. (This is unrelated to the
+sales-goal "quota" in the [analytics guide](/pdcli/guides/analytics/).)
 
 ### Backoff and the hard stop
 
