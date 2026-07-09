@@ -77,12 +77,16 @@ const firstLine = (s) =>
     .split('\n')[0]
     .trim()
 
-// Escape MDX-significant chars: `|` breaks tables, bare `<`/`>` parse as JSX.
+// Escape MDX-significant chars: `|` breaks tables, bare `<`/`>` parse as JSX,
+// and a bare `{` opens a JSX expression (a literal `{name, type}` or a JSON
+// `{"glue":...}` in a description otherwise fails the MDX build).
 const mdxSafe = (s) =>
   firstLine(s)
     .replaceAll('|', '\\|')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
+    .replaceAll('{', '&#123;')
+    .replaceAll('}', '&#125;')
 
 export function renderWebsiteMdx(manifest, bin = BIN) {
   const { commands, byTopic } = groupByTopic(manifest)

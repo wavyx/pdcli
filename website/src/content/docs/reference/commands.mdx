@@ -1247,7 +1247,7 @@ pdcli filter create [flags]
 | --- | --- |
 | `--name` &lt;value&gt; | Filter name |
 | `--type` &lt;deals\|leads\|org\|people\|products\|activity\|projects&gt; | Filter type |
-| `--conditions` &lt;value&gt; | Conditions JSON (a value, @file, or piped stdin). Fields are referenced by numeric field_id — run `pdcli filter helpers` for the valid operators. The blob needs the two-level glue structure {"glue":"and","conditions":[{"glue":"and",...},{"glue":"or",...}]}. |
+| `--conditions` &lt;value&gt; | Conditions JSON (a value, @file, or piped stdin). Fields are referenced by numeric field_id — run `pdcli filter helpers` for the valid operators. The blob needs the two-level glue structure &#123;"glue":"and","conditions":[&#123;"glue":"and",...&#125;,&#123;"glue":"or",...&#125;]&#125;. |
 
 ```bash
 pdcli filter create --name "Open deals" --type deals --conditions @conditions.json
@@ -1273,7 +1273,7 @@ pdcli filter delete 5 --yes
 
 ### `pdcli filter export`
 
-Export a filter (or all filters) as portable {name, type, conditions} JSON. To recreate it, feed the fields to `filter create` separately (the create command takes --name/--type/--conditions, not one blob).
+Export a filter (or all filters) as portable &#123;name, type, conditions&#125; JSON. To recreate it, feed the fields to `filter create` separately (the create command takes --name/--type/--conditions, not one blob).
 
 ```text
 pdcli filter export [id] [flags]
