@@ -107,6 +107,7 @@ export default defineConfig({
             { label: 'Sales analytics', slug: 'guides/analytics' },
             { label: 'Data-hygiene audit', slug: 'guides/audit' },
             { label: 'The raw api escape hatch', slug: 'guides/api' },
+            { label: 'Local mock endpoint', slug: 'guides/mock' },
           ],
         },
         {

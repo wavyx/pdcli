@@ -1,0 +1,61 @@
+---
+title: Local mock endpoint
+description: Point pdcli at a localhost mock server (Prism, WireMock) for offline development and CI, without ever leaking your real Pipedrive token off-host.
+---
+
+`pdcli` is host-locked: every request goes to your own company domain
+(`{company}.pipedrive.com`) or your OAuth `api_domain`, and nothing else. That is
+what stops a mistyped or hallucinated URL from leaking your API token.
+
+For local development you sometimes want to aim pdcli at a **mock server** instead
+of the live API: to iterate offline, to run deterministic tests, or to exercise a
+new command against a canned response. `PDCLI_BASE_URL` is the guarded escape hatch
+for exactly that.
+
+## The rules
+
+`PDCLI_BASE_URL`, when set, overrides the base origin for every request. It is
+deliberately narrow:
+
+- It is honored **only** when it resolves to `localhost`, `127.0.0.1`, or `::1`.
+  Any other host is a hard config error (exit `78`) that reaffirms the host-lock.
+  pdcli never silently trusts an arbitrary host with your credentials.
+- Because a mock server has no business receiving your real Pipedrive token,
+  `PDCLI_API_TOKEN` **must** be set when the override is active. Set it to a
+  throwaway dummy value. If pdcli would otherwise send a stored keychain token to
+  the override host, it refuses with a clear error rather than leaking it.
+- Every invocation prints a loud banner to stderr so the override is never silent:
+
+  ```
+  [pdcli] MOCK ENDPOINT — using http://127.0.0.1:4010 (host-lock bypassed)
+  ```
+
+## Recipe: Prism against the Pipedrive OpenAPI spec
+
+[Prism](https://github.com/stoplightio/prism) turns an OpenAPI document into a
+local mock server. Point it at the Pipedrive v2 spec:
+
+```bash
+prism mock ~/dev/wavyx/pddoc/output/openapi-v2.yaml
+# → Prism is listening on http://127.0.0.1:4010
+```
+
+Then run pdcli against it. A dummy token satisfies the safety check; a company
+domain (env or profile) is still required so credential resolution succeeds:
+
+```bash
+PDCLI_BASE_URL=http://127.0.0.1:4010 \
+PDCLI_API_TOKEN=dummy \
+PDCLI_COMPANY_DOMAIN=mock \
+  pdcli deal list
+```
+
+pdcli prints the banner and the mock's canned deals, using the same pagers,
+rate-limit handling, and output formatting as against the live API. Unset
+`PDCLI_BASE_URL` to return to your real, host-locked company domain.
+
+:::caution
+The mock endpoint is a development aid. Requests never reach Pipedrive, so
+responses are only as accurate as the mock. Never point production automation at
+a mock server.
+:::

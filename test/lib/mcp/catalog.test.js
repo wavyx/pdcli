@@ -56,6 +56,8 @@ describe('classifyKind', () => {
     ['funnel', 'read'],
     ['digest', 'read'],
     ['audit', 'read'],
+    ['lookup', 'read'],
+    ['quota', 'read'],
     ['audit:stage-skips', 'read'],
     ['version', 'read'],
     ['some:future-verb', 'write'], // unknown verbs default to gated
@@ -225,6 +227,7 @@ describe('real-config classification audit', () => {
     'lead:label:list': 'read',
     'lead:list': 'read',
     'lead:update': 'write',
+    lookup: 'read',
     'mcp:serve': 'excluded',
     'metrics:aging': 'read',
     'metrics:conversion-matrix': 'read',
@@ -282,6 +285,7 @@ describe('real-config classification audit', () => {
     'project:get': 'read',
     'project:list': 'read',
     'project:update': 'write',
+    quota: 'read',
     'rep:scorecard': 'read',
     search: 'read',
     'stage:get': 'read',
@@ -358,9 +362,9 @@ describe('real-config classification audit', () => {
     }
   })
 
-  it('locks the curated split: 45 reads + 14 writes, nothing destructive', () => {
+  it('locks the curated split: 46 reads + 14 writes, nothing destructive', () => {
     const kinds = [...CURATED].map(classifyKind)
-    expect(kinds.filter((k) => k === 'read')).toHaveLength(45)
+    expect(kinds.filter((k) => k === 'read')).toHaveLength(46)
     expect(kinds.filter((k) => k === 'write')).toHaveLength(14)
     expect(kinds).not.toContain('destructive')
   })
