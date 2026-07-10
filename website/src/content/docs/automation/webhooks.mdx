@@ -1,0 +1,151 @@
+---
+title: Webhooks & the local dev loop
+description: Manage Pipedrive webhooks and run a Stripe-style local receiver that registers a temporary webhook, verifies deliveries, and forwards them to your app.
+---
+
+Pipedrive can POST an event to a URL every time a record changes. pdcli gives you two
+things: plain CRUD over your account's webhooks, and `webhook listen`, a local dev loop
+that stands up a receiver, registers a throwaway webhook pointing at it, and prints and
+forwards each delivery, the way `stripe listen` does.
+
+Webhooks are a **v1** feature. pdcli talks to `/api/v1/webhooks`, and v1 supports
+**create and delete only** — there is no update. To change a subscription, delete it and
+create a new one.
+
+## Managing webhooks
+
+`webhook list` shows every webhook on the account, with its subscription URL, the
+action/object pair it fires on, and whether it is active:
+
+```bash
+pdcli webhook list
+pdcli webhook list --output json
+```
+
+`webhook create` registers one. A webhook subscribes to exactly **one action on one
+object**, each of which may be a `*` wildcard. `--url` is where Pipedrive POSTs, and
+must be a public **https** endpoint:
+
+```bash
+pdcli webhook create --url https://example.com/hook --event-action change --event-object deal
+pdcli webhook create --url https://example.com/hook --event-action "*" --event-object "*"
+```
+
+- `--event-action` is one of `create`, `change`, `delete`, or `*`.
+- `--event-object` is one of `activity`, `deal`, `person`, `organization`, `product`,
+  `lead`, `note`, `pipeline`, `stage`, `user`, and a handful more (`--help` lists them all),
+  or `*`.
+- `--version` defaults to `2.0` (the v2 payload shape).
+- `--name` labels the webhook. `--http-auth-user` and `--http-auth-password` protect your
+  endpoint with basic auth; the two go together, or pdcli rejects the pair.
+
+`webhook delete <id>` removes one. It confirms first (skip with `-y`/`--yes`); declining
+aborts with exit 1:
+
+```bash
+pdcli webhook delete 3
+pdcli webhook delete 3 --yes
+```
+
+## The local dev loop: `webhook listen`
+
+`webhook listen` is the fast path for building against webhooks without deploying anything.
+In **tunnel mode** it:
+
+1. Binds a local receiver on `127.0.0.1:<port>` (default `3000`).
+2. Registers a **temporary** catch-all webhook (named `pdcli-listen:<uuid>`) pointing at
+   your public tunnel URL, with generated basic-auth credentials.
+3. Pretty-prints every delivery, and optionally forwards the raw payload to your app.
+4. Deletes the temporary webhook when you stop it.
+
+```bash
+# tunnel already running: ngrok http 3000  →  https://abc123.ngrok.app
+pdcli webhook listen --url https://abc123.ngrok.app --forward-to http://localhost:3000
+```
+
+pdcli does **not** bundle a relay. You provide the public tunnel (ngrok, cloudflared, or
+anything that terminates https and forwards to your local port), and pass its URL as
+`--url`. Pipedrive POSTs to the tunnel, the tunnel forwards to the pdcli receiver on
+`--port`, and pdcli handles the delivery.
+
+Each delivery prints one line in a terminal — a timestamp, the `entity.action` key, and the
+record id. Piped or under `--output json`, every delivery is emitted as a JSON line
+(NDJSON), one object per delivery, so you can pipe it straight into `jq` or a file. Add
+`--forward-to <url>` to also POST the raw payload to your local app, exactly as it arrived.
+
+### Filtering with `--events`
+
+The temporary webhook is a catch-all, and pdcli filters client-side. `--events` takes a
+comma-separated list of `entity.action` patterns; `*` is a wildcard on either side, and a
+bare entity means every action on it:
+
+```bash
+pdcli webhook listen --url https://abc123.ngrok.app --events deal.change,person.*
+```
+
+`deal.change,person.*` prints deal changes and every person event. Omit `--events` to see
+everything.
+
+### Stopping and cleanup
+
+Stop with Ctrl-C (`SIGINT`), or bound the run with `--once` (stop after the first delivery)
+or `--max-events <n>`. However it stops, pdcli deletes the temporary webhook so nothing is
+left pointing at a tunnel that is about to disappear.
+
+If a previous run crashed before it could clean up, its orphaned `pdcli-listen:` webhook is
+**swept on the next start**. The run id is unique per session and only stale, untracked
+leftovers are removed, so two `webhook listen` sessions can run at once without deleting
+each other's live webhook.
+
+### Why forged deliveries can't slip through
+
+A public tunnel URL is guessable, so the receiver does not trust every POST that reaches it.
+The temporary webhook is registered with **generated basic-auth credentials**, and the
+receiver **rejects with 401** any POST that does not carry them. Only Pipedrive was handed
+those credentials, so a forged request to your tunnel is never printed and never forwarded.
+
+## `--synthetic`: the change feed as webhook deliveries
+
+Sometimes you cannot receive an inbound webhook at all — you are behind a firewall, on a
+laptop with no tunnel, or writing a reactive agent that only makes **outbound** calls.
+`--synthetic` covers that case. Instead of registering a real webhook, it polls the
+incremental change feed and emits the **same delivery envelope** a webhook would, with zero
+inbound network:
+
+```bash
+pdcli webhook listen --synthetic --since 15m
+pdcli webhook listen --synthetic --since 7d --events deal.change --forward-to http://localhost:3000
+```
+
+Each cycle fetches everything changed across deals, persons, organizations, activities, and
+products since the last watermark, and emits one event per record. The event envelope is
+`{ event, meta, current, previous }` (`previous` is always `null` — the feed carries only
+current state). `--events`, `--forward-to`, and the JSON/NDJSON output all behave exactly
+as they do in tunnel mode, so code written against synthetic deliveries also handles real
+ones.
+
+`--synthetic` keeps its **own watermark**, separate from the [`changes`](/pdcli/reference/commands/)
+command's. The first run needs a `--since <timestamp|Nd>` to anchor from (a bare first run
+with no stored watermark exits 64); after that it resumes on its own. `--interval` sets the
+gap between poll cycles (default 10s), and `--once` runs a single cycle then exits.
+
+:::tip
+Two modes, same envelope, different trade-offs:
+
+- **Tunnel mode** (`--url`) delivers **real** Pipedrive events the instant they fire, but
+  needs a public https tunnel you provide.
+- **`--synthetic`** makes **no inbound connection** at all — it polls — so it works behind a
+  firewall and for outbound-only agents, at the cost of up-to-`--interval` latency and the
+  five v2 entities the change feed covers.
+
+Prototype an integration with `--synthetic`, then flip to `--url` for live deliveries once a
+tunnel is up. See the [analytics guide](/pdcli/guides/analytics/) and the
+[agent quickstart](/pdcli/start/agents/) for more on driving pdcli from scripts and agents.
+:::
+
+:::caution
+The tunnel is **yours to provide**. pdcli does not ship or host a relay, and it will not
+open one for you. `--url` must be a public https endpoint (ngrok, cloudflared, or similar)
+that forwards to the receiver on `--port`. If the port is already in use, the receiver
+fails to bind and pdcli exits 78 — see [exit codes](/pdcli/automation/exit-codes/).
+:::
