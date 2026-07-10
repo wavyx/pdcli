@@ -1,0 +1,159 @@
+---
+title: Filters as code
+description: Provision Pipedrive saved filters from JSON — a server-side filter you reference by id on every list command, git-diffable and portable across accounts.
+---
+
+A Pipedrive **saved filter** lives on the server and gets referenced by id on nearly
+every list endpoint — `pdcli deal list --filter 9`, `pdcli person list --filter 12`, and
+the [bulk flows](/pdcli/guides/bulk/) all take the same id. That makes a filter the right
+place to push selection logic: instead of paging every record and running client-side jq
+over the results, you let Pipedrive apply the predicate and return only the matches.
+
+Under pdcli's token budget that difference is real. A filtered list is one cheap request;
+a scan-then-filter is many paginated GET-lists you pay for and throw most of away. And
+because a filter is just JSON, it is git-diffable, reviewable, and portable — author it
+once, `filter export` it, and recreate it on another account.
+
+The `filter` commands make filters authorable as code:
+
+```bash
+pdcli filter list --type deals        # discover existing filters + their ids
+pdcli filter get 5                    # inspect one
+pdcli filter helpers                  # discover valid operators per field type
+pdcli filter create --name … --type … --conditions …
+pdcli filter update 5 --conditions …
+pdcli filter export 5                 # emit portable {name, type, conditions} JSON
+```
+
+## Creating a filter
+
+`filter create` needs a `--name`, a `--type`, and a `--conditions` JSON blob:
+
+```bash
+pdcli filter create --name "Open deals" --type deals --conditions @conditions.json
+cat conditions.json | pdcli filter create --name "Open deals" --type deals
+```
+
+`--type` is one of `deals`, `leads`, `org`, `people`, `products`, `activity`, or
+`projects`. `--conditions` is resolved like every other body in pdcli — an inline string,
+an `@file`, or piped stdin (see [`resolveBody`](/pdcli/guides/api/)). It is parsed as JSON
+before any request; invalid JSON fails fast with exit **65** and never hits the API.
+
+### The conditions shape
+
+This is the part worth reading twice. `conditions` is a free-form nested JSON blob, but
+Pipedrive imposes a **mandatory two-level glue structure**: an outer group whose
+`conditions` array holds inner groups, and each inner group's `conditions` array holds the
+actual leaf predicates. Every group carries a `glue` of `"and"` or `"or"`.
+
+```json
+{
+  "glue": "and",
+  "conditions": [
+    {
+      "glue": "and",
+      "conditions": [
+        { "object": "deal", "field_id": 2384, "operator": "=", "value": "open" }
+      ]
+    },
+    {
+      "glue": "or",
+      "conditions": [
+        { "object": "deal", "field_id": 2391, "operator": ">", "value": 5000 }
+      ]
+    }
+  ]
+}
+```
+
+Two things that trip people up:
+
+- There is a **16-condition cap** across the whole blob — Pipedrive rejects filters with
+  more leaf predicates than that.
+- Leaf conditions reference a field by its **numeric `field_id`**, not the 40-char
+  custom-field key hash that pdcli resolves for you everywhere else (see
+  [Custom fields](/pdcli/guides/custom-fields/)). The filters API predates that
+  resolution and speaks raw numeric ids only, so there is no name-to-key convenience here.
+
+To discover the numeric field ids and which operators a field accepts, reach for
+`filter helpers` (below) and `filter get` on an existing filter of the same type — copying
+a working blob is the fastest way to learn the grammar.
+
+## Discovering operators: `filter helpers`
+
+`filter helpers` hits `GET /filters/helpers` and lists the operators available for each
+field **data type** — `varchar`, `date`, `int`, `enum`, and so on. It answers "which
+operators can I put in a leaf for a text field vs a date field?":
+
+```bash
+pdcli filter helpers                  # every data type
+pdcli filter helpers --type varchar   # just text-field operators
+pdcli filter helpers --output json    # machine-readable
+```
+
+`--type` narrows the output to a single data type. It is a **client-side** filter on the
+data-type key of the response — there is no server-side type parameter — so an unknown
+value simply yields no rows.
+
+## Updating a filter
+
+`filter update <id>` changes a filter in place. Only the fields you pass change:
+
+```bash
+pdcli filter update 5 --name "Renamed filter"
+pdcli filter update 5 --conditions @conditions.json
+```
+
+Pass `--name`, `--conditions`, or both. `--conditions` is resolved and JSON-validated the
+same way `create` does it (bad JSON → exit **65**). If you pass **neither**, there is
+nothing to change and the command exits **64** rather than issuing an empty write.
+
+## Exporting and recreating: `filter export`
+
+`filter export` reduces a full filter record to the portable triple `name`, `type`,
+`conditions` — the shape you need to recreate it — and prints it as pretty JSON:
+
+```bash
+pdcli filter export 5 > filter.json       # one filter
+pdcli filter export --all > filters.json  # every filter, as a JSON array
+```
+
+Provide a filter id **or** `--all`; with neither it exits **64**. `--jq` still applies, so
+exports can be sliced inside a pipeline.
+
+Because `filter create` takes **three separate flags** (`--name` / `--type` /
+`--conditions`), not one combined blob, recreating an exported filter on another account
+means slicing the export back into those flags. This round-trip mirrors what the command's
+own examples show:
+
+```bash
+pdcli filter export 5 > filter.json
+
+pdcli filter create \
+  --name "$(jq -r .name filter.json)" \
+  --type "$(jq -r .type filter.json)" \
+  --conditions "$(jq -c .conditions filter.json)"
+```
+
+:::caution
+The conditions grammar is **under-documented upstream** and references fields by **numeric
+`field_id`**, not the human names or hash keys pdcli resolves elsewhere. A field id valid
+on one account is meaningless on another, so a `conditions` blob is **not** blindly
+portable: when you recreate a filter on a different account, re-point each `field_id` to
+the target account's ids (list them with `pdcli field list` and confirm operators with
+`filter helpers`). Copy a working `filter get` blob rather than authoring one from scratch.
+:::
+
+## Where filter ids flow
+
+A filter id is a reusable handle. Once created, feed it to any list command's `--filter`
+flag and to the [bulk flows](/pdcli/guides/bulk/):
+
+```bash
+pdcli deal list --filter 9 --sort-by update_time     # preview the set
+pdcli deal list --filter 9 --jq '.[].id' | pdcli deal bulk-update --stage 5
+```
+
+For anything the two-level glue grammar can't express — an endpoint or query pdcli's
+filter commands don't wrap — drop down to the host-locked
+[raw `api` escape hatch](/pdcli/guides/api/) and call `/api/v1/filters` directly.
